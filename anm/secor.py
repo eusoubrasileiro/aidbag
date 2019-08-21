@@ -153,11 +153,13 @@ class Form1:
         self.wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1',
                 data=formdata, timeout=50)
         if not ( self.wpage.response.url == r'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'):
-            print("Falhou salvar Retirada de Interferencia",  file=sys.stderr)
-            return
+            #print("Falhou salvar Retirada de Interferencia",  file=sys.stderr)
+            # provavelmente estudo aberto
+            return False
         #wpage.response.url # response url deve ser 'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'
-        fname = 'sigareas_rinterferencia_'+processo_number+processo_year
+        fname = 'sigareas_rinterferencia_'+self.processo_number+self.processo_year
         self.wpage.save(os.path.join(self.processo_path, fname))
+        return True
 
     def cancelaUltimoEstudoInterferencia(self):
         """Danger Zone - cancela ultimo estudo em aberto sem perguntar mais nada"""
@@ -181,4 +183,6 @@ class Form1:
         }
         formdata = formdataPostAspNet(self.wpage.response, formcontrols)
         self.wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/CancelarEstudo.aspx', data=formdata)
-        #self.wpage.save('cancelar_estudo')
+        if self.wpage.response.text.find(r'Estudo excluído com sucesso.') == -1:
+            return False
+        return True
