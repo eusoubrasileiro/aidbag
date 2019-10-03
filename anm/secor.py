@@ -7,92 +7,31 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
-class wPage: # html  webpage scraping with soup and requests
-    def __init__(self, session): # requests session
-        self.session = session
+import pandas as pd
+from datetime import datetime
 
+from ..\web\htmlscrap import *
+
+class wPage(wPage): # overwrites original class for ntlm authentication
     def __init__(self, user, passwd):
+        """ntlm auth user and pass"""
         self.session = requests.Session()
         self.session.auth = HttpNtlmAuth(user, passwd)
 
-    def findAllnSave(self, pagefolder, tag2find='img', inner='src', verbose=False):
-        if not os.path.exists(pagefolder): # create only once
-            os.mkdir(pagefolder)
-        for res in self.soup.findAll(tag2find):   # images, css, etc..
-            try:
-                filename = os.path.basename(res[inner])
-                # dealing with weird resource names (RENAME it to save)
-                if len(filename) > 30: # too big  weird names
-                    extension = os.path.splitext(filename)[1]
-                    if len(extension) > 5: # weird string with dots
-                        extension = ''
-                    filename = 'file_' + tag2find + '_' +str(hash(filename)) + extension # RENAMED file
-                #fileurl = url.scheme + '://' + url.netloc + urljoin(url.path, res.get(inner))
-                fileurl = urljoin(self.url, res.get(inner))
-                # renamed and saved file path
-                # res[inner] # may or may not exist
-                filepath = os.path.join(pagefolder, filename)
-                res[inner] = filepath
-                # like a '<script' tag where the script is inplace
-                if not os.path.isfile(filepath): # was not downloaded
-                    with open(filepath, 'wb') as file:
-                        filebin = self.session.get(fileurl)
-                        file.write(filebin.content)
-            except Exception as exc:
-                if verbose:
-                    print(exc, '\n', file=sys.stderr)
+def getEventosSimples(wpage, processo_number, processo_year):
+    """ Retorna tabela de eventos simples para processo especificado
+    wpage : class wPage
+    processo_number : str
+    processo_year : str
+    return : (Pandas DataFrame)"""
+    wpage.get(('http://sigareas.dnpm.gov.br/Paginas/Usuario/ListaEvento.aspx?processo='+
+          processo_number+'_'+processo_year))
+    htmltxt = wpage.response.content
+    soup = BeautifulSoup(htmltxt, features="lxml")
+    eventstable = soup.find("table", {'class': "BordaTabela"})
+    rows = tableDataText(eventstable)
+    return pd.DataFrame(rows[1:], columns=rows[0])
 
-    def save(self, pagefilename='page'):
-        """
-        save html page and supported contents
-        pagefilename  : specified folder
-        """
-        self.url = self.response.url
-        self.soup = BeautifulSoup(self.response.text, features="lxml")
-        pagefolder = pagefilename+'_files' # page contents
-        self.findAllnSave(pagefolder, 'img', inner='src')
-        self.findAllnSave(pagefolder, 'link', inner='href')
-        self.findAllnSave(pagefolder, 'script', inner='src')
-        with open(pagefilename+'.html', 'w') as file:
-            file.write(self.soup.prettify())
-
-    def post(self, arg, save=True, **kwargs):
-        """save : save response overwriting the last"""
-        resp = self.session.post(arg, **kwargs)
-        if save:
-            self.response = resp
-        return resp
-
-    def get(self, arg, save=True, **kwargs):
-        """save : save response overwrites the last"""
-        resp = self.session.get(arg, **kwargs)
-        if save:
-            self.response = resp
-        return resp
-
-def formdataPostAspNet(response, formcontrols):
-    """
-    Creates a formdata dict based on dict of formcontrols to make a post request
-    to an AspNet html page. Use the previous html get `response` to extract the AspNet
-    states of the page.
-
-    response : from page GET request
-    formcontrols : dict from webpage with values assigned
-    """
-    # get the aspnet form data neeed with bsoup
-    soup = BeautifulSoup(response.content, features="lxml")
-    aspnetstates = ['__VIEWSTATE', '__VIEWSTATEGENERATOR', '__EVENTVALIDATION', '__EVENTTARGET',
-                    '__EVENTARGUMENT', '__VIEWSTATEENCRYPTED' ];
-    formdata = {}
-    for aspnetstate in aspnetstates: # search for existing aspnet states and get its values when existent
-        result = soup.find('input', {'name': aspnetstate})
-        if not (result is None):
-            formdata.update({aspnetstate : result['value']})
-
-    # include aditional form controls params
-    formdata.update(formcontrols)
-    #return formdata
-    return formdata
 
 
 class Form1:
@@ -186,3 +125,85 @@ class Form1:
         if self.wpage.response.text.find(r'Estudo excluído com sucesso.') == -1:
             return False
         return True
+
+    def getTabelaInterf(self):
+        os.chdir(self.processo_path)
+        interf_html = 'sigareas_rinterferencia_'+self.processo_number+self.processo_year+'.html'
+        with open(interf_html, 'r') as f:
+            htmltxt = f.read()
+        soup = BeautifulSoup(htmltxt, features="lxml")
+        mastertable = soup.find("td", {"class" : "TabelaGeral", "valign" : "top"})
+        mastertable = mastertable.findChild("table", style="width: 100%; border: none;").find("td", align="right")
+        interf_table = mastertable.find_all('tr')[1]
+        rows = tableDataText(interf_table)
+        self.tabela_interf = pd.DataFrame(rows[1:], columns=rows[0])
+        return self.tabela_interf
+
+    def getTabelaInterfEventosTodos(self):
+        """
+          Baixa todas as tabelas de eventos processos interferentes:
+            - concatena em tabela única
+            - converte data texto para datetime
+            - converte numero evento para np.int
+            - cria index ordem eventos para
+        """
+        self.tabela_interf_eventos = pd.DataFrame()
+        for proc in self.tabela_interf.Processo:
+            processo_number, processo_year = proc.split('/')
+            #print(processo_number, processo_year)
+            processo_events = getEventosSimples(self.wpage, processo_number, processo_year)
+            #processo_events.drop(columns='Processo', axis=0, inplace=True)
+            processo_events['ProAno'] = int(processo_year)
+            processo_events['ProNum'] = int(processo_number)
+            processo_events['EvSeq'] = len(processo_events)-processo_events.index.values.astype(int) # set correct order of events
+            processo_events['Evento'] = processo_events['Evento'].astype(int)
+            self.tabela_interf_eventos = self.tabela_interf_eventos.append(processo_events)
+        # strdate to datetime
+        self.tabela_interf_eventos.Data = self.tabela_interf_eventos.Data.apply(
+                 lambda strdate: datetime.strptime(strdate, "%d/%m/%Y %H:%M:%S"))
+        self.tabela_interf_eventos.reset_index(inplace=True,drop=True)
+        # rearrange collumns in more meaningfully viewing
+        columns_order = ['Processo', 'ProAno', 'ProNum', 'Evento', 'EvSeq', 'Descrição', 'Data']
+        self.tabela_interf_eventos = self.tabela_interf_eventos[columns_order]
+        return self.tabela_interf_eventos
+
+    def getPrioridade(self):
+        os.chdir(self.processo_path)
+        scm_dados_html = 'scm_dados_'+self.processo_number+self.processo_year+'.html'
+        with open(scm_dados_html, 'r') as f:
+            htmltxt = f.read()
+        soup = BeautifulSoup(htmltxt, features="lxml")
+        self.data_prioridade = soup.find('span', id="ctl00_conteudo_lblDataPrioridade").get_text(strip=True)
+        self.data_prioridade = datetime.strptime(self.data_prioridade, "%d/%m/%Y %H:%M:%S")
+        return self.data_prioridade
+
+    def recebeSICOP(self):
+        """
+        1. Must be authenticated with a aspnet Session Id
+        2. Be aware that Fiddler causes problems with SSL authenthication making 1 impossible
+        """
+        self.wpage.get('https://sistemas.dnpm.gov.br/sicopii/SICOP.asp') # must be here to get Asp Cookie for SICOP
+        formdata = {
+            'CodProcessoAno': self.processo_year,
+            'CodProcessoOrgao': '',
+            'CodProcessoSeq': self.processo_number,
+            'Pesquisar.x': '31',
+            'Pesquisar.y': '9'
+        }
+        # consulta
+        self.wpage.post('https://sistemas.dnpm.gov.br/sicopii/P/Receber/ReceberProcesso.asp?go=S', data=formdata)
+
+        if not self.wpage.response.text.find(self.processo_number+'-'+self.processo_year):
+            print('Nao achou, provavelmente não autenticado em sistemas.dnpm.gov.br')
+            return False
+
+        formdata = { 'chk1': 'on',
+        'Botao.x': '37',
+        'Botao.y': '8'}
+
+        self.wpage.post('https://sistemas.dnpm.gov.br/sicopii/P/Receber/ReceberProcesso.asp?go=S', data=formdata)
+
+        if not self.wpage.response.text.find('NAME="CodProcessoAno"'):
+            return False
+        else:
+            return True
