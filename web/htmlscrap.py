@@ -72,6 +72,12 @@ class wPage: # html  webpage scraping with soup and requests
             self.response = resp
         return resp
 
+class wPageNtlm(wPage): # overwrites original class for ntlm authentication
+    def __init__(self, user, passwd):
+        """ntlm auth user and pass"""
+        self.session = requests.Session()
+        self.session.auth = HttpNtlmAuth(user, passwd)
+
 def formdataPostAspNet(response, formcontrols):
     """
     Creates a formdata dict based on dict of formcontrols to make a post request

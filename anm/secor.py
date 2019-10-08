@@ -9,8 +9,11 @@ from urllib.parse import urljoin
 
 import pandas as pd
 from datetime import datetime
+#from .scm import *
 
-from ..\web\htmlscrap import *
+from .scm import *
+sys.path.append("..") # Adds higher directory to python modules path.
+from web.htmlscrap import *
 
 class wPage(wPage): # overwrites original class for ntlm authentication
     def __init__(self, user, passwd):
@@ -32,19 +35,14 @@ def getEventosSimples(wpage, processo_number, processo_year):
     rows = tableDataText(eventstable)
     return pd.DataFrame(rows[1:], columns=rows[0])
 
-
-
-class Form1:
+class Form1(Processo):
     """Analise de Formulario 1"""
     def __init__(self, processostr, wpage):
         """
         processostr : numero processo format xxx.xxx/ano
         wpage : wPage html webpage scraping class com login e passwd preenchidos
         """
-        self.processostr = processostr
-        self.processo_number = processostr.split('/')[0].replace('.', '')
-        self.processo_year = processostr.split('/')[1]
-        self.wpage = wpage
+        super().__init__(processostr, wpage)
         # pasta padrao salvar processos formulario 1
         self.secorpath = r"D:\Users\andre.ferreira\Documents\Controle de Áreas"
         # pasta deste processo
@@ -54,30 +52,17 @@ class Form1:
             os.mkdir(self.processo_path)
 
     def salvaDadosGeraisSCM(self):
-        ### Abre página dados do Processo do Cadastro  Mineiro
-        # portal ortoga Cadastro mineiro
-        self.wpage.get('https://sistemas.dnpm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx')
-        formcontrols = {
-            'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnConsultarProcesso',
-            'ctl00$conteudo$txtNumeroProcesso': self.processostr,
-            'ctl00$conteudo$btnConsultarProcesso': 'Consultar',
-            '__VIEWSTATEENCRYPTED': ''}
-        formdata = formdataPostAspNet(self.wpage.response, formcontrols)
-        self.wpage.post('https://sistemas.dnpm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx',
-                      data=formdata)
+        # entra na pagina dados básicos do Processo do Cadastro  Mineiro
+        self.dadosBasicosRetrieve()
         dadosgeraisfname = 'scm_dados_'+self.processo_number+self.processo_year
         # sobrescreve
         self.wpage.save(os.path.join(self.processo_path, dadosgeraisfname))
 
     def salvaDadosGeraisSCMPoligonal(self):
-        formcontrols = {
-            'ctl00$conteudo$btnPoligonal': 'Poligonal',
-            'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnPoligonal'}
-        formdata = formdataPostAspNet(self.wpage.response, formcontrols)
-        self.wpage.post('https://sistemas.dnpm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx',
-                      data=formdata)
+        # entra na pagina dados básicos do Processo do Cadastro  Mineiro (Poligonal)
+        self.dadosPoligonalRetrieve()
         # sobrescreve
-        dadosgeraisfname = 'scm_dados_polygonal_'+self.processo_number+self.processo_year
+        dadosgeraisfname = 'scm_dados_poligonal_'+self.processo_number+self.processo_year
         self.wpage.save(os.path.join(self.processo_path, dadosgeraisfname))
 
     def salvaRetiradaInterferencia(self):
@@ -166,16 +151,6 @@ class Form1:
         columns_order = ['Processo', 'ProAno', 'ProNum', 'Evento', 'EvSeq', 'Descrição', 'Data']
         self.tabela_interf_eventos = self.tabela_interf_eventos[columns_order]
         return self.tabela_interf_eventos
-
-    def getPrioridade(self):
-        os.chdir(self.processo_path)
-        scm_dados_html = 'scm_dados_'+self.processo_number+self.processo_year+'.html'
-        with open(scm_dados_html, 'r') as f:
-            htmltxt = f.read()
-        soup = BeautifulSoup(htmltxt, features="lxml")
-        self.data_prioridade = soup.find('span', id="ctl00_conteudo_lblDataPrioridade").get_text(strip=True)
-        self.data_prioridade = datetime.strptime(self.data_prioridade, "%d/%m/%Y %H:%M:%S")
-        return self.data_prioridade
 
     def recebeSICOP(self):
         """
