@@ -4,6 +4,19 @@ from bs4 import BeautifulSoup
 sys.path.append("..") # Adds higher directory to python modules path.
 from web import htmlscrap as hscrap
 from datetime import datetime
+import re
+
+# "scm consulta dados (post) nao aceita formato diferente de 'xxx.xxx/xxxx'"
+regxdp = re.compile("\d+")
+def fmtPname(pross_str):
+    "format process name to xxx.xxx/yyyy"
+    pross_str = ''.join(re.findall(regxdp, pross_str))
+    return pross_str[:3]+'.'+pross_str[3:6]+r'/'+pross_str[6:]
+
+def numberyearPname(pross_str):
+    "return process (number, year0"
+    pross_str = ''.join(re.findall(regxdp, pross_str))
+    return pross_str[:6], pross_str[6:]
 
 class Processo:
     # static field
@@ -11,15 +24,14 @@ class Processo:
         'prioridade'            : ['span',  { 'id' : "ctl00_conteudo_lblDataPrioridade"} ],
         'area'                  : ['span',  { 'id' : 'ctl00_conteudo_lblArea'} ],
         'UF'                    : ['span',  { 'id' : 'ctl00_conteudo_lblUF'} ],
-        'processos_associados'  : ['table', { 'id' : 'ctl00_conteudo_gridProcessosAssociados'} ],
+        'associados'            : ['table', { 'id' : 'ctl00_conteudo_gridProcessosAssociados'} ],
         'substancias'           : ['table', { 'id' : 'ctl00_conteudo_gridSubstancias'} ],
         'eventos'               : ['table', { 'id' : 'ctl00_conteudo_gridEventos'} ],
         'municipios'            : ['table', { 'id' : 'ctl00_conteudo_gridMunicipios'} ]
     }
     def __init__(self, processostr, wpage):
         self.processostr = processostr
-        self.processo_number = processostr.split('/')[0].replace('.', '')
-        self.processo_year = processostr.split('/')[1]
+        self.processo_number, self.processo_year = numberyearPname(processostr)
         self.wpage = wpage
 
     @classmethod # not same as @staticmethod (has a self)
@@ -38,12 +50,13 @@ class Processo:
         self.wpage.get('https://sistemas.dnpm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx')
         formcontrols = {
             'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnConsultarProcesso',
-            'ctl00$conteudo$txtNumeroProcesso': self.processostr,
+            'ctl00$conteudo$txtNumeroProcesso': fmtPname(self.processostr),
             'ctl00$conteudo$btnConsultarProcesso': 'Consultar',
             '__VIEWSTATEENCRYPTED': ''}
         formdata = hscrap.formdataPostAspNet(self.wpage.response, formcontrols)
         self.wpage.post('https://sistemas.dnpm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx',
                       data=formdata)
+        # may give
         return self.wpage
 
     def dadosPoligonalRetrieve(self):
@@ -56,6 +69,8 @@ class Processo:
         return self.wpage
 
     def dadosBasicosGet(self, data_tags=None):
+        """check your nltm authenticated session
+        if getting empty dict dados"""
         if not hasattr(self, 'dados'):
             self.dadosBasicosRetrieve()
             self.dados = {}
@@ -93,7 +108,7 @@ class Processo:
         miss_data_tags = Processo.specifyData(missing)
         # processo father
         fathername = self.dados['processos_associados'][1][5]
-        if fathername == self.processostr: # doesn't have father
+        if fmtPname(fathername) == fmtPname(self.processostr): # doesn't have father
             return False
         father = Processo(fathername, self.wpage)
         father.dadosBasicosGet(miss_data_tags)
