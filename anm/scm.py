@@ -9,8 +9,12 @@ import re
 # "scm consulta dados (post) nao aceita formato diferente de 'xxx.xxx/xxxx'"
 regxdp = re.compile("\d+")
 def fmtPname(pross_str):
-    "format process name to xxx.xxx/yyyy"
+    """format process name to xxx.xxx/yyyy
+    - input process might be also like this 2735/1935
+    prepend zeros in this case to form 002.735/1935"""
     pross_str = ''.join(re.findall(regxdp, pross_str))
+    ncharsmissing = 10-len(pross_str)
+    pross_str = '0'*ncharsmissing+pross_str # prepend with zeros
     return pross_str[:3]+'.'+pross_str[3:6]+r'/'+pross_str[6:]
 
 def numberyearPname(pross_str):
@@ -56,8 +60,11 @@ class Processo:
         formdata = hscrap.formdataPostAspNet(self.wpage.response, formcontrols)
         self.wpage.post('https://sistemas.dnpm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx',
                       data=formdata)
-        # may give
-        return self.wpage
+        # check for failure if cannot find Campo Ativo
+        if self.wpage.response.text.find('ctl00_conteudo_lblAtivo') == -1:
+            return False
+        # may give False
+        return True
 
     def dadosPoligonalRetrieve(self):
         formcontrols = {
@@ -86,7 +93,7 @@ class Processo:
                 else:
                     result = result.text
                 self.dados.update({data : result})
-        return self.dados
+        return len(self.dados) == len(data_tags) # return if got w. asked for
 
     def dadosBasicosGetMissing(self):
         """obtém dados faltantes (se houver) pelo processo associado (pai):

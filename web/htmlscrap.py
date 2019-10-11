@@ -49,6 +49,7 @@ class wPage: # html  webpage scraping with soup and requests
         save html page and supported contents
         pagefilename  : specified folder
         """
+        self.url = self.response.url # needed above findAllnSave
         self.soup = BeautifulSoup(self.response.text, features="lxml")
         pagefolder = pagefilename+'_files' # page contents
         self.findAllnSave(pagefolder, 'img', inner='src')

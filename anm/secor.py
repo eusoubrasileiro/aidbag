@@ -67,7 +67,8 @@ class SECOR(Processo):
 
     def salvaDadosGeraisSCM(self):
         # entra na pagina dados básicos do Processo do Cadastro  Mineiro
-        self.dadosBasicosRetrieve()
+        if not self.dadosBasicosRetrieve():
+            return False
         dadosgeraisfname = 'scm_dados_'+self.processo_number+self.processo_year
         # sobrescreve
         self.wpage.save(os.path.join(self.processo_path, dadosgeraisfname))
@@ -91,10 +92,7 @@ class SECOR(Processo):
         self.wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1',
                 data=formdata, timeout=50)
         if not ( self.wpage.response.url == r'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'):
-            #print("Falhou salvar Retirada de Interferencia",  file=sys.stderr)
-            # provavelmente estudo aberto
-            return False
-        #wpage.response.url # response url deve ser 'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'
+            return False             # Falhou salvar Retirada de Interferencia # provavelmente estudo aberto
         fname = 'sigareas_rinterferencia_'+self.processo_number+self.processo_year
         self.wpage.save(os.path.join(self.processo_path, fname))
         return True
@@ -148,7 +146,7 @@ class SECOR(Processo):
             return False
         return True
 
-    def getTabelaInterferencia(self, associados=True):
+    def getTabelaInterferencia(self):
         if hasattr(self, 'tabela_interf'):
             return self.tabela_interf
         os.chdir(self.processo_path)
@@ -156,9 +154,12 @@ class SECOR(Processo):
         with open(interf_html, 'r') as f:
             htmltxt = f.read()
         soup = BeautifulSoup(htmltxt, features="lxml")
-        mastertable = soup.find("td", {"class" : "TabelaGeral", "valign" : "top"})
-        mastertable = mastertable.findChild("table", style="width: 100%; border: none;").find("td", align="right")
-        interf_table = mastertable.find_all('tr')[1]
+        # check connection failure (this table must allways be here)
+        if htmltxt.find("ctl00_cphConteudo_gvLowerLeft") == -1:
+            raise ConnectionError('Did not connect to sigareas r-interferencia')
+        interf_table = soup.find("table", {"id" : "ctl00_cphConteudo_gvLowerRight"})
+        if interf_table is None: # possible no interferencia at all
+            return False # nenhuma interferencia SHOW!!
         rows = tableDataText(interf_table)
         self.tabela_interf = pd.DataFrame(rows[1:], columns=rows[0])
         # instert list of processos associados for each processo interferente
@@ -166,11 +167,14 @@ class SECOR(Processo):
         data_tag = self.specifyData(['associados'])
         for row in self.tabela_interf.iterrows(): # takes some time
             processo = Processo(row[1].Processo, self.wpage)
-            processo.dadosBasicosGet(data_tag)
+            if not processo.dadosBasicosGet(data_tag):
+                printf('getTabelaInterferencia - failed dadosBasicosGet', file=sys.stderr)
+                return False
             if not (processo.dados['associados'][0][0] == 'Nenhum processo associado.'):
-                self.tabela_interf.loc[row[0], 'Assoc'] = processo.dados['associados'][0]
+                print(processo.dados['associados'][1:])
+                self.tabela_interf.loc[row[0], 'Assoc'] = processo.dados['associados'][1:]
             del processo
-        return self.tabela_interf
+        return True
 
     def getTabelaInterferenciaTodos(self):
         """
@@ -181,7 +185,8 @@ class SECOR(Processo):
             - cria index ordem eventos para
         """
         if not hasattr(self, 'tabela_interf'):
-            self.getTabelaInterferencia()
+            if not self.getTabelaInterferencia(): # there is no interference !
+                return False
 
         if hasattr(self, 'tabela_interf_eventos'):
             return self.tabela_interf_eventos
@@ -220,9 +225,8 @@ class SECOR(Processo):
         # join Inativ column -1/1 inativam or ativam processo
         self.tabela_interf_eventos = self.tabela_interf_eventos.join(eventos.set_index('Evento'), on='Evento')
         self.tabela_interf_eventos.Inativ = self.tabela_interf_eventos.Inativ.fillna(0) # not an important event
-        #### processos associados não 300 baixa
-
-        return self.tabela_interf_eventos
+        #### processos associados não 300 baixar
+        return True
 
     def excelInterferencia(self):
         if not hasattr(self, 'tabela_interf_eventos'):
