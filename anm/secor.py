@@ -3,6 +3,7 @@ from requests_ntlm import HttpNtlmAuth
 import re
 
 import os, sys
+from pathlib import Path
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
@@ -16,15 +17,13 @@ from .scm import *
 sys.path.append("..") # Adds higher directory to python modules path.
 from web.htmlscrap import *
 
+from enum import Enum
+
 class wPage(wPage): # overwrites original class for ntlm authentication
     def __init__(self, user, passwd):
         """ntlm auth user and pass"""
         self.session = requests.Session()
         self.session.auth = HttpNtlmAuth(user, passwd)
-
-# eventos que inativam or ativam processo
-__secor_home__ = r'D:\Users\andre.ferreira\Documents\Controle de Áreas\secorpy'
-__eventos_scm__ = r'eventos_scm_09102019.xls'
 
 
 # def copy_format(book, fmt):
@@ -47,18 +46,32 @@ def getEventosSimples(wpage, processostr):
     rows = tableDataText(eventstable)
     return pd.DataFrame(rows[1:], columns=rows[0])
 
-class SECOR(Processo):
-    """ - Analise de Formulario 1
-        - Analise de Opcao de Area
+
+userhome = str(Path.home()) # get userhome folder
+# eventos que inativam or ativam processo
+__secor_path__ = os.path.join(userhome, r'Documents\Controle_Areas')
+__eventos_scm__ = os.path.join(__secor_path__,
+                        r'Secorpy\eventos_scm_09102019.xls')
+
+class Estudo(Processo):
     """
-    def __init__(self, processostr, wpage):
+    - Analise de Requerimento de Pesquisa - opcao 0
+    - Analise de Formulario 1 - opcao 1
+    - Analise de Opcao de Area - opcao 2
+    """
+    def __init__(self, processostr, wpage, option="Requerimento"):
         """
         processostr : numero processo format xxx.xxx/ano
         wpage : wPage html webpage scraping class com login e passwd preenchidos
         """
         super().__init__(processostr, wpage)
         # pasta padrao salvar processos formulario 1
-        self.secorpath = r"D:\Users\andre.ferreira\Documents\Controle de Áreas"
+        if option == "Requerimento":
+            self.secorpath = os.path.join(__secor_path__, 'Requerimento')
+        elif option == "Formulario1":
+            self.secorpath = os.path.join(__secor_path__, 'Formulario1')
+        elif option == "Opcao":
+            self.secorpath = os.path.join(__secor_path__, 'Opcao')
         # pasta deste processo
         self.processo_path = os.path.join(self.secorpath,
                     self.processo_number+'-'+self.processo_year )
@@ -169,7 +182,7 @@ class SECOR(Processo):
             processo = Processo(row[1].Processo, self.wpage)
             if not processo.dadosBasicosGet(data_tag):
                 printf('getTabelaInterferencia - failed dadosBasicosGet', file=sys.stderr)
-                return False
+                return
             if not (processo.dados['associados'][0][0] == 'Nenhum processo associado.'):
                 print(processo.dados['associados'][1:])
                 self.tabela_interf.loc[row[0], 'Assoc'] = processo.dados['associados'][1:]
@@ -219,7 +232,7 @@ class SECOR(Processo):
             lambda row: True if row['Data'] < self.prioridade else False, axis=1)
         ### fill-in column with inativam or ativam processo for each event
         ### using excel 'eventos_scm_09102019.xls'
-        eventos = pd.read_excel( os.path.join(__secor_home__, __eventos_scm__) )
+        eventos = pd.read_excel(__eventos_scm__)
         eventos.drop(columns=['nome'],inplace=True)
         eventos.columns = ['Evento', 'Inativ'] # rename columns
         # join Inativ column -1/1 inativam or ativam processo
