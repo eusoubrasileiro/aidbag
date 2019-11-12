@@ -58,20 +58,23 @@ class Estudo(Processo):
     - Analise de Requerimento de Pesquisa - opcao 0
     - Analise de Formulario 1 - opcao 1
     - Analise de Opcao de Area - opcao 2
+    - Batch Requerimento de Pesquisa - opcao 3
     """
-    def __init__(self, processostr, wpage, option="Requerimento"):
+    def __init__(self, processostr, wpage, option=3):
         """
         processostr : numero processo format xxx.xxx/ano
         wpage : wPage html webpage scraping class com login e passwd preenchidos
         """
         super().__init__(processostr, wpage)
         # pasta padrao salvar processos formulario 1
-        if option == "Requerimento":
+        if option == 0:
             self.secorpath = os.path.join(__secor_path__, 'Requerimento')
-        elif option == "Formulario1":
+        elif option ==  1:
             self.secorpath = os.path.join(__secor_path__, 'Formulario1')
-        elif option == "Opcao":
+        elif option == 2:
             self.secorpath = os.path.join(__secor_path__, 'Opcao')
+        elif option == 3:
+            self.secorpath = os.path.join(__secor_path__, r'Requerimento\Batch')
         # pasta deste processo
         self.processo_path = os.path.join(self.secorpath,
                     self.processo_number+'-'+self.processo_year )
@@ -176,7 +179,12 @@ class Estudo(Processo):
         rows = tableDataText(interf_table)
         self.tabela_interf = pd.DataFrame(rows[1:], columns=rows[0])
         # instert list of processos associados for each processo interferente
-        self.tabela_interf['Assoc'] = None
+        self.tabela_interf['Dad'] = 0
+        self.tabela_interf['Sons'] = 0
+        #self.tabela_interf['Assoc'] = None
+        # tabela c/ processos associadoas # aos processos interferentes
+        self.tabela_assoc = pd.DataFrame(columns=['Main', 'Processo',  'Titular', 'Tipo',
+                'Assoc', 'DesAssoc', 'Original', 'Obs'])
         data_tag = self.specifyData(['associados'])
         for row in self.tabela_interf.iterrows(): # takes some time
             processo = Processo(row[1].Processo, self.wpage)
@@ -184,8 +192,18 @@ class Estudo(Processo):
                 printf('getTabelaInterferencia - failed dadosBasicosGet', file=sys.stderr)
                 return
             if not (processo.dados['associados'][0][0] == 'Nenhum processo associado.'):
-                print(processo.dados['associados'][1:])
-                self.tabela_interf.loc[row[0], 'Assoc'] = processo.dados['associados'][1:]
+                fathername = processo.dados['associados'][1][5]
+                assoc_items = pd.DataFrame(processo.dados['associados'][1:],
+                        columns=self.tabela_assoc.columns[1:])
+                assoc_items['Main'] = processo.processostr
+                dad = 1 # has a father
+                if fmtPname(fathername) == fmtPname(processo.processostr): # doesn't have father
+                    dad = 0
+                # number of sons/dad and list of associados
+                self.tabela_interf.loc[row[0], 'Sons'] = len(processo.dados['associados'][1+dad:])
+                self.tabela_interf.loc[row[0], 'Dad'] = dad
+                #assoc_items = assoc_items[self.tabela_assoc.columns]
+                self.tabela_assoc = self.tabela_assoc.append(assoc_items, sort=False, ignore_index=True)
             del processo
         return True
 
@@ -211,8 +229,9 @@ class Estudo(Processo):
             #processo_events['ProNum'] = int(processo_number)
             processo_events['EvSeq'] = len(processo_events)-processo_events.index.values.astype(int) # set correct order of events
             processo_events['Evento'] = processo_events['Evento'].astype(int)
-            # put count of associados
-            processo_events['Assoc']  = 0 if row[1]['Assoc'] is None else len(row[1]['Assoc'])
+            # put count of associados father and sons
+            processo_events['Dad'] = row[1]['Dad']
+            processo_events['Sons'] =row[1]['Sons']
             self.tabela_interf_eventos = self.tabela_interf_eventos.append(processo_events)
 
         # strdate to datetime comparacao prioridade
@@ -220,16 +239,16 @@ class Estudo(Processo):
                  lambda strdate: datetime.strptime(strdate, "%d/%m/%Y %H:%M:%S"))
         self.tabela_interf_eventos.reset_index(inplace=True,drop=True)
         # rearrange collumns in more meaningfully viewing
-        columns_order = ['Processo', 'Evento', 'EvSeq', 'Descrição', 'Data', 'Assoc']
+        columns_order = ['Processo', 'Evento', 'EvSeq', 'Descrição', 'Data', 'Dad', 'Sons']
         self.tabela_interf_eventos = self.tabela_interf_eventos[columns_order]
         ### Todos os eventos posteriores a data de prioridade são marcados
         # como 0 na coluna Prioridade otherwise 1
         if not hasattr(self, 'prioridade'):
             self.prioridade = self.getPrioridade()
         self.tabela_interf_eventos['DataPrior'] = self.prioridade
-        self.tabela_interf_eventos['EvPrior'] = True
+        self.tabela_interf_eventos['EvPrior'] = 0 # 1 prioritario 0 otherwise
         self.tabela_interf_eventos['EvPrior'] = self.tabela_interf_eventos.apply(
-            lambda row: True if row['Data'] < self.prioridade else False, axis=1)
+            lambda row: 1 if row['Data'] < self.prioridade else 0, axis=1)
         ### fill-in column with inativam or ativam processo for each event
         ### using excel 'eventos_scm_09102019.xls'
         eventos = pd.read_excel(__eventos_scm__)
@@ -298,6 +317,15 @@ class Estudo(Processo):
             worksheet.set_column(i, i, colwidths[i])
         # Close the Pandas Excel writer and output the Excel file.
         writer.save()
+        self.excelInterferenciaAssociados()
+
+    def excelInterferenciaAssociados(self):
+        """Processos interferentes com processos associados"""
+        if not hasattr(self, 'tabela_assoc'):
+            return
+        excelname = ('eventos_prioridade_assoc_' + self.processo_number
+                            + self.processo_year+'.xlsx')
+        self.tabela_assoc.to_excel(excelname, index=False)
 
     def recebeSICOP(self):
         """
