@@ -19,6 +19,7 @@ def fmtPname(pross_str):
 
 def numberyearPname(pross_str):
     "return process (number, year0"
+    pross_str = fmtPname(pross_str) # to make sure
     pross_str = ''.join(re.findall(regxdp, pross_str))
     return pross_str[:6], pross_str[6:]
 

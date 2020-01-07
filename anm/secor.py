@@ -44,7 +44,9 @@ def getEventosSimples(wpage, processostr):
     soup = BeautifulSoup(htmltxt, features="lxml")
     eventstable = soup.find("table", {'class': "BordaTabela"})
     rows = tableDataText(eventstable)
-    return pd.DataFrame(rows[1:], columns=rows[0])
+    df = pd.DataFrame(rows[1:], columns=rows[0])
+    df.Processo = df.Processo.apply(lambda x: fmtPname(x)) # standard names
+    return df
 
 
 userhome = str(Path.home()) # get userhome folder
@@ -104,9 +106,9 @@ class Estudo(Processo):
             'ctl00$cphConteudo$btnEnviarUmProcesso': 'Processar'
         }
         formdata = formdataPostAspNet(self.wpage.response, formcontrols)
-        # must be timout 50
+        # must be timout 2 minutes
         self.wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1',
-                data=formdata, timeout=50)
+                data=formdata, timeout=(2*60))
         if not ( self.wpage.response.url == r'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'):
             return False             # Falhou salvar Retirada de Interferencia # provavelmente estudo aberto
         fname = 'sigareas_rinterferencia_'+self.processo_number+self.processo_year
@@ -187,6 +189,9 @@ class Estudo(Processo):
                 'Assoc', 'DesAssoc', 'Original', 'Obs'])
         data_tag = self.specifyData(['associados'])
         for row in self.tabela_interf.iterrows(): # takes some time
+            # it seams excel writer needs every process name have same length string 000.000/xxxx (12)
+            # so reformat process name
+            self.tabela_interf.loc[row[0], 'Processo'] = fmtPname(row[1]['Processo'])
             processo = Processo(row[1].Processo, self.wpage)
             if not processo.dadosBasicosGet(data_tag):
                 printf('getTabelaInterferencia - failed dadosBasicosGet', file=sys.stderr)
@@ -257,7 +262,13 @@ class Estudo(Processo):
         # join Inativ column -1/1 inativam or ativam processo
         self.tabela_interf_eventos = self.tabela_interf_eventos.join(eventos.set_index('Evento'), on='Evento')
         self.tabela_interf_eventos.Inativ = self.tabela_interf_eventos.Inativ.fillna(0) # not an important event
-        #### processos associados não 300 baixar
+        # Add a 'Prior' (Prioridade) Collumn At the Beggining
+        self.tabela_interf_eventos['Prior'] = 1
+        for name, events in self.tabela_interf_eventos.groupby('Processo'):
+            self.tabela_interf_eventos.loc[self.tabela_interf_eventos.Processo == name, 'Prior'] = (
+            1*(events.EvPrior.sum() > 0 and events.Inativ.sum() > -1))
+        newcolumns = ['Prior'] + self.tabela_interf_eventos.columns[:-1].tolist()
+        self.tabela_interf_eventos = self.tabela_interf_eventos[newcolumns]
         return True
 
     def excelInterferencia(self):
