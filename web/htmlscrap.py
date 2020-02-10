@@ -103,12 +103,6 @@ def formdataPostAspNet(response, formcontrols):
     return formdata
 
 # Table parsing with bs4
-def rowgetDataText(tr, coltag='td'): # td (data) or th (header)
-    cols = []
-    for td in tr.find_all(coltag):
-        cols.append(td.get_text(strip=True))
-    return cols
-
 def tableDataText(table):
     """Parse a html segment started with tag <table>
     followed by multiple <tr> (table rows) and
@@ -117,10 +111,10 @@ def tableDataText(table):
     Note: one <th> (table header/data) accepted in the first row"""
     rows = []
     trs = table.find_all('tr')
-    headerow = rowgetDataText(trs[0], 'th')
+    headerow = [td.get_text(strip=True) for td in trs[0].find_all('th')] # header row
     if headerow: # if there is a header row include first
         rows.append(headerow)
         trs = trs[1:]
     for tr in trs: # for every table row
-        rows.append(rowgetDataText(tr, 'td')) # data row
+        rows.append([td.get_text(strip=True) for td in tr.find_all('td')]) # data row
     return rows
