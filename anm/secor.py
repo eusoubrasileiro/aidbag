@@ -183,11 +183,12 @@ class Estudo(Processo):
         # instert list of processos associados for each processo interferente
         self.tabela_interf['Dad'] = 0
         self.tabela_interf['Sons'] = 0
+        self.tabela_interf['Ativo'] = 'Sim'
         #self.tabela_interf['Assoc'] = None
         # tabela c/ processos associadoas # aos processos interferentes
         self.tabela_assoc = pd.DataFrame(columns=['Main', 'Processo',  'Titular', 'Tipo',
                 'Assoc', 'DesAssoc', 'Original', 'Obs'])
-        data_tag = self.specifyData(['associados'])
+        data_tag = self.specifyData(['associados', 'ativo'])
         for row in self.tabela_interf.iterrows(): # takes some time
             # it seams excel writer needs every process name have same length string 000.000/xxxx (12)
             # so reformat process name
@@ -196,6 +197,7 @@ class Estudo(Processo):
             if not processo.dadosBasicosGet(data_tag):
                 printf('getTabelaInterferencia - failed dadosBasicosGet', file=sys.stderr)
                 return
+            self.tabela_interf.loc[row[0], 'Ativo'] = processo.dados['ativo']
             if not (processo.dados['associados'][0][0] == 'Nenhum processo associado.'):
                 fathername = processo.dados['associados'][1][5]
                 assoc_items = pd.DataFrame(processo.dados['associados'][1:],
@@ -237,6 +239,7 @@ class Estudo(Processo):
             # put count of associados father and sons
             processo_events['Dad'] = row[1]['Dad']
             processo_events['Sons'] =row[1]['Sons']
+            processo_events['Ativo'] = row[1]['Ativo']
             self.tabela_interf_eventos = self.tabela_interf_eventos.append(processo_events)
 
         # strdate to datetime comparacao prioridade
@@ -244,7 +247,7 @@ class Estudo(Processo):
                  lambda strdate: datetime.strptime(strdate, "%d/%m/%Y %H:%M:%S"))
         self.tabela_interf_eventos.reset_index(inplace=True,drop=True)
         # rearrange collumns in more meaningfully viewing
-        columns_order = ['Processo', 'Evento', 'EvSeq', 'Descrição', 'Data', 'Dad', 'Sons']
+        columns_order = ['Ativo','Processo', 'Evento', 'EvSeq', 'Descrição', 'Data', 'Dad', 'Sons']
         self.tabela_interf_eventos = self.tabela_interf_eventos[columns_order]
         ### Todos os eventos posteriores a data de prioridade são marcados
         # como 0 na coluna Prioridade otherwise 1
@@ -267,6 +270,7 @@ class Estudo(Processo):
         for name, events in self.tabela_interf_eventos.groupby('Processo'):
             self.tabela_interf_eventos.loc[self.tabela_interf_eventos.Processo == name, 'Prior'] = (
             1*(events.EvPrior.sum() > 0 and events.Inativ.sum() > -1))
+        # re-rearrange columns
         newcolumns = ['Prior'] + self.tabela_interf_eventos.columns[:-1].tolist()
         self.tabela_interf_eventos = self.tabela_interf_eventos[newcolumns]
         return True

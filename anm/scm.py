@@ -32,7 +32,8 @@ class Processo:
         'associados'            : ['table', { 'id' : 'ctl00_conteudo_gridProcessosAssociados'} ],
         'substancias'           : ['table', { 'id' : 'ctl00_conteudo_gridSubstancias'} ],
         'eventos'               : ['table', { 'id' : 'ctl00_conteudo_gridEventos'} ],
-        'municipios'            : ['table', { 'id' : 'ctl00_conteudo_gridMunicipios'} ]
+        'municipios'            : ['table', { 'id' : 'ctl00_conteudo_gridMunicipios'} ],
+        'ativo'                 : ['span',  { 'id' : 'ctl00_conteudo_lblAtivo'} ]
     }
     def __init__(self, processostr, wpage):
         self.processostr = processostr
