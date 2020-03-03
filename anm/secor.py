@@ -62,12 +62,12 @@ class Estudo(Processo):
     - Analise de Opcao de Area - opcao 2
     - Batch Requerimento de Pesquisa - opcao 3
     """
-    def __init__(self, processostr, wpage, option=3):
+    def __init__(self, processostr, wpage, option=3, scmdata=True, upsearch=True, verbose=False):
         """
         processostr : numero processo format xxx.xxx/ano
         wpage : wPage html webpage scraping class com login e passwd preenchidos
         """
-        super().__init__(processostr, wpage)
+        super().__init__(processostr, wpage, scmdata, upsearch, verbose)
         # pasta padrao salvar processos formulario 1
         if option == 0:
             self.secorpath = os.path.join(__secor_path__, 'Requerimento')
@@ -176,42 +176,36 @@ class Estudo(Processo):
         if htmltxt.find("ctl00_cphConteudo_gvLowerLeft") == -1:
             raise ConnectionError('Did not connect to sigareas r-interferencia')
         interf_table = soup.find("table", {"id" : "ctl00_cphConteudo_gvLowerRight"})
-        if interf_table is None: # possible no interferencia at all
+        if interf_table is None: # possible! no interferencia at all
             return False # nenhuma interferencia SHOW!!
         rows = tableDataText(interf_table)
         self.tabela_interf = pd.DataFrame(rows[1:], columns=rows[0])
         # instert list of processos associados for each processo interferente
-        self.tabela_interf['Dad'] = 0
+        self.tabela_interf['Dads'] = 0
         self.tabela_interf['Sons'] = 0
         self.tabela_interf['Ativo'] = 'Sim'
         #self.tabela_interf['Assoc'] = None
         # tabela c/ processos associadoas # aos processos interferentes
-        self.tabela_assoc = pd.DataFrame(columns=['Main', 'Processo',  'Titular', 'Tipo',
+        self.tabela_assoc = pd.DataFrame(columns=['Main', 'Prior', 'Processo',  'Titular', 'Tipo',
                 'Assoc', 'DesAssoc', 'Original', 'Obs'])
-        data_tag = self.specifyData(['associados', 'ativo'])
+        self.processes_interf = {}
         for row in self.tabela_interf.iterrows(): # takes some time
             # it seams excel writer needs every process name have same length string 000.000/xxxx (12)
             # so reformat process name
-            self.tabela_interf.loc[row[0], 'Processo'] = fmtPname(row[1]['Processo'])
-            processo = Processo(row[1].Processo, self.wpage)
-            if not processo.dadosBasicosGet(data_tag):
-                printf('getTabelaInterferencia - failed dadosBasicosGet', file=sys.stderr)
-                return
+            processo_name = fmtPname(row[1]['Processo'])
+            self.tabela_interf.loc[row[0], 'Processo'] = processo_name
+            processo = Processo(row[1].Processo, self.wpage, verbose=self.verbose)
+            self.processes_interf[processo_name] = processo # save on interf process object list
             self.tabela_interf.loc[row[0], 'Ativo'] = processo.dados['ativo']
-            if not (processo.dados['associados'][0][0] == 'Nenhum processo associado.'):
-                fathername = processo.dados['associados'][1][5]
+            if len(processo.assprocesses) > 0:
                 assoc_items = pd.DataFrame(processo.dados['associados'][1:],
-                        columns=self.tabela_assoc.columns[1:])
+                        columns=self.tabela_assoc.columns[2:])
                 assoc_items['Main'] = processo.processostr
-                dad = 1 # has a father
-                if fmtPname(fathername) == fmtPname(processo.processostr): # doesn't have father
-                    dad = 0
-                # number of sons/dad and list of associados
-                self.tabela_interf.loc[row[0], 'Sons'] = len(processo.dados['associados'][1+dad:])
-                self.tabela_interf.loc[row[0], 'Dad'] = dad
-                #assoc_items = assoc_items[self.tabela_assoc.columns]
+                assoc_items['Prior'] = processo.prioridadec
+                # number of direct sons/ ancestors
+                self.tabela_interf.loc[row[0], 'Sons'] = len(processo.dsons)
+                self.tabela_interf.loc[row[0], 'Dads'] = len(processo.anscestors)
                 self.tabela_assoc = self.tabela_assoc.append(assoc_items, sort=False, ignore_index=True)
-            del processo
         return True
 
     def getTabelaInterferenciaTodos(self):
@@ -231,15 +225,21 @@ class Estudo(Processo):
 
         self.tabela_interf_eventos = pd.DataFrame()
         for row in self.tabela_interf.iterrows():
+            # TODO remove getEventosSimples and extract everything from dados basicos
             processo_events = getEventosSimples(self.wpage, row[1][1])
-            #processo_events['ProAno'] = int(processo_year)
-            #processo_events['ProNum'] = int(processo_number)
+            # get columns 'Publicação D.O.U' & 'Observação' from dados_basicos
+            processo_dados = self.processes_interf[fmtPname(row[1][1])].dados
+            dfbasicos = pd.DataFrame(processo_dados['eventos'][1:],
+                        columns=processo_dados['eventos'][0])
+
             processo_events['EvSeq'] = len(processo_events)-processo_events.index.values.astype(int) # set correct order of events
             processo_events['Evento'] = processo_events['Evento'].astype(int)
             # put count of associados father and sons
-            processo_events['Dad'] = row[1]['Dad']
+            processo_events['Dads'] = row[1]['Dads']
             processo_events['Sons'] =row[1]['Sons']
             processo_events['Ativo'] = row[1]['Ativo']
+            processo_events['Obs'] = dfbasicos['Observação']
+            processo_events['DOU'] = dfbasicos['Publicação D.O.U']
             self.tabela_interf_eventos = self.tabela_interf_eventos.append(processo_events)
 
         # strdate to datetime comparacao prioridade
@@ -247,12 +247,10 @@ class Estudo(Processo):
                  lambda strdate: datetime.strptime(strdate, "%d/%m/%Y %H:%M:%S"))
         self.tabela_interf_eventos.reset_index(inplace=True,drop=True)
         # rearrange collumns in more meaningfully viewing
-        columns_order = ['Ativo','Processo', 'Evento', 'EvSeq', 'Descrição', 'Data', 'Dad', 'Sons']
+        columns_order = ['Ativo','Processo', 'Evento', 'EvSeq', 'Descrição', 'Data', 'Dads', 'Sons', 'Obs', 'DOU']
         self.tabela_interf_eventos = self.tabela_interf_eventos[columns_order]
         ### Todos os eventos posteriores a data de prioridade são marcados
         # como 0 na coluna Prioridade otherwise 1
-        if not hasattr(self, 'prioridade'):
-            self.prioridade = self.getPrioridade()
         self.tabela_interf_eventos['DataPrior'] = self.prioridade
         self.tabela_interf_eventos['EvPrior'] = 0 # 1 prioritario 0 otherwise
         self.tabela_interf_eventos['EvPrior'] = self.tabela_interf_eventos.apply(
@@ -273,6 +271,10 @@ class Estudo(Processo):
         # re-rearrange columns
         newcolumns = ['Prior'] + self.tabela_interf_eventos.columns[:-1].tolist()
         self.tabela_interf_eventos = self.tabela_interf_eventos[newcolumns]
+        # place Observação/DOU in the end (last columns)
+        newcolumns = self.tabela_interf_eventos.columns.tolist()
+        newcolumns = [e for e in newcolumns if e not in ('Obs', 'DOU')] + ['Obs', 'DOU']
+        self.tabela_interf_eventos = self.tabela_interf_eventos[newcolumns]
         return True
 
     def excelInterferencia(self):
@@ -290,6 +292,9 @@ class Estudo(Processo):
                             arr=txt_table, axis=-1) # maximum string size in each column
         headers = np.array([ len(string) for string in interf_eventos.columns ]) # maximum string size each header
         colwidths = np.maximum(minsize, headers) + 5 # 5 characters of space more
+        # Observação / DOU set size to header size - due a lot of text
+        colwidths[-1] = headers[-1] + 10 # Observação
+        colwidths[-2] = headers[-2] + 10 # DOU
         # number of rows
         nrows = len(interf_eventos)
         # Create a Pandas Excel writer using XlsxWriter as the engine.

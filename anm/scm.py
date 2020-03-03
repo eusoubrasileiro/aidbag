@@ -18,7 +18,7 @@ def fmtPname(pross_str):
     return pross_str[:3]+'.'+pross_str[3:6]+r'/'+pross_str[6:]
 
 def numberyearPname(pross_str):
-    "return process (number, year0"
+    "return process (number, year)"
     pross_str = fmtPname(pross_str) # to make sure
     pross_str = ''.join(re.findall(regxdp, pross_str))
     return pross_str[:6], pross_str[6:]
@@ -26,19 +26,24 @@ def numberyearPname(pross_str):
 class Processo:
     # static field
     scm_data_tags = { # "data name" ; soup.find fields( "tag", "attributes")
-        'prioridade'            : ['span',  { 'id' : "ctl00_conteudo_lblDataPrioridade"} ],
+        'prioridade'            : ['span',  { 'id' : "ctl00_conteudo_lblDataPrioridade"} ], # pode estar errada
         'area'                  : ['span',  { 'id' : 'ctl00_conteudo_lblArea'} ],
         'UF'                    : ['span',  { 'id' : 'ctl00_conteudo_lblUF'} ],
+        'data_protocolo'        : ['span',  { 'id' : 'ctl00_conteudo_lblDataProtocolo'} ], # pode estar vazia
         'associados'            : ['table', { 'id' : 'ctl00_conteudo_gridProcessosAssociados'} ],
         'substancias'           : ['table', { 'id' : 'ctl00_conteudo_gridSubstancias'} ],
         'eventos'               : ['table', { 'id' : 'ctl00_conteudo_gridEventos'} ],
         'municipios'            : ['table', { 'id' : 'ctl00_conteudo_gridMunicipios'} ],
         'ativo'                 : ['span',  { 'id' : 'ctl00_conteudo_lblAtivo'} ]
     }
-    def __init__(self, processostr, wpage):
-        self.processostr = processostr
+    def __init__(self, processostr, wpage, scmdata=True, upsearch=True, verbose=True):
+        self.processostr = fmtPname(processostr)
         self.processo_number, self.processo_year = numberyearPname(processostr)
         self.wpage = wpage
+        self.verbose = verbose
+        if scmdata:
+            self.dadosBasicosGet()
+            self.ancestorsnSons(upsearch)
 
     @classmethod # not same as @staticmethod (has a self)
     def fromNumberYear(self, processo_number, processo_year, wpage):
@@ -53,10 +58,13 @@ class Processo:
     def dadosBasicosRetrieve(self):
         """   Get & Post na página dados do Processo do Cadastro  Mineiro (SCM)
         """
+        if hasattr(self, 'scm_dadosbasicosmain_response'): # already downloaded
+            self.wpage.response = self.scm_dadosbasicosmain_response
+            return True
         self.wpage.get('https://sistemas.dnpm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx')
         formcontrols = {
             'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnConsultarProcesso',
-            'ctl00$conteudo$txtNumeroProcesso': fmtPname(self.processostr),
+            'ctl00$conteudo$txtNumeroProcesso': self.processostr,
             'ctl00$conteudo$btnConsultarProcesso': 'Consultar',
             '__VIEWSTATEENCRYPTED': ''}
         formdata = hscrap.formdataPostAspNet(self.wpage.response, formcontrols)
@@ -66,6 +74,7 @@ class Processo:
         if self.wpage.response.text.find('ctl00_conteudo_lblAtivo') == -1:
             return False
         # may give False
+        self.scm_dadosbasicosmain_response = self.wpage.response
         return True
 
     def dadosPoligonalRetrieve(self):
@@ -77,15 +86,106 @@ class Processo:
                       data=formdata)
         return self.wpage
 
-    def dadosBasicosGet(self, data_tags=None):
+    def ancestorsnSons(self, upsearch=True, ass_ignore=''):
+        """
+        * upsearch - if to upsearch for 'corrected' prioridade by ancestry
+        * ass_ignore - to ignore in associados list (remove)
+
+        'associados' must be in self.dados dict to build anscestors and sons
+        - build self.anscestors lists ( father, grandfather, great-grandfather etc.) from
+        closer to farther
+        - build direct sons (self.dsons) list
+        - create the 'correct' prioridade (self.prioridadec)
+        """
+
+        if not (("associados" in self.dados)):  # key must exist
+            raise Exception("key <associados> must exist on self.dados")
+
+       # process 'processos associados' to get father, grandfather etc.
+        self.anscestors = []
+        self.dsons = []
+        self.assprocesses = {}
+        self.prioridadec = self.prioridade
+        if (not (self.dados['associados'][0][0] == 'Nenhum processo associado.')):
+            # 'processo original' vs 'processo'  (many many times) wrong
+            # sons / father association are many times wrong
+            # father as son and vice-versa
+            # get all processes listed on processos associados
+            # dados['associados'][0][:] header line
+            # dados['associados'][1][5] # coluna 5 'processo original'
+            # dados['associados'][1][0] # coluna 0 'processo'
+            nrows = len(self.dados['associados'])
+            assprocesses_str = ([self.dados['associados'][i][0] for i in range(1, nrows) ] +
+                             [ self.dados['associados'][i][5] for i in range(1, nrows) ])
+            assprocesses_str = list(set(assprocesses_str)) # Unique Process Only
+            assprocesses_str = list(map(fmtPname, assprocesses_str)) # formatted process names
+            assprocesses_str.remove(self.processostr)# remove SELF from list
+            ass_ignore = fmtPname(ass_ignore)
+            if ass_ignore in assprocesses_str:  # ignore this process (son)
+                assprocesses_str.remove(ass_ignore) # removing circular reference
+            # get 'data_protocolo' of every_body
+            for aprocess in assprocesses_str:
+                processo = Processo(aprocess, self.wpage, scmdata=False, verbose=self.verbose)
+                processo.dadosBasicosGet()
+                self.assprocesses[aprocess] = processo
+            # from here we get dsons
+            for kname, vprocess in self.assprocesses.items():
+                if vprocess.data_protocolo >= self.prioridade:
+                    self.dsons.append(kname)
+                else: # and anscestors if any
+                    self.anscestors.append(kname)
+            # go up on ascestors until no other parent
+            if len(self.anscestors) > 1:
+                raise Exception("ancestorsnSons - failed More than one parent: ", self.processostr)
+            if len(self.anscestors) == 0: # no parent
+                return False
+            # first father already has an process class object (get it)
+            self.anscestorsprocesses = [] # storing the ancestors processes objects
+            parent = self.assprocesses[self.anscestors[0]] # first father
+            son_name = self.processostr # self is the son
+            self.prioridadec = parent.prioridade
+            if self.verbose:
+                print("ancestorsnSons - going up: ", parent.processostr, file=sys.stderr)
+            # find corrected data prioridade by ancestry
+            while True and upsearch: # how long will this take?
+                parent.ancestorsnSons(False, ass_ignore=son_name)
+                # remove circular reference to son
+                self.anscestorsprocesses.append(parent)
+                if len(parent.anscestors) > 1:
+                    raise Exception("ancestorsnSons - failed More than one parent: ", parent.processostr)
+                if len(parent.anscestors) == 0:
+                    break
+                self.anscestors.append(parent.anscestors[0])
+                son_name = parent.processostr
+                parent = Processo(parent.anscestors[0], self.wpage, scmdata=False)
+                parent.dadosBasicosGet()
+                self.prioridadec = parent.prioridade
+
+            return True
+        # nenhum associado
+        return False
+
+
+    def toDates(self):
+        """prioridade pode estar errada, por exemplo, quando uma cessão gera processos 300
+        a prioridade desses 300 acaba errada ao esquecer do avô"""
+        self.prioridade = datetime.strptime(self.dados['prioridade'], "%d/%m/%Y %H:%M:%S")
+        self.data_protocolo = datetime.strptime(self.dados['data_protocolo'], "%d/%m/%Y %H:%M:%S")
+        return self.prioridade
+
+    def dadosBasicosGet(self, data_tags=None, redo=False):
         """check your nltm authenticated session
         if getting empty dict dados"""
+        if data_tags is None: # data tags to fill in 'dados' with
+            data_tags = self.scm_data_tags
         if not hasattr(self, 'dados'):
             self.dadosBasicosRetrieve()
             self.dados = {}
-        if data_tags is None: # data tags to fill in 'dados' with
-            data_tags = self.scm_data_tags
+        elif not redo: # do again
+            return len(self.dados) == len(data_tags)
         soup = BeautifulSoup(self.wpage.response.text, features="lxml")
+        if self.verbose:
+            print("dadosBasicosGet - parsing: ", self.processostr, file=sys.stderr)
         for data in data_tags:
             result = soup.find(data_tags[data][0],
                                     data_tags[data][1])
@@ -95,6 +195,11 @@ class Processo:
                 else:
                     result = result.text
                 self.dados.update({data : result})
+        if self.dados['data_protocolo'] == '': # might happen
+            self.dados['data_protocolo'] = self.dados['prioridade']
+            if self.verbose:
+                print('dadosBasicosGet - missing <data_protocolo>: ', self.processostr, file=sys.stderr)
+        self.toDates()
         return len(self.dados) == len(data_tags) # return if got w. asked for
 
     def dadosBasicosGetMissing(self):
@@ -124,9 +229,3 @@ class Processo:
         self.dados.update(father.dados)
         del father
         return self.dados
-
-    def getPrioridade(self):
-        if not (hasattr(self, 'dados')):
-            self.dadosBasicosGet()
-        self.prioridade = datetime.strptime(self.dados['prioridade'], "%d/%m/%Y %H:%M:%S")
-        return self.prioridade
