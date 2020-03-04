@@ -56,18 +56,20 @@ __eventos_scm__ = os.path.join(__secor_path__,
                         r'Secorpy\eventos_scm_09102019.xls')
 
 class Estudo(Processo):
-    """
-    - Analise de Requerimento de Pesquisa - opcao 0
-    - Analise de Formulario 1 - opcao 1
-    - Analise de Opcao de Area - opcao 2
-    - Batch Requerimento de Pesquisa - opcao 3
-    """
-    def __new__(cls, processostr, wpage, option=3, dadosbasicos=True, fathernsons=True, ancestry=True, verbose=True):
+    def __init__(self, processostr, wpage, dadosbasicos=True, fathernsons=True, ancestry=True, verbose=True):
         """
         processostr : numero processo format xxx.xxx/ano
         wpage : wPage html webpage scraping class com login e passwd preenchidos
         """
-        self = super().__new__(cls, processostr, wpage, dadosbasicos, fathernsons, ancestry, verbose)
+        pass
+
+    def setPath(self, option=3):
+        """
+        - Analise de Requerimento de Pesquisa - opcao 0
+        - Analise de Formulario 1 - opcao 1
+        - Analise de Opcao de Area - opcao 2
+        - Batch Requerimento de Pesquisa - opcao 3
+        """
         # pasta padrao salvar processos formulario 1
         if option == 0:
             self.secorpath = os.path.join(__secor_path__, 'Requerimento')
@@ -82,7 +84,6 @@ class Estudo(Processo):
                     self.processo_number+'-'+self.processo_year )
         if not os.path.exists(self.processo_path): # cria a pasta  se nao existir
             os.mkdir(self.processo_path)
-        return self
 
     def salvaDadosGeraisSCM(self):
         # entra na pagina dados básicos do Processo do Cadastro  Mineiro
