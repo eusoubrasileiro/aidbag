@@ -6,6 +6,10 @@ from web import htmlscrap as hscrap
 from datetime import datetime
 import re
 
+from threading import Thread, Lock
+
+mutex = Lock()
+
 # "scm consulta dados (post) nao aceita formato diferente de 'xxx.xxx/xxxx'"
 regxdp = re.compile("\d+")
 def fmtPname(pross_str):
@@ -40,7 +44,9 @@ class Processo:
         processostr = fmtPname(processostr)
         if processostr in ProcessStorage:
             if verbose:
+                mutex.acquire()
                 print("Processo __new___ getting from storage ", processostr, file=sys.stderr)
+                mutex.release()
             processo = ProcessStorage[processostr]
             if dadosbasicos and not processo.dadosbasicos_run:
                 processo.dadosBasicosGet()
@@ -61,7 +67,9 @@ class Processo:
             self.dadosbasicos_run = False
             self.fathernsons_run = False
             if verbose:
+                mutex.acquire()
                 print("Processo __new___ placing on storage ", processostr, file=sys.stderr)
+                mutex.release()
             ProcessStorage[self.processostr] = self   # store this new guy
             if dadosbasicos:
                 self.dadosBasicosGet()
@@ -180,7 +188,9 @@ class Processo:
             parent = self.assprocesses[self.anscestors[0]] # first father
             son_name = self.processostr # self is the son
             if self.verbose:
+                mutex.acquire()
                 print("ancestrySearch - going up: ", parent.processostr, file=sys.stderr)
+                mutex.release()
             # find corrected data prioridade by ancestry
             while True: # how long will this take?
                 parent.fathernSons(ass_ignore=son_name)
@@ -216,7 +226,9 @@ class Processo:
             return len(self.dados) == len(data_tags)
         soup = BeautifulSoup(self.wpage.response.text, features="lxml")
         if self.verbose:
+            mutex.acquire()
             print("dadosBasicosGet - parsing: ", self.processostr, file=sys.stderr)
+            mutex.release()
         for data in data_tags:
             result = soup.find(data_tags[data][0],
                                     data_tags[data][1])

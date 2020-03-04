@@ -8,6 +8,11 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
+# threading
+import copy
+from multiprocessing.dummy import Pool as ThreadPool
+import itertools
+
 import numpy as np
 import pandas as pd
 from datetime import datetime
@@ -22,6 +27,8 @@ from enum import Enum
 class wPage(wPage): # overwrites original class for ntlm authentication
     def __init__(self, user, passwd):
         """ntlm auth user and pass"""
+        self.user = user
+        self.passwd = passwd
         self.session = requests.Session()
         self.session.auth = HttpNtlmAuth(user, passwd)
 
@@ -186,18 +193,32 @@ class Estudo(Processo):
         self.tabela_interf['Dads'] = 0
         self.tabela_interf['Sons'] = 0
         self.tabela_interf['Ativo'] = 'Sim'
-        #self.tabela_interf['Assoc'] = None
+        # POOL OF THREADS
+        # due many calls to python.requests taking much time
+        processos_interferentes = [fmtPname(row[1]['Processo'])
+                                    for row in self.tabela_interf.iterrows()]
+        # create multiple python requests sessions
+        wpages = [wPage(self.wpage.user, self.wpage.passwd)
+                        for i in range(len(processos_interferentes))]
+        self.processes_interf = None
+        with ThreadPool(len(processos_interferentes)) as pool:
+            # Open the URLs in their own threads and return the results
+            #processo = Processo(row[1].Processo, self.wpage, verbose=self.verbose)
+            self.processes_interf = pool.starmap(Processo, zip(processos_interferentes,
+                                            wpages, itertools.repeat(self.verbose)))
+        # create dict of key process name , value process objects
+        self.processes_interf = dict(zip(list(map(lambda p: p.processostr, self.processes_interf)),
+                                        self.processes_interf))
+        # self.processes_interf[processo_name] = processo # save on interf process object list
         # tabela c/ processos associadoas # aos processos interferentes
         self.tabela_assoc = pd.DataFrame(columns=['Main', 'Prior', 'Processo',  'Titular', 'Tipo',
                 'Assoc', 'DesAssoc', 'Original', 'Obs'])
-        self.processes_interf = {}
-        for row in self.tabela_interf.iterrows(): # takes some time
+        for row in self.tabela_interf.iterrows():
             # it seams excel writer needs every process name have same length string 000.000/xxxx (12)
             # so reformat process name
             processo_name = fmtPname(row[1]['Processo'])
+            processo = self.processes_interf[processo_name]
             self.tabela_interf.loc[row[0], 'Processo'] = processo_name
-            processo = Processo(row[1].Processo, self.wpage, verbose=self.verbose)
-            self.processes_interf[processo_name] = processo # save on interf process object list
             self.tabela_interf.loc[row[0], 'Ativo'] = processo.dados['ativo']
             if processo.associados:
                 assoc_items = pd.DataFrame(processo.dados['associados'][1:],
