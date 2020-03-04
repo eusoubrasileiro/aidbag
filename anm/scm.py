@@ -36,14 +36,41 @@ class Processo:
         'municipios'            : ['table', { 'id' : 'ctl00_conteudo_gridMunicipios'} ],
         'ativo'                 : ['span',  { 'id' : 'ctl00_conteudo_lblAtivo'} ]
     }
-    def __init__(self, processostr, wpage, scmdata=True, upsearch=True, verbose=True):
-        self.processostr = fmtPname(processostr)
-        self.processo_number, self.processo_year = numberyearPname(processostr)
-        self.wpage = wpage
-        self.verbose = verbose
-        if scmdata:
-            self.dadosBasicosGet()
-            self.ancestorsnSons(upsearch)
+    def __new__(cls, processostr, wpage, dadosbasicos=True, fathernsons=True, ancestry=True, verbose=True):
+        processostr = fmtPname(processostr)
+        if processostr in ProcessStorage:
+            if verbose:
+                print("Processo __new___ getting from storage ", processostr, file=sys.stderr)
+            processo = ProcessStorage[processostr]
+            if dadosbasicos and not processo.dadosbasicos_run:
+                processo.dadosBasicosGet()
+            if fathernsons and not processo.fathernsons_run:
+                processo.fathernSons()
+            if ancestry and not processo.ancestry_run:
+                processo.ancestrySearch()
+            return processo
+        else:
+             # No instance existed, so create new object
+            self = super().__new__(cls)  # Calls parent __new__ to make empty object
+            self.processostr = processostr
+            self.processo_number, self.processo_year = numberyearPname(processostr)
+            self.wpage = wpage
+            self.verbose = verbose
+            # control to avoid running again
+            self.ancestry_run = False
+            self.dadosbasicos_run = False
+            self.fathernsons_run = False
+            if verbose:
+                print("Processo __new___ placing on storage ", processostr, file=sys.stderr)
+            ProcessStorage[self.processostr] = self   # store this new guy
+            if dadosbasicos:
+                self.dadosBasicosGet()
+            if fathernsons:
+                self.fathernSons()
+            if ancestry:
+                self.ancestrySearch()
+            return self
+    #def __init__(self, processostr, wpage, scmdata=True, upsearch=True, verbose=True):
 
     @classmethod # not same as @staticmethod (has a self)
     def fromNumberYear(self, processo_number, processo_year, wpage):
@@ -86,27 +113,25 @@ class Processo:
                       data=formdata)
         return self.wpage
 
-    def ancestorsnSons(self, upsearch=True, ass_ignore=''):
+
+    def fathernSons(self, ass_ignore=''):
         """
-        * upsearch - if to upsearch for 'corrected' prioridade by ancestry
         * ass_ignore - to ignore in associados list (remove)
 
         'associados' must be in self.dados dict to build anscestors and sons
-        - build self.anscestors lists ( father, grandfather, great-grandfather etc.) from
-        closer to farther
+        - build self.anscestors lists ( father only)
         - build direct sons (self.dsons) list
-        - create the 'correct' prioridade (self.prioridadec)
         """
-
         if not (("associados" in self.dados)):  # key must exist
             raise Exception("key <associados> must exist on self.dados")
-
        # process 'processos associados' to get father, grandfather etc.
         self.anscestors = []
         self.dsons = []
         self.assprocesses = {}
-        self.prioridadec = self.prioridade
+        self.associados = False
+        self.fathernsons_run = True
         if (not (self.dados['associados'][0][0] == 'Nenhum processo associado.')):
+            self.associados = True
             # 'processo original' vs 'processo'  (many many times) wrong
             # sons / father association are many times wrong
             # father as son and vice-versa
@@ -125,8 +150,8 @@ class Processo:
                 assprocesses_str.remove(ass_ignore) # removing circular reference
             # get 'data_protocolo' of every_body
             for aprocess in assprocesses_str:
-                processo = Processo(aprocess, self.wpage, scmdata=False, verbose=self.verbose)
-                processo.dadosBasicosGet()
+                processo = Processo(aprocess, self.wpage,  True, False, False,
+                                        verbose=self.verbose)
                 self.assprocesses[aprocess] = processo
             # from here we get dsons
             for kname, vprocess in self.assprocesses.items():
@@ -136,35 +161,40 @@ class Processo:
                     self.anscestors.append(kname)
             # go up on ascestors until no other parent
             if len(self.anscestors) > 1:
-                raise Exception("ancestorsnSons - failed More than one parent: ", self.processostr)
-            if len(self.anscestors) == 0: # no parent
-                return False
+                raise Exception("fathernSons - failed More than one parent: ", self.processostr)
+        # nenhum associado
+        return self.associados
+
+    def ancestrySearch(self):
+        """
+        upsearch for ancestry of this process
+        - create the 'correct' prioridade (self.prioridadec)
+        - complete the self.anscestors lists ( ..., grandfather, great-grandfather etc.) from
+        closer to farther
+        """
+        self.ancestry_run = True
+        self.prioridadec = self.prioridade
+        if self.associados and len(self.anscestors) > 0:
             # first father already has an process class object (get it)
             self.anscestorsprocesses = [] # storing the ancestors processes objects
             parent = self.assprocesses[self.anscestors[0]] # first father
             son_name = self.processostr # self is the son
-            self.prioridadec = parent.prioridade
             if self.verbose:
-                print("ancestorsnSons - going up: ", parent.processostr, file=sys.stderr)
+                print("ancestrySearch - going up: ", parent.processostr, file=sys.stderr)
             # find corrected data prioridade by ancestry
-            while True and upsearch: # how long will this take?
-                parent.ancestorsnSons(False, ass_ignore=son_name)
+            while True: # how long will this take?
+                parent.fathernSons(ass_ignore=son_name)
                 # remove circular reference to son
                 self.anscestorsprocesses.append(parent)
                 if len(parent.anscestors) > 1:
-                    raise Exception("ancestorsnSons - failed More than one parent: ", parent.processostr)
+                    raise Exception("ancestrySearch - failed More than one parent: ", parent.processostr)
                 if len(parent.anscestors) == 0:
                     break
                 self.anscestors.append(parent.anscestors[0])
                 son_name = parent.processostr
-                parent = Processo(parent.anscestors[0], self.wpage, scmdata=False)
-                parent.dadosBasicosGet()
+                parent = Processo(parent.anscestors[0], self.wpage,
+                        True, False, False, self.verbose)
                 self.prioridadec = parent.prioridade
-
-            return True
-        # nenhum associado
-        return False
-
 
     def toDates(self):
         """prioridade pode estar errada, por exemplo, quando uma cessão gera processos 300
@@ -176,12 +206,13 @@ class Processo:
     def dadosBasicosGet(self, data_tags=None, redo=False):
         """check your nltm authenticated session
         if getting empty dict dados"""
+        self.dadosbasicos_run = True
         if data_tags is None: # data tags to fill in 'dados' with
             data_tags = self.scm_data_tags
-        if not hasattr(self, 'dados'):
+        if not hasattr(self, 'dados') or redo == True:
             self.dadosBasicosRetrieve()
             self.dados = {}
-        elif not redo: # do again
+        else:
             return len(self.dados) == len(data_tags)
         soup = BeautifulSoup(self.wpage.response.text, features="lxml")
         if self.verbose:
@@ -229,3 +260,12 @@ class Processo:
         self.dados.update(father.dados)
         del father
         return self.dados
+
+
+############################################################
+# Container of processes to avoid :
+# 1. conneting/open page of scm again
+# 2. parsing all information again
+# If it was already parsed save it in here
+ProcessStorage = {}
+# key - fmtPname pross_str - value Processo object

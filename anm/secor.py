@@ -67,7 +67,7 @@ class Estudo(Processo):
         processostr : numero processo format xxx.xxx/ano
         wpage : wPage html webpage scraping class com login e passwd preenchidos
         """
-        super().__init__(processostr, wpage, scmdata, upsearch, verbose)
+        # super().__new__(processostr, wpage, scmdata, upsearch, verbose)
         # pasta padrao salvar processos formulario 1
         if option == 0:
             self.secorpath = os.path.join(__secor_path__, 'Requerimento')
@@ -197,11 +197,11 @@ class Estudo(Processo):
             processo = Processo(row[1].Processo, self.wpage, verbose=self.verbose)
             self.processes_interf[processo_name] = processo # save on interf process object list
             self.tabela_interf.loc[row[0], 'Ativo'] = processo.dados['ativo']
-            if len(processo.assprocesses) > 0:
+            if processo.associados:
                 assoc_items = pd.DataFrame(processo.dados['associados'][1:],
                         columns=self.tabela_assoc.columns[2:])
                 assoc_items['Main'] = processo.processostr
-                assoc_items['Prior'] = processo.prioridadec
+                assoc_items['Prior'] = (processo.prioridadec if hasattr(processo, 'prioridadec') else processo.prioridade)
                 # number of direct sons/ ancestors
                 self.tabela_interf.loc[row[0], 'Sons'] = len(processo.dsons)
                 self.tabela_interf.loc[row[0], 'Dads'] = len(processo.anscestors)
