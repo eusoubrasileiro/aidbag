@@ -24,15 +24,6 @@ from web.htmlscrap import *
 
 from enum import Enum
 
-class wPage(wPage): # overwrites original class for ntlm authentication
-    def __init__(self, user, passwd):
-        """ntlm auth user and pass"""
-        self.user = user
-        self.passwd = passwd
-        self.session = requests.Session()
-        self.session.auth = HttpNtlmAuth(user, passwd)
-
-
 # def copy_format(book, fmt):
 #     """xlsxwriter cell-format 'clone' function"""
 #     properties = [f[4:] for f in dir(fmt) if f[0:4] == 'set_']
@@ -60,23 +51,21 @@ userhome = str(Path.home()) # get userhome folder
 # eventos que inativam or ativam processo
 __secor_path__ = os.path.join(userhome, r'Documents\Controle_Areas')
 __eventos_scm__ = os.path.join(__secor_path__,
-                        r'Secorpy\eventos_scm_09102019.xls')
+                        r'Secorpy\eventos_scm_12032020.xls')
 
 class Estudo(Processo):
-    def __init__(self, processostr, wpage, dadosbasicos=True, fathernsons=True, ancestry=True, verbose=True):
+    """
+    - Analise de Requerimento de Pesquisa - opcao 0
+    - Analise de Formulario 1 - opcao 1
+    - Analise de Opcao de Area - opcao 2
+    - Batch Requerimento de Pesquisa - opcao 3
+    """
+    def __new__(cls, processostr, wpage, option=3, dados=3, verbose=True):
         """
         processostr : numero processo format xxx.xxx/ano
         wpage : wPage html webpage scraping class com login e passwd preenchidos
         """
-        pass
-
-    def setPath(self, option=3):
-        """
-        - Analise de Requerimento de Pesquisa - opcao 0
-        - Analise de Formulario 1 - opcao 1
-        - Analise de Opcao de Area - opcao 2
-        - Batch Requerimento de Pesquisa - opcao 3
-        """
+        self = super(Estudo, cls).__new__(cls,  processostr, wpage, dados, verbose)
         # pasta padrao salvar processos formulario 1
         if option == 0:
             self.secorpath = os.path.join(__secor_path__, 'Requerimento')
@@ -91,21 +80,25 @@ class Estudo(Processo):
                     self.processo_number+'-'+self.processo_year )
         if not os.path.exists(self.processo_path): # cria a pasta  se nao existir
             os.mkdir(self.processo_path)
+        return self
+        # https://stackoverflow.com/questions/16843158/python-multiple-inheritance-of-new-and-init-with-a-string-and-second-cla
 
-    def salvaDadosGeraisSCM(self):
+    def salvaDadosBasicosSCM(self):
         # entra na pagina dados básicos do Processo do Cadastro  Mineiro
-        if not self.dadosBasicosRetrieve():
-            return False
-        dadosgeraisfname = 'scm_dados_'+self.processo_number+self.processo_year
+        if not hasattr(self, 'scm_dadosbasicosmain_response'):
+            self._dadosBasicosRetrieve()
+        else:
+            self.wpage.response = self.scm_dadosbasicosmain_response
+        dadosbasicosfname = 'scm_basicos_'+self.processo_number+self.processo_year
         # sobrescreve
-        self.wpage.save(os.path.join(self.processo_path, dadosgeraisfname))
+        self.wpage.save(os.path.join(self.processo_path, dadosbasicosfname))
 
-    def salvaDadosGeraisSCMPoligonal(self):
+    def salvaDadosPoligonalSCM(self):
         # entra na pagina dados básicos do Processo do Cadastro  Mineiro (Poligonal)
-        self.dadosPoligonalRetrieve()
+        self._dadosPoligonalRetrieve()
         # sobrescreve
-        dadosgeraisfname = 'scm_dados_poligonal_'+self.processo_number+self.processo_year
-        self.wpage.save(os.path.join(self.processo_path, dadosgeraisfname))
+        dadospolyfname = 'scm_poligonal_'+self.processo_number+self.processo_year
+        self.wpage.save(os.path.join(self.processo_path, dadospolyfname))
 
     def salvaRetiradaInterferencia(self):
         self.wpage.get('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1')
@@ -197,18 +190,28 @@ class Estudo(Processo):
         # due many calls to python.requests taking much time
         processos_interferentes = [fmtPname(row[1]['Processo'])
                                     for row in self.tabela_interf.iterrows()]
+        # Unique Process Only
+        processos_interferentes = list(set(processos_interferentes))
+        # cannot have this here for now ...
+        # hack to workaround
         # create multiple python requests sessions
-        wpages = [wPage(self.wpage.user, self.wpage.passwd)
-                        for i in range(len(processos_interferentes))]
-        self.processes_interf = None
-        with ThreadPool(len(processos_interferentes)) as pool:
-            # Open the URLs in their own threads and return the results
-            #processo = Processo(row[1].Processo, self.wpage, verbose=self.verbose)
-            self.processes_interf = pool.starmap(Processo, zip(processos_interferentes,
-                                            wpages, itertools.repeat(self.verbose)))
-        # create dict of key process name , value process objects
-        self.processes_interf = dict(zip(list(map(lambda p: p.processostr, self.processes_interf)),
-                                        self.processes_interf))
+        # self.processes_interf = None
+        # with ThreadPool(len(processos_interferentes)) as pool:
+        #     # Open the URLs in their own threads and return the results
+        #     #processo = Processo(row[1].Processo, self.wpage, verbose=self.verbose)
+        #     self.processes_interf = pool.starmap(Processo,
+        #                                 zip(processos_interferentes,
+        #                                     itertools.repeat(self.wpage),
+        #                                     itertools.repeat(3),
+        #                                     itertools.repeat(self.verbose)))
+        # # create dict of key process name , value process objects
+        # self.processes_interf = dict(zip(list(map(lambda p: p.processostr, self.processes_interf)),
+        #                                 self.processes_interf))
+        self.processes_interf = {}
+        for process_name in processos_interferentes:
+            processo = Processo(process_name, self.wpage, 3, self.verbose)
+            self.processes_interf[process_name] = processo
+
         # self.processes_interf[processo_name] = processo # save on interf process object list
         # tabela c/ processos associadoas # aos processos interferentes
         self.tabela_assoc = pd.DataFrame(columns=['Main', 'Prior', 'Processo',  'Titular', 'Tipo',
@@ -360,6 +363,7 @@ class Estudo(Processo):
             worksheet.set_column(i, i, colwidths[i])
         # Close the Pandas Excel writer and output the Excel file.
         writer.save()
+        writer.close()
         self.excelInterferenciaAssociados()
 
     def excelInterferenciaAssociados(self):

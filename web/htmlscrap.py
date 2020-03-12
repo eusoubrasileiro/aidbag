@@ -6,11 +6,14 @@ import re
 
 import os, sys
 import requests
+from requests.adapters import HTTPAdapter
+
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
 import pandas as pd
 from datetime import datetime
+
 
 class wPage: # html  webpage scraping with soup and requests
     def __init__(self): # requests session
@@ -75,8 +78,11 @@ class wPage: # html  webpage scraping with soup and requests
 class wPageNtlm(wPage): # overwrites original class for ntlm authentication
     def __init__(self, user, passwd):
         """ntlm auth user and pass"""
-        self.session = requests.Session()
+        super().__init__()
+        self.user = user
+        self.passwd = passwd
         self.session.auth = HttpNtlmAuth(user, passwd)
+
 
 def formdataPostAspNet(response, formcontrols):
     """

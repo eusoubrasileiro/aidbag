@@ -2,13 +2,18 @@ import sys
 from bs4 import BeautifulSoup
 
 sys.path.append("..") # Adds higher directory to python modules path.
-from web import htmlscrap as hscrap
+from web import htmlscrap
 from datetime import datetime
 import re
 
+from multiprocessing.dummy import Pool as ThreadPool
+import itertools
+import threading
 from threading import Thread, Lock
 
 mutex = Lock()
+
+scm_timeout=(2*60)
 
 # "scm consulta dados (post) nao aceita formato diferente de 'xxx.xxx/xxxx'"
 regxdp = re.compile("\d+")
@@ -40,43 +45,71 @@ class Processo:
         'municipios'            : ['table', { 'id' : 'ctl00_conteudo_gridMunicipios'} ],
         'ativo'                 : ['span',  { 'id' : 'ctl00_conteudo_lblAtivo'} ]
     }
-    def __new__(cls, processostr, wpage, dadosbasicos=True, fathernsons=True, ancestry=True, verbose=True):
+    def __new__(cls, processostr, wpagentlm, dados=3, verbose=True):
+        """
+        dados :
+                1 - scm dados basicos page
+                2 - anterior + processos associados (father and direct sons)
+                3 - anterior + correção prioridade ancestor list
+        """
         processostr = fmtPname(processostr)
         if processostr in ProcessStorage:
             if verbose:
                 with mutex:
                     print("Processo __new___ getting from storage ", processostr, file=sys.stderr)
             processo = ProcessStorage[processostr]
-            if dadosbasicos and not processo.dadosbasicos_run:
-                processo.dadosBasicosGet()
-            if fathernsons and not processo.fathernsons_run:
-                processo.fathernSons()
-            if ancestry and not processo.ancestry_run:
-                processo.ancestrySearch()
+            processo.runtask(cdados=dados)
             return processo
         else:
              # No instance existed, so create new object
             self = super().__new__(cls)  # Calls parent __new__ to make empty object
             self.processostr = processostr
             self.processo_number, self.processo_year = numberyearPname(processostr)
-            self.wpage = wpage
+            self.wpage = htmlscrap.wPageNtlm(wpagentlm.user, wpagentlm.passwd)
             self.verbose = verbose
             # control to avoid running again
             self.ancestry_run = False
             self.dadosbasicos_run = False
             self.fathernsons_run = False
+            self.isfree = threading.Event()
             if verbose:
                 with mutex:
                     print("Processo __new___ placing on storage ", processostr, file=sys.stderr)
             ProcessStorage[self.processostr] = self   # store this new guy
-            if dadosbasicos:
-                self.dadosBasicosGet()
-            if fathernsons:
-                self.fathernSons()
-            if ancestry:
-                self.ancestrySearch()
+            self.isfree.set() # make it free right now so it can execute
+            self.runtask(cdados=dados)
             return self
+
     #def __init__(self, processostr, wpage, scmdata=True, upsearch=True, verbose=True):
+
+    def runtask(self, task=None, cdados=0):
+        """
+        codedados :
+                1 - scm dados basicos page
+                2 - anterior + processos associados (father and direct sons)
+                3 - anterior + correção prioridade (ancestors list)
+        """
+        # check if some taks is running
+        # only ONE can have this process at time
+        if not self.isfree.wait(60.*2):
+            raise Exception("runtask - wait time-out for process: ", self.processostr)
+        self.isfree.clear() # make it busy
+        if cdados: # passed argument to perform a default calls without args
+            if (cdados == 1) and not self.dadosbasicos_run:
+                task = (self.dadosBasicosGet, {})
+            elif (cdados == 2) and not self.fathernsons_run:
+                task = (self.fathernSons, {})
+            elif (cdados == 3) and not self.ancestry_run:
+                task = (self.ancestrySearch, {})
+        if task:
+            task, params = task
+            if self.verbose:
+                with mutex:
+                    print('task to run: ', task.__name__, ' params: ', params,
+                    ' - process: ', self.processostr, file=sys.stderr)
+            task(**params)
+
+        self.isfree.set() # make it free
 
     @classmethod # not same as @staticmethod (has a self)
     def fromNumberYear(self, processo_number, processo_year, wpage):
@@ -88,7 +121,7 @@ class Processo:
         """return scm_data_tags from specified data labels"""
         return dict(zip(data, [ Processo.scm_data_tags[key] for key in data ]))
 
-    def dadosBasicosRetrieve(self):
+    def _dadosBasicosRetrieve(self):
         """   Get & Post na página dados do Processo do Cadastro  Mineiro (SCM)
         """
         if hasattr(self, 'scm_dadosbasicosmain_response'): # already downloaded
@@ -100,9 +133,9 @@ class Processo:
             'ctl00$conteudo$txtNumeroProcesso': self.processostr,
             'ctl00$conteudo$btnConsultarProcesso': 'Consultar',
             '__VIEWSTATEENCRYPTED': ''}
-        formdata = hscrap.formdataPostAspNet(self.wpage.response, formcontrols)
+        formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
         self.wpage.post('https://sistemas.dnpm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx',
-                      data=formdata)
+                      data=formdata, timeout=scm_timeout)
         # check for failure if cannot find Campo Ativo
         if self.wpage.response.text.find('ctl00_conteudo_lblAtivo') == -1:
             return False
@@ -110,11 +143,11 @@ class Processo:
         self.scm_dadosbasicosmain_response = self.wpage.response
         return True
 
-    def dadosPoligonalRetrieve(self):
+    def _dadosPoligonalRetrieve(self):
         formcontrols = {
             'ctl00$conteudo$btnPoligonal': 'Poligonal',
             'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnPoligonal'}
-        formdata = hscrap.formdataPostAspNet(self.wpage.response, formcontrols)
+        formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
         self.wpage.post('https://sistemas.dnpm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx',
                       data=formdata)
         return self.wpage
@@ -128,14 +161,15 @@ class Processo:
         - build self.anscestors lists ( father only)
         - build direct sons (self.dsons) list
         """
-        if not (("associados" in self.dados)):  # key must exist
-            raise Exception("key <associados> must exist on self.dados")
+        if not self.dadosbasicos_run:
+            self.dadosBasicosGet()
+
        # process 'processos associados' to get father, grandfather etc.
         self.anscestors = []
         self.dsons = []
         self.assprocesses = {}
         self.associados = False
-        self.fathernsons_run = True
+
         if (not (self.dados['associados'][0][0] == 'Nenhum processo associado.')):
             self.associados = True
             # 'processo original' vs 'processo'  (many many times) wrong
@@ -146,29 +180,51 @@ class Processo:
             # dados['associados'][1][5] # coluna 5 'processo original'
             # dados['associados'][1][0] # coluna 0 'processo'
             nrows = len(self.dados['associados'])
-            assprocesses_str = ([self.dados['associados'][i][0] for i in range(1, nrows) ] +
+            self.assprocesses_str = ([self.dados['associados'][i][0] for i in range(1, nrows) ] +
                              [ self.dados['associados'][i][5] for i in range(1, nrows) ])
-            assprocesses_str = list(set(assprocesses_str)) # Unique Process Only
-            assprocesses_str = list(map(fmtPname, assprocesses_str)) # formatted process names
-            assprocesses_str.remove(self.processostr)# remove SELF from list
+            self.assprocesses_str = list(set(self.assprocesses_str)) # Unique Process Only
+            self.assprocesses_str = list(map(fmtPname, self.assprocesses_str)) # formatted process names
+            self.assprocesses_str.remove(self.processostr)# remove SELF from list
             ass_ignore = fmtPname(ass_ignore)
-            if ass_ignore in assprocesses_str:  # ignore this process (son)
-                assprocesses_str.remove(ass_ignore) # removing circular reference
+            if ass_ignore in self.assprocesses_str:  # ignore this process (son)
+                self.assprocesses_str.remove(ass_ignore) # removing circular reference
+            if self.verbose:
+                with mutex:
+                    print("fathernSons - getting associados: ", self.processostr,
+                    ' - ass_ignore: ', ass_ignore, file=sys.stderr)
+            # for aprocess in self.assprocesses_str:
+            #     processo = Processo(aprocess, self.wpage,  1, self.verbose)
+            #     self.assprocesses[aprocess] = processo
+            #create multiple python requests sessions
             # get 'data_protocolo' of every_body
-            for aprocess in assprocesses_str:
-                processo = Processo(aprocess, self.wpage,  True, False, False,
-                                        verbose=self.verbose)
-                self.assprocesses[aprocess] = processo
-            # from here we get dsons
-            for kname, vprocess in self.assprocesses.items():
-                if vprocess.data_protocolo >= self.prioridade:
-                    self.dsons.append(kname)
-                else: # and anscestors if any
-                    self.anscestors.append(kname)
-            # go up on ascestors until no other parent
-            if len(self.anscestors) > 1:
-                raise Exception("fathernSons - failed More than one parent: ", self.processostr)
+            self.assprocesses = None
+            # ignoring empty lists
+            # only one son or father that is ignored
+            if self.assprocesses_str:
+                with ThreadPool(len(self.assprocesses_str)) as pool:
+                    # Open the URLs in their own threads and return the results
+                    # processo = Processo(aprocess, self.wpage, True, False, False, verbose=self.verbose)
+                    self.assprocesses = pool.starmap(Processo, zip(self.assprocesses_str,
+                                                    itertools.repeat(self.wpage),
+                                                    itertools.repeat(1),
+                                                    itertools.repeat(self.verbose)))
+                # create dict of key process name , value process objects
+                self.assprocesses = dict(zip(list(map(lambda p: p.processostr, self.assprocesses)),
+                                                self.assprocesses))
+                if self.verbose:
+                    with mutex:
+                        print("fathernSons - finished associados: ", self.processostr, file=sys.stderr)
+                #from here we get dsons
+                for kname, vprocess in self.assprocesses.items():
+                    if vprocess.data_protocolo >= self.prioridade:
+                        self.dsons.append(kname)
+                    else: # and anscestors if any
+                        self.anscestors.append(kname)
+                # go up on ascestors until no other parent
+                if len(self.anscestors) > 1:
+                    raise Exception("fathernSons - failed more than one parent: ", self.processostr)
         # nenhum associado
+        self.fathernsons_run = True
         return self.associados
 
     def ancestrySearch(self):
@@ -178,7 +234,9 @@ class Processo:
         - complete the self.anscestors lists ( ..., grandfather, great-grandfather etc.) from
         closer to farther
         """
-        self.ancestry_run = True
+        if not self.fathernsons_run:
+            self.fathernSons()
+
         self.prioridadec = self.prioridade
         if self.associados and len(self.anscestors) > 0:
             # first father already has an process class object (get it)
@@ -190,7 +248,9 @@ class Processo:
                     print("ancestrySearch - going up: ", parent.processostr, file=sys.stderr)
             # find corrected data prioridade by ancestry
             while True: # how long will this take?
-                parent.fathernSons(ass_ignore=son_name)
+                # must run on same thread to block the sequence
+                # of instructions just after this
+                parent.runtask((parent.fathernSons,{'ass_ignore':son_name}))
                 # remove circular reference to son
                 self.anscestorsprocesses.append(parent)
                 if len(parent.anscestors) > 1:
@@ -199,11 +259,11 @@ class Processo:
                     break
                 self.anscestors.append(parent.anscestors[0])
                 son_name = parent.processostr
-                parent = Processo(parent.anscestors[0], self.wpage,
-                        True, False, False, self.verbose)
+                parent = Processo(parent.anscestors[0], self.wpage, 1, self.verbose)
                 self.prioridadec = parent.prioridade
+        self.ancestry_run = True
 
-    def toDates(self):
+    def _toDates(self):
         """prioridade pode estar errada, por exemplo, quando uma cessão gera processos 300
         a prioridade desses 300 acaba errada ao esquecer do avô"""
         self.prioridade = datetime.strptime(self.dados['prioridade'], "%d/%m/%Y %H:%M:%S")
@@ -213,11 +273,10 @@ class Processo:
     def dadosBasicosGet(self, data_tags=None, redo=False):
         """check your nltm authenticated session
         if getting empty dict dados"""
-        self.dadosbasicos_run = True
         if data_tags is None: # data tags to fill in 'dados' with
             data_tags = self.scm_data_tags
         if not hasattr(self, 'dados') or redo == True:
-            self.dadosBasicosRetrieve()
+            self._dadosBasicosRetrieve()
             self.dados = {}
         else:
             return len(self.dados) == len(data_tags)
@@ -230,18 +289,20 @@ class Processo:
                                     data_tags[data][1])
             if not (result is None):
                 if data_tags[data][0] == 'table': # parse table if table
-                    result = hscrap.tableDataText(result)
+                    result = htmlscrap.tableDataText(result)
                 else:
                     result = result.text
                 self.dados.update({data : result})
         if self.dados['data_protocolo'] == '': # might happen
             self.dados['data_protocolo'] = self.dados['prioridade']
             if self.verbose:
-                print('dadosBasicosGet - missing <data_protocolo>: ', self.processostr, file=sys.stderr)
-        self.toDates()
+                with mutex:
+                    print('dadosBasicosGet - missing <data_protocolo>: ', self.processostr, file=sys.stderr)
+        self._toDates()
+        self.dadosbasicos_run = True
         return len(self.dados) == len(data_tags) # return if got w. asked for
 
-    def dadosBasicosGetMissing(self):
+    def _dadosBasicosGetMissing(self):
         """obtém dados faltantes (se houver) pelo processo associado (pai):
            - UF
            - substancias
