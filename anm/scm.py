@@ -127,28 +127,27 @@ class Processo:
         if hasattr(self, 'scm_dadosbasicosmain_response'): # already downloaded
             self.wpage.response = self.scm_dadosbasicosmain_response
             return True
-        self.wpage.get('https://sistemas.dnpm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx')
+        self.wpage.get('https://sistemas.anm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx')
         formcontrols = {
             'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnConsultarProcesso',
             'ctl00$conteudo$txtNumeroProcesso': self.processostr,
             'ctl00$conteudo$btnConsultarProcesso': 'Consultar',
             '__VIEWSTATEENCRYPTED': ''}
         formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
-        self.wpage.post('https://sistemas.dnpm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx',
+        self.wpage.post('https://sistemas.anm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx',
                       data=formdata, timeout=scm_timeout)
         # check for failure if cannot find Campo Ativo
         if self.wpage.response.text.find('ctl00_conteudo_lblAtivo') == -1:
-            return False
+            raise Exception("Processo._dadosBasicosRetrieve - did not receive page")
         # may give False
         self.scm_dadosbasicosmain_response = self.wpage.response
-        return True
 
     def _dadosPoligonalRetrieve(self):
         formcontrols = {
             'ctl00$conteudo$btnPoligonal': 'Poligonal',
             'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnPoligonal'}
         formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
-        self.wpage.post('https://sistemas.dnpm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx',
+        self.wpage.post('https://sistemas.anm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx',
                       data=formdata)
         return self.wpage
 

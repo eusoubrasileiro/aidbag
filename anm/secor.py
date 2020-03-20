@@ -167,8 +167,7 @@ class Estudo(Processo):
         return True
 
     def getTabelaInterferencia(self):
-        if hasattr(self, 'tabela_interf'):
-            return self.tabela_interf
+        self.tabela_interf = None
         os.chdir(self.processo_path)
         interf_html = 'sigareas_rinterferencia_'+self.processo_number+self.processo_year+'.html'
         with open(interf_html, 'r') as f:
@@ -179,7 +178,7 @@ class Estudo(Processo):
             raise ConnectionError('Did not connect to sigareas r-interferencia')
         interf_table = soup.find("table", {"id" : "ctl00_cphConteudo_gvLowerRight"})
         if interf_table is None: # possible! no interferencia at all
-            return False # nenhuma interferencia SHOW!!
+            return self.tabela_interf # nenhuma interferencia SHOW!!
         rows = tableDataText(interf_table)
         self.tabela_interf = pd.DataFrame(rows[1:], columns=rows[0])
         # instert list of processos associados for each processo interferente
@@ -232,7 +231,7 @@ class Estudo(Processo):
                 self.tabela_interf.loc[row[0], 'Sons'] = len(processo.dsons)
                 self.tabela_interf.loc[row[0], 'Dads'] = len(processo.anscestors)
                 self.tabela_assoc = self.tabela_assoc.append(assoc_items, sort=False, ignore_index=True)
-        return True
+        return self.tabela_interf
 
     def getTabelaInterferenciaTodos(self):
         """
@@ -301,7 +300,6 @@ class Estudo(Processo):
         newcolumns = self.tabela_interf_eventos.columns.tolist()
         newcolumns = [e for e in newcolumns if e not in ('Obs', 'DOU')] + ['Obs', 'DOU']
         self.tabela_interf_eventos = self.tabela_interf_eventos[newcolumns]
-        return True
 
     def excelInterferencia(self):
         if not hasattr(self, 'tabela_interf_eventos'):
@@ -379,7 +377,7 @@ class Estudo(Processo):
         1. Must be authenticated with a aspnet Session Id
         2. Be aware that Fiddler causes problems with SSL authenthication making 1 impossible
         """
-        self.wpage.get('https://sistemas.dnpm.gov.br/sicopii/SICOP.asp') # must be here to get Asp Cookie for SICOP
+        self.wpage.get('https://sistemas.anm.gov.br/sicopii/SICOP.asp') # must be here to get Asp Cookie for SICOP
         formdata = {
             'CodProcessoAno': self.processo_year,
             'CodProcessoOrgao': '',
@@ -388,19 +386,32 @@ class Estudo(Processo):
             'Pesquisar.y': '9'
         }
         # consulta
-        self.wpage.post('https://sistemas.dnpm.gov.br/sicopii/P/Receber/ReceberProcesso.asp?go=S', data=formdata)
+        self.wpage.post('https://sistemas.anm.gov.br/sicopii/P/Receber/ReceberProcesso.asp?go=S', data=formdata)
 
         if not self.wpage.response.text.find(self.processo_number+'-'+self.processo_year):
-            print('Nao achou, provavelmente não autenticado em sistemas.dnpm.gov.br')
+            print('Nao achou, provavelmente não autenticado em sistemas.anm.gov.br')
             return False
 
         formdata = { 'chk1': 'on',
         'Botao.x': '37',
         'Botao.y': '8'}
 
-        self.wpage.post('https://sistemas.dnpm.gov.br/sicopii/P/Receber/ReceberProcesso.asp?go=S', data=formdata)
+        self.wpage.post('https://sistemas.anm.gov.br/sicopii/P/Receber/ReceberProcesso.asp?go=S', data=formdata)
 
         if not self.wpage.response.text.find('NAME="CodProcessoAno"'):
             return False
         else:
             return True
+
+def EstudoBatchRun(wpage, processos):
+    for processo in processos:
+        estudo = Estudo(processo, wpage, 0)
+        estudo.salvaDadosBasicosSCM()
+        if not estudo.salvaRetiradaInterferencia():
+            raise Exception('didnt download retirada de interferencia')
+        if not estudo.cancelaUltimoEstudo():
+            raise Exception('couldnt cancel ultimo estudo')
+        if estudo.getTabelaInterferencia() is not None:
+            estudo.getTabelaInterferenciaTodos()
+            estudo.excelInterferencia()
+            estudo.excelInterferenciaAssociados()
