@@ -38,6 +38,9 @@ class Processo:
         'prioridade'            : ['span',  { 'id' : "ctl00_conteudo_lblDataPrioridade"} ], # pode estar errada
         'area'                  : ['span',  { 'id' : 'ctl00_conteudo_lblArea'} ],
         'UF'                    : ['span',  { 'id' : 'ctl00_conteudo_lblUF'} ],
+        'NUP'                   : ['span',  { 'id' : 'ctl00_conteudo_lblNup'} ],
+        'tipo'                  : ['span',  { 'id' : 'ctl00_conteudo_lblTipoRequerimento'} ],
+        'fase'                  : ['span',  { 'id' : 'ctl00_conteudo_lblTipoFase'} ],        
         'data_protocolo'        : ['span',  { 'id' : 'ctl00_conteudo_lblDataProtocolo'} ], # pode estar vazia
         'associados'            : ['table', { 'id' : 'ctl00_conteudo_gridProcessosAssociados'} ],
         'substancias'           : ['table', { 'id' : 'ctl00_conteudo_gridSubstancias'} ],
