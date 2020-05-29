@@ -53,19 +53,21 @@ __secor_path__ = os.path.join(userhome, r'Documents\Controle_Areas')
 __eventos_scm__ = os.path.join(__secor_path__,
                         r'Secorpy\eventos_scm_12032020.xls')
 
-class Estudo(Processo):
+class Estudo:
     """
     - Analise de Requerimento de Pesquisa - opcao 0
     - Analise de Formulario 1 - opcao 1
     - Analise de Opcao de Area - opcao 2
     - Batch Requerimento de Pesquisa - opcao 3
     """
-    def __new__(cls, processostr, wpage, option=3, dados=3, verbose=True):
+    def __init__(self, processostr, wpage, option=3, dados=3, verbose=True):
         """
         processostr : numero processo format xxx.xxx/ano
         wpage : wPage html webpage scraping class com login e passwd preenchidos
         """
-        self = super(Estudo, cls).__new__(cls,  processostr, wpage, dados, verbose)
+        self.processo = GetProcesso(processostr, wpage, dados, verbose)
+        self.wpage = wpage
+        self.verbose = verbose
         # pasta padrao salvar processos formulario 1
         if option == 0:
             self.secorpath = os.path.join(__secor_path__, 'Requerimento')
@@ -77,34 +79,31 @@ class Estudo(Processo):
             self.secorpath = os.path.join(__secor_path__, r'Requerimento\Batch')
         # pasta deste processo
         self.processo_path = os.path.join(self.secorpath,
-                    self.processo_number+'-'+self.processo_year )
+                    self.processo.number+'-'+self.processo.year )
         if not os.path.exists(self.processo_path): # cria a pasta  se nao existir
             os.mkdir(self.processo_path)
-        return self
-        # https://stackoverflow.com/questions/16843158/python-multiple-inheritance-of-new-and-init-with-a-string-and-second-cla
 
     def salvaDadosBasicosSCM(self):
         # entra na pagina dados básicos do Processo do Cadastro  Mineiro
         if not hasattr(self, 'scm_dadosbasicosmain_response'):
-            self._dadosBasicosRetrieve()
-        else:
-            self.wpage.response = self.scm_dadosbasicosmain_response
-        dadosbasicosfname = 'scm_basicos_'+self.processo_number+self.processo_year
+            self.processo._dadosBasicosRetrieve()
+        dadosbasicosfname = 'scm_basicos_'+self.processo.number+self.processo.year
         # sobrescreve
-        self.wpage.save(os.path.join(self.processo_path, dadosbasicosfname))
+        self.processo.wpage.save(os.path.join(self.processo_path, dadosbasicosfname))
 
     def salvaDadosPoligonalSCM(self):
         # entra na pagina dados básicos do Processo do Cadastro  Mineiro (Poligonal)
-        self._dadosPoligonalRetrieve()
+        if not hasattr(self, 'scm_dadosbasicospoli_response'):
+            self.processo._dadosPoligonalRetrieve()
         # sobrescreve
-        dadospolyfname = 'scm_poligonal_'+self.processo_number+self.processo_year
-        self.wpage.save(os.path.join(self.processo_path, dadospolyfname))
+        dadospolyfname = 'scm_poligonal_'+self.processo.number+self.processo.year
+        self.processo.wpage.save(os.path.join(self.processo_path, dadospolyfname))
 
     def salvaRetiradaInterferencia(self):
         self.wpage.get('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1')
         formcontrols = {
-            'ctl00$cphConteudo$txtNumProc': self.processo_number,
-            'ctl00$cphConteudo$txtAnoProc': self.processo_year,
+            'ctl00$cphConteudo$txtNumProc': self.processo.number,
+            'ctl00$cphConteudo$txtAnoProc': self.processo.year,
             'ctl00$cphConteudo$btnEnviarUmProcesso': 'Processar'
         }
         formdata = formdataPostAspNet(self.wpage.response, formcontrols)
@@ -113,15 +112,15 @@ class Estudo(Processo):
                 data=formdata, timeout=(2*60))
         if not ( self.wpage.response.url == r'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'):
             return False             # Falhou salvar Retirada de Interferencia # provavelmente estudo aberto
-        fname = 'sigareas_rinterferencia_'+self.processo_number+self.processo_year
+        fname = 'sigareas_rinterferencia_'+self.processo.number+self.processo.year
         self.wpage.save(os.path.join(self.processo_path, fname))
         return True
 
     def salvaEstudoOpcaoDeArea(self):
         self.wpage.get('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=8')
         formcontrols = {
-            'ctl00$cphConteudo$txtNumProc': self.processo_number,
-            'ctl00$cphConteudo$txtAnoProc': self.processo_year,
+            'ctl00$cphConteudo$txtNumProc': self.processo.number,
+            'ctl00$cphConteudo$txtAnoProc': self.processo.year,
             'ctl00$cphConteudo$btnEnviarUmProcesso': 'Processar'
         }
         formdata = formdataPostAspNet(self.wpage.response, formcontrols)
@@ -133,7 +132,7 @@ class Estudo(Processo):
             # provavelmente estudo aberto
             return False
         #wpage.response.url # response url deve ser 'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'
-        fname = 'sigareas_opcao_'+self.processo_number+self.processo_year
+        fname = 'sigareas_opcao_'+self.processo.number+self.processo.year
         self.wpage.save(os.path.join(self.processo_path, fname))
         return True
 
@@ -145,8 +144,8 @@ class Estudo(Processo):
         self.wpage.get('http://sigareas.dnpm.gov.br/Paginas/Usuario/CancelarEstudo.aspx')
         #self.wpage.save('cancelar_estudo')
         formcontrols = {
-            'ctl00$cphConteudo$txtNumero': self.processo_number,
-            'ctl00$cphConteudo$txtAno': self.processo_year,
+            'ctl00$cphConteudo$txtNumero': self.processo.number,
+            'ctl00$cphConteudo$txtAno': self.processo.year,
             'ctl00$cphConteudo$btnConsultar': 'Consultar'
         }
         formdata = formdataPostAspNet(self.wpage.response, formcontrols)
@@ -155,8 +154,8 @@ class Estudo(Processo):
         # wpage.save('cancelar_estudo')
         # Cancela
         formcontrols = {
-            'ctl00$cphConteudo$txtNumero': self.processo_number,
-            'ctl00$cphConteudo$txtAno': self.processo_year,
+            'ctl00$cphConteudo$txtNumero': self.processo.number,
+            'ctl00$cphConteudo$txtAno': self.processo.year,
             'ctl00$cphConteudo$rptEstudo$ctl00$btnCancelar.x': '12',
             'ctl00$cphConteudo$rptEstudo$ctl00$btnCancelar.y': '12'
         }
@@ -169,7 +168,7 @@ class Estudo(Processo):
     def getTabelaInterferencia(self):
         self.tabela_interf = None
         os.chdir(self.processo_path)
-        interf_html = 'sigareas_rinterferencia_'+self.processo_number+self.processo_year+'.html'
+        interf_html = 'sigareas_rinterferencia_'+self.processo.number+self.processo.year+'.html'
         with open(interf_html, 'r') as f:
             htmltxt = f.read()
         soup = BeautifulSoup(htmltxt, features="lxml")
@@ -208,7 +207,7 @@ class Estudo(Processo):
         #                                 self.processes_interf))
         self.processes_interf = {}
         for process_name in processos_interferentes:
-            processo = Processo(process_name, self.wpage, 3, self.verbose)
+            processo = GetProcesso(process_name, self.wpage, 3, self.verbose)
             self.processes_interf[process_name] = processo
 
         # self.processes_interf[processo_name] = processo # save on interf process object list
@@ -276,10 +275,10 @@ class Estudo(Processo):
         self.tabela_interf_eventos = self.tabela_interf_eventos[columns_order]
         ### Todos os eventos posteriores a data de prioridade são marcados
         # como 0 na coluna Prioridade otherwise 1
-        self.tabela_interf_eventos['DataPrior'] = self.prioridade
+        self.tabela_interf_eventos['DataPrior'] = self.processo.prioridade
         self.tabela_interf_eventos['EvPrior'] = 0 # 1 prioritario 0 otherwise
         self.tabela_interf_eventos['EvPrior'] = self.tabela_interf_eventos.apply(
-            lambda row: 1 if row['Data'] < self.prioridade else 0, axis=1)
+            lambda row: 1 if row['Data'] < self.processo.prioridade else 0, axis=1)
         ### fill-in column with inativam or ativam processo for each event
         ### using excel 'eventos_scm_09102019.xls'
         eventos = pd.read_excel(__eventos_scm__)
@@ -308,8 +307,8 @@ class Estudo(Processo):
         dataformat = (lambda x: x.strftime("%d/%m/%Y %H:%M:%S"))
         interf_eventos.Data = interf_eventos.Data.apply(dataformat)
         interf_eventos.DataPrior = interf_eventos.DataPrior.apply(dataformat)
-        excelname = ('eventos_prioridade_' + self.processo_number
-                            + self.processo_year+'.xlsx')
+        excelname = ('eventos_prioridade_' + self.processo.number
+                            + self.processo.year+'.xlsx')
         # Get max string size each collum for setting excel width column
         txt_table = interf_eventos.values.astype(str).T
         minsize = np.apply_along_axis(lambda array: np.max([ len(string) for string in array ] ),
@@ -368,8 +367,8 @@ class Estudo(Processo):
         """Processos interferentes com processos associados"""
         if not hasattr(self, 'tabela_assoc'):
             return
-        excelname = ('eventos_prioridade_assoc_' + self.processo_number
-                            + self.processo_year+'.xlsx')
+        excelname = ('eventos_prioridade_assoc_' + self.processo.number
+                            + self.processo.year+'.xlsx')
         self.tabela_assoc.to_excel(excelname, index=False)
 
     def recebeSICOP(self):
@@ -379,16 +378,16 @@ class Estudo(Processo):
         """
         self.wpage.get('https://sistemas.anm.gov.br/sicopii/SICOP.asp') # must be here to get Asp Cookie for SICOP
         formdata = {
-            'CodProcessoAno': self.processo_year,
+            'CodProcessoAno': self.processo.year,
             'CodProcessoOrgao': '',
-            'CodProcessoSeq': self.processo_number,
+            'CodProcessoSeq': self.processo.number,
             'Pesquisar.x': '31',
             'Pesquisar.y': '9'
         }
         # consulta
         self.wpage.post('https://sistemas.anm.gov.br/sicopii/P/Receber/ReceberProcesso.asp?go=S', data=formdata)
 
-        if not self.wpage.response.text.find(self.processo_number+'-'+self.processo_year):
+        if not self.wpage.response.text.find(self.processo.number+'-'+self.processo.year):
             print('Nao achou, provavelmente não autenticado em sistemas.anm.gov.br')
             return False
 

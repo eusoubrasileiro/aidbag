@@ -32,6 +32,10 @@ def numberyearPname(pross_str):
     pross_str = ''.join(re.findall(regxdp, pross_str))
     return pross_str[:6], pross_str[6:]
 
+
+"""
+Use `GetProcesso` to avoid creating duplicate Processo's
+"""
 class Processo:
     # static field
     scm_data_tags = { # "data name" ; soup.find fields( "tag", "attributes")
@@ -40,7 +44,7 @@ class Processo:
         'UF'                    : ['span',  { 'id' : 'ctl00_conteudo_lblUF'} ],
         'NUP'                   : ['span',  { 'id' : 'ctl00_conteudo_lblNup'} ],
         'tipo'                  : ['span',  { 'id' : 'ctl00_conteudo_lblTipoRequerimento'} ],
-        'fase'                  : ['span',  { 'id' : 'ctl00_conteudo_lblTipoFase'} ],        
+        'fase'                  : ['span',  { 'id' : 'ctl00_conteudo_lblTipoFase'} ],
         'data_protocolo'        : ['span',  { 'id' : 'ctl00_conteudo_lblDataProtocolo'} ], # pode estar vazia
         'associados'            : ['table', { 'id' : 'ctl00_conteudo_gridProcessosAssociados'} ],
         'substancias'           : ['table', { 'id' : 'ctl00_conteudo_gridSubstancias'} ],
@@ -48,42 +52,27 @@ class Processo:
         'municipios'            : ['table', { 'id' : 'ctl00_conteudo_gridMunicipios'} ],
         'ativo'                 : ['span',  { 'id' : 'ctl00_conteudo_lblAtivo'} ]
     }
-    def __new__(cls, processostr, wpagentlm, dados=3, verbose=True):
+
+    def __init__(self, processostr, wpagentlm, verbose=True):
         """
+        Hint: Use `GetProcesso` to avoid creating duplicate Processo's
+
         dados :
                 1 - scm dados basicos page
                 2 - anterior + processos associados (father and direct sons)
                 3 - anterior + correção prioridade ancestor list
         """
         processostr = fmtPname(processostr)
-        if processostr in ProcessStorage:
-            if verbose:
-                with mutex:
-                    print("Processo __new___ getting from storage ", processostr, file=sys.stderr)
-            processo = ProcessStorage[processostr]
-            processo.runtask(cdados=dados)
-            return processo
-        else:
-             # No instance existed, so create new object
-            self = super().__new__(cls)  # Calls parent __new__ to make empty object
-            self.processostr = processostr
-            self.processo_number, self.processo_year = numberyearPname(processostr)
-            self.wpage = htmlscrap.wPageNtlm(wpagentlm.user, wpagentlm.passwd)
-            self.verbose = verbose
-            # control to avoid running again
-            self.ancestry_run = False
-            self.dadosbasicos_run = False
-            self.fathernsons_run = False
-            self.isfree = threading.Event()
-            if verbose:
-                with mutex:
-                    print("Processo __new___ placing on storage ", processostr, file=sys.stderr)
-            ProcessStorage[self.processostr] = self   # store this new guy
-            self.isfree.set() # make it free right now so it can execute
-            self.runtask(cdados=dados)
-            return self
-
-    #def __init__(self, processostr, wpage, scmdata=True, upsearch=True, verbose=True):
+        self.processostr = processostr
+        self.number, self.year = numberyearPname(processostr)
+        self.wpage = htmlscrap.wPageNtlm(wpagentlm.user, wpagentlm.passwd)
+        self.verbose = verbose
+        # control to avoid running again
+        self.ancestry_run = False
+        self.dadosbasicos_run = False
+        self.fathernsons_run = False
+        self.isfree = threading.Event()
+        self.isfree.set() # make it free right now so it can execute
 
     def runtask(self, task=None, cdados=0):
         """
@@ -111,7 +100,6 @@ class Processo:
                     print('task to run: ', task.__name__, ' params: ', params,
                     ' - process: ', self.processostr, file=sys.stderr)
             task(**params)
-
         self.isfree.set() # make it free
 
     @classmethod # not same as @staticmethod (has a self)
@@ -144,15 +132,20 @@ class Processo:
             raise Exception("Processo._dadosBasicosRetrieve - did not receive page")
         # may give False
         self.scm_dadosbasicosmain_response = self.wpage.response
+        return True
 
     def _dadosPoligonalRetrieve(self):
+        if hasattr(self, 'scm_dadosbasicospoli_response'): # already downloaded
+            self.wpage.response = self.scm_dadosbasicospoli_response
+            return True
         formcontrols = {
             'ctl00$conteudo$btnPoligonal': 'Poligonal',
             'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnPoligonal'}
         formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
         self.wpage.post('https://sistemas.anm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx',
                       data=formdata)
-        return self.wpage
+        self.scm_dadosbasicospoli_response = self.wpage.response
+        return True
 
 
     def fathernSons(self, ass_ignore=''):
@@ -206,7 +199,7 @@ class Processo:
                 with ThreadPool(len(self.assprocesses_str)) as pool:
                     # Open the URLs in their own threads and return the results
                     # processo = Processo(aprocess, self.wpage, True, False, False, verbose=self.verbose)
-                    self.assprocesses = pool.starmap(Processo, zip(self.assprocesses_str,
+                    self.assprocesses = pool.starmap(GetProcesso, zip(self.assprocesses_str,
                                                     itertools.repeat(self.wpage),
                                                     itertools.repeat(1),
                                                     itertools.repeat(self.verbose)))
@@ -261,7 +254,7 @@ class Processo:
                     break
                 self.anscestors.append(parent.anscestors[0])
                 son_name = parent.processostr
-                parent = Processo(parent.anscestors[0], self.wpage, 1, self.verbose)
+                parent = GetProcesso(parent.anscestors[0], self.wpage, 1, self.verbose)
                 self.prioridadec = parent.prioridade
         self.ancestry_run = True
 
@@ -326,16 +319,39 @@ class Processo:
         fathername = self.dados['processos_associados'][1][5]
         if fmtPname(fathername) == fmtPname(self.processostr): # doesn't have father
             return False
-        father = Processo(fathername, self.wpage)
+        father = GetProcesso(fathername, self.wpage)
         father.dadosBasicosGet(miss_data_tags)
         self.dados.update(father.dados)
         del father
         return self.dados
 
 
+def GetProcesso(processostr, wpagentlm, dados=3, verbose=True):
+    """
+    Create a new or get a Processo from ProcessStorage
+
+    processostr : numero processo format xxx.xxx/ano
+    wpage : wPage html webpage scraping class com login e passwd preenchidos
+    """
+    processo = None
+    processostr = fmtPname(processostr)
+    if processostr in ProcessStorage:
+        if verbose:
+            with mutex:
+                print("Processo __new___ getting from storage ", processostr, file=sys.stderr)
+        processo = ProcessStorage[processostr]
+    else:
+        if verbose:
+            with mutex:
+                print("Processo __new___ placing on storage ", processostr, file=sys.stderr)
+    processo = Processo(processostr, wpagentlm,  verbose)
+    ProcessStorage[processostr] = processo   # store this new guy
+    processo.runtask(cdados=dados)
+    return processo
+
 ############################################################
 # Container of processes to avoid :
-# 1. conneting/open page of scm again
+# 1. conneting/open page of SCM again
 # 2. parsing all information again
 # If it was already parsed save it in here
 ProcessStorage = {}
