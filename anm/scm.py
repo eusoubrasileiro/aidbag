@@ -294,6 +294,7 @@ class Processo:
                 with mutex:
                     print('dadosBasicosGet - missing <data_protocolo>: ', self.processostr, file=sys.stderr)
         self._toDates()
+        self.NUP = self.dados['NUP'] # numero unico processo SEI
         self.dadosbasicos_run = True
         return len(self.dados) == len(data_tags) # return if got w. asked for
 

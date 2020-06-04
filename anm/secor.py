@@ -21,6 +21,7 @@ from datetime import datetime
 from .scm import *
 sys.path.append("..") # Adds higher directory to python modules path.
 from web.htmlscrap import *
+from .SEI import *
 
 from enum import Enum
 
@@ -46,6 +47,48 @@ def getEventosSimples(wpage, processostr):
     df.Processo = df.Processo.apply(lambda x: fmtPname(x)) # standard names
     return df
 
+
+docs_externos_sei_tipo = [ 'Estudo',
+        'Minuta', 'Minuta', 'Estudo']
+
+docs_externos_sei_txt = [ 'de Retirada de Interferência', # Nome na Arvore
+        'Pré de Alvará', 'de Licenciamento', 'de Opção' ]
+
+def IncluiDocumentoExternoSEI(sei, ProcessoNUP, doc=0, pdf_path=None):
+    """
+    Inclui pdf como documento externo no SEI
+
+    doc :
+        0 - Estudo - 'de Retirada de Interferência'
+        1 - Minuta - 'Pré de Alvará'
+        2 - Minuta - 'de Licenciamento'
+        3 - Estudo - 'de Opção'
+
+    pdf_path :
+        if None cria sem anexo
+    """
+    sei.Pesquisa(ProcessoNUP) # Entra neste processo
+    sei.ProcessoIncluiDoc(0) # Inclui Externo
+    # Preenchendo
+    sei.driver.find_element_by_id('selSerie').send_keys(docs_externos_sei_tipo[doc]) # Tipo de Documento
+    # Data do Documento
+    sei.driver.find_element_by_id('txtDataElaboracao').send_keys(datetime.today().strftime('%d/%m/%Y')) # put TODAY
+    sei.driver.find_element_by_id('txtNumero').send_keys(docs_externos_sei_txt[doc]) # Nome na Arvore
+    sei.driver.find_element_by_id('optNato').click() #   Nato-digital
+    sei.driver.find_element_by_id('lblPublico').click() # Publico
+    if pdf_path is not None: # existe documento para anexar
+        file = sei.driver.find_element_by_id('filArquivo') # Upload PDF
+        file.send_keys(pdf_path)
+    # save = sei.driver.find_element_by_id('btnSalvar')
+    save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'btnSalvar')))
+    save.click()
+    try :
+        # wait 5 seconds
+        alert = wait(sei.driver, 5).until(expected_conditions.alert_is_present()) # may sometimes show
+        alert.accept()
+    except:
+        pass
+    sei.driver.switch_to.default_content() # go back from iframe
 
 userhome = str(Path.home()) # get userhome folder
 # eventos que inativam or ativam processo
@@ -401,6 +444,27 @@ class Estudo:
             return False
         else:
             return True
+
+    def incluiDocumentoExternoSEI(self, doc=0, pdf_path=None):
+        """
+        Loga no SEI (se já não estiver logado) e
+        inclui pdf como documento externo
+
+        doc :
+            0 - Estudo - 'de Retirada de Interferência'
+            1 - Minuta - 'Pré de Alvará'
+            2 - Minuta - 'de Licenciamento'
+            3 - Estudo - 'de Opção'
+
+        pdf_path :
+            if None cria sem anexo
+        """
+        if not hasattr(self, 'sei'):
+            user = self.wpage.user
+            passwd = self.wpage.passwd
+            self.sei = SEI.SEI(user, passwd)
+
+        IncluiDocumentoExternoSEI(self.sei, self.Processo.NUP, doc, pdf_path)
 
 def EstudoBatchRun(wpage, processos):
     for processo in processos:
