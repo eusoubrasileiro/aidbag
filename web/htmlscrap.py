@@ -13,6 +13,7 @@ from urllib.parse import urljoin
 
 import pandas as pd
 from datetime import datetime
+import re
 
 
 class wPage: # html  webpage scraping with soup and requests
@@ -24,18 +25,13 @@ class wPage: # html  webpage scraping with soup and requests
             os.mkdir(pagefolder)
         for res in self.soup.findAll(tag2find):   # images, css, etc..
             try:
-                filename = os.path.basename(res[inner])
-                # dealing with weird resource names (RENAME it to save)
-                if len(filename) > 30: # too big  weird names
-                    extension = os.path.splitext(filename)[1]
-                    if len(extension) > 5: # weird string with dots
-                        extension = ''
-                    filename = 'file_' + tag2find + '_' +str(hash(filename)) + extension # RENAMED file
-                #fileurl = url.scheme + '://' + url.netloc + urljoin(url.path, res.get(inner))
+                if not res.has_attr(inner): # check if inner tag (file object) exists
+                    continue # may not exist
+                # dealing with weird resource names (RENAME it to save as a file)
+                filename = re.sub('\W+', '', os.path.basename(res[inner])) # clean special chars
+                # fileurl = url.scheme + '://' + url.netloc + urljoin(url.path, res.get(inner))
                 fileurl = urljoin(self.url, res.get(inner))
-                # renamed and saved file path
-                # res[inner] # may or may not exist basename makes
-                # move html and folder of files anywhere
+                # rename html ref so can move html and folder of files anywhere
                 res[inner] = os.path.join(os.path.basename(pagefolder), filename)
                 # like a '<script' tag where the script is inplace
                 filepath = os.path.join(pagefolder, filename)
