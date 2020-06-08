@@ -32,26 +32,27 @@ def numberyearPname(pross_str):
     pross_str = ''.join(re.findall(regxdp, pross_str))
     return pross_str[:6], pross_str[6:]
 
+# static field
+scm_data_tags = { # "data name" ; soup.find fields( "tag", "attributes")
+    'prioridade'            : ['span',  { 'id' : "ctl00_conteudo_lblDataPrioridade"} ], # pode estar errada
+    'area'                  : ['span',  { 'id' : 'ctl00_conteudo_lblArea'} ],
+    'UF'                    : ['span',  { 'id' : 'ctl00_conteudo_lblUF'} ],
+    'NUP'                   : ['span',  { 'id' : 'ctl00_conteudo_lblNup'} ],
+    'tipo'                  : ['span',  { 'id' : 'ctl00_conteudo_lblTipoRequerimento'} ],
+    'fase'                  : ['span',  { 'id' : 'ctl00_conteudo_lblTipoFase'} ],
+    'data_protocolo'        : ['span',  { 'id' : 'ctl00_conteudo_lblDataProtocolo'} ], # pode estar vazia
+    'associados'            : ['table', { 'id' : 'ctl00_conteudo_gridProcessosAssociados'} ],
+    'substancias'           : ['table', { 'id' : 'ctl00_conteudo_gridSubstancias'} ],
+    'eventos'               : ['table', { 'id' : 'ctl00_conteudo_gridEventos'} ],
+    'municipios'            : ['table', { 'id' : 'ctl00_conteudo_gridMunicipios'} ],
+    'ativo'                 : ['span',  { 'id' : 'ctl00_conteudo_lblAtivo'} ]
+}
 
 """
 Use `GetProcesso` to avoid creating duplicate Processo's
 """
 class Processo:
-    # static field
-    scm_data_tags = { # "data name" ; soup.find fields( "tag", "attributes")
-        'prioridade'            : ['span',  { 'id' : "ctl00_conteudo_lblDataPrioridade"} ], # pode estar errada
-        'area'                  : ['span',  { 'id' : 'ctl00_conteudo_lblArea'} ],
-        'UF'                    : ['span',  { 'id' : 'ctl00_conteudo_lblUF'} ],
-        'NUP'                   : ['span',  { 'id' : 'ctl00_conteudo_lblNup'} ],
-        'tipo'                  : ['span',  { 'id' : 'ctl00_conteudo_lblTipoRequerimento'} ],
-        'fase'                  : ['span',  { 'id' : 'ctl00_conteudo_lblTipoFase'} ],
-        'data_protocolo'        : ['span',  { 'id' : 'ctl00_conteudo_lblDataProtocolo'} ], # pode estar vazia
-        'associados'            : ['table', { 'id' : 'ctl00_conteudo_gridProcessosAssociados'} ],
-        'substancias'           : ['table', { 'id' : 'ctl00_conteudo_gridSubstancias'} ],
-        'eventos'               : ['table', { 'id' : 'ctl00_conteudo_gridEventos'} ],
-        'municipios'            : ['table', { 'id' : 'ctl00_conteudo_gridMunicipios'} ],
-        'ativo'                 : ['span',  { 'id' : 'ctl00_conteudo_lblAtivo'} ]
-    }
+
 
     def __init__(self, processostr, wpagentlm, verbose=True):
         """
@@ -110,7 +111,7 @@ class Processo:
     @staticmethod
     def specifyData(data=['prioridade', 'UF']):
         """return scm_data_tags from specified data labels"""
-        return dict(zip(data, [ Processo.scm_data_tags[key] for key in data ]))
+        return dict(zip(data, [ scm_data_tags[key] for key in data ]))
 
     def _dadosBasicosRetrieve(self):
         """   Get & Post na página dados do Processo do Cadastro  Mineiro (SCM)
@@ -269,7 +270,7 @@ class Processo:
         """check your nltm authenticated session
         if getting empty dict dados"""
         if data_tags is None: # data tags to fill in 'dados' with
-            data_tags = self.scm_data_tags
+            data_tags = scm_data_tags.copy()
         if not hasattr(self, 'dados') or redo == True:
             self._dadosBasicosRetrieve()
             self.dados = {}
@@ -279,15 +280,10 @@ class Processo:
         if self.verbose:
             with mutex:
                 print("dadosBasicosGet - parsing: ", self.processostr, file=sys.stderr)
-        for data in data_tags:
-            result = soup.find(data_tags[data][0],
-                                    data_tags[data][1])
-            if not (result is None):
-                if data_tags[data][0] == 'table': # parse table if table
-                    result = htmlscrap.tableDataText(result)
-                else:
-                    result = result.text
-                self.dados.update({data : result})
+
+        new_dados = dictDataText(soup, data_tags)
+        self.dados.update(new_dados)
+
         if self.dados['data_protocolo'] == '': # might happen
             self.dados['data_protocolo'] = self.dados['prioridade']
             if self.verbose:

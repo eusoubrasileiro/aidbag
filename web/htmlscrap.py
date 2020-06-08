@@ -104,6 +104,10 @@ def formdataPostAspNet(response, formcontrols):
     #return formdata
     return formdata
 
+
+#### HTML PARSING DATA
+# BeautifulSoup Power
+
 # Table parsing with bs4
 def tableDataText(table):
     """Parse a html segment started with tag <table>
@@ -120,3 +124,35 @@ def tableDataText(table):
     for tr in trs: # for every table row
         rows.append([td.get_text(strip=True) for td in tr.find_all('td')]) # data row
     return rows
+
+
+def dictDataText(soup, data_tags):
+    """
+    Parse Html tags from dict `data_tags` like bellow:
+
+    data_tags = {
+        'tipo'                  : ['span',  { 'id' : 'ctl00_conteudo_lblTipoRequerimento'} ],
+        'eventos'               : ['table', { 'id' : 'ctl00_conteudo_gridEventos'} ]
+    }
+
+    format
+       "data name"  :    ["tagname" , { "attribute name" : "attribute value" }]
+
+    Will be used by BeautifulSoup like
+         `soup.find(data_tags['tipo'][0], data_tags['tipo'][1])`
+
+    Return:
+        dictionary of data_names with parsed data including tables using `tableDataText`
+
+    """
+    dados = {}
+    for data in data_tags:
+        result = soup.find(data_tags[data][0],
+                                data_tags[data][1])
+        if not (result is None):
+            if data_tags[data][0] == 'table': # parse table if table
+                result = tableDataText(result)
+            else:
+                result = result.text
+            dados.update({data : result})
+    return dados
