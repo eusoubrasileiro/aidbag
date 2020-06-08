@@ -7,6 +7,20 @@ from anm import scm
 from bs4 import BeautifulSoup
 import pandas as pd
 
+
+def PesquisaSICOPSimples(wpage, uorg, number, year):
+    """
+    Pesquisa Simples DIRETA URL - precisa uorg
+    link e.g.:
+        https://sistemas.dnpm.gov.br/sicopii/P/UnicoProcesso.asp?Numero=272038302301995
+    """
+    processwget = uorg+number+year # NUP w/out s. chars
+    # must be here to get Asp Cookie for SICOP
+    wpage.get('https://sistemas.dnpm.gov.br/sicopii/SICOP.asp')
+    wpage.get('https://sistemas.dnpm.gov.br/sicopii/P/UnicoProcesso.asp?Numero='+processwget)
+    soup = BeautifulSoup(wpage.response.content, features="lxml")
+    return hscrap.tableDataText(soup.find('table', border="1"))
+
 def PesquisaSICOP(wpage, processo_number, processo_year):
     """
     1. Must be authenticated with a aspnet Session Id
@@ -49,15 +63,6 @@ def PesquisaSICOP(wpage, processo_number, processo_year):
 
     # just first line, where it is now
     return pd.DataFrame(table[1:2], columns=table[0])
-
-def PesquisaSICOPSimples(wpage, uorg, processo_number, processo_year):
-    # Pesquisa Simples DIRETA
-    processwget = uorg+processo_number+processo_year
-    # must be here to get Asp Cookie for SICOP
-    wpage.get('https://sistemas.dnpm.gov.br/sicopii/SICOP.asp')
-    wpage.get('https://sistemas.dnpm.gov.br/sicopii/P/UnicoProcesso.asp?Numero='+processwget)
-    soup = BeautifulSoup(wpage.response.content, features="lxml")
-    return hscrap.tableDataText(soup.find('table', border="1"))
 
 
 def PesquisasSICOP(wpage, listprocessostr, verbose=True):

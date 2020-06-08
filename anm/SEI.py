@@ -96,9 +96,13 @@ class SEI:
 #     'selOrgao': '26',
 #     'chkLembrar': 'on',
 #     'sbmLogin': 'Acessar'}
+
+## SEI hdnToken
 # import re
 # key, value = re.findall('name="(hdnToken.{32}).*value="(.{32})',wpage.response.text)[0]
 # formdata.update({key : value})
+#
+# # not using
 # #import requests
 # #wpage.session.cookies = requests.cookies.merge_cookies(wpage.session.cookies, cookies)
 # #wpage.session.cookies
@@ -143,9 +147,10 @@ class SEI:
 #
 # wpage.get(wpage.response.url, cookies=cookies)
 #
+# have to search for the correct iframe 2 iframes  on Processo Page
 # soup = BeautifulSoup(wpage.response.text)
 # iframes = soup.find_all('iframe')
-# iframes[0]
+# iframes[1]
 #
 # # from IPython.core.display import display, HTML
 # # display(HTML(wpage.response.text))
