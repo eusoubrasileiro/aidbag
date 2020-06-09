@@ -4,6 +4,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait as wait
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import Select # drop down select
 
 class SEI:
     def __init__(self, user, passwd, headless=False, implicit_wait=10):
@@ -33,10 +34,36 @@ class SEI:
         self.driver = driver
 
     def Pesquisa(self, ProcessoNUP):
-        self.driver.switch_to.default_content() # go back from iframe or not
+        self.driver.switch_to.default_content() # go back main document
         processo = self.driver.find_element_by_id("txtPesquisaRapida")
         processo.send_keys(ProcessoNUP)
         processo.send_keys(Keys.ENTER)
+
+    def _processoMainMenu(self):
+        """back to main menu processo"""
+        self.driver.switch_to.default_content() # go to parent main document
+        self.driver.switch_to.frame(0) # then go to frame panel left
+        anchors = wait(self.driver, 10).until(
+            expected_conditions.presence_of_all_elements_located(
+            (By.CSS_SELECTOR,'#topmenu a')))
+        anchors[1].click() # # 1 click to open main menu on processo name
+        self.driver.switch_to.default_content() # go back parent main document
+
+    def _processoBarraBotoes(self, index):
+        """
+        get barra botoes (list) and botao by index
+            0 - incluir documento
+            3 - acompanhamento especial
+        """
+        self._processoMainMenu()
+        wait(self.driver, 10).until(
+            expected_conditions.frame_to_be_available_and_switch_to_it(
+            (By.CSS_SELECTOR,'iframe#ifrVisualizacao')))
+        # wait for infraBarraComandos botoes available
+        botoes = wait(self.driver, 10).until(
+            expected_conditions.visibility_of_all_elements_located(
+            (By.CLASS_NAME, "botaoSEI")))
+        return botoes[index]
 
     def ProcessoIncluiDoc(self, code=0):
         """
@@ -50,19 +77,35 @@ class SEI:
         ...
 
         """
-        self.driver.switch_to.default_content() # go back from iframe or not
-        self.driver.switch_to.frame(1) # barra de botoes
-        incluir_doc = self.driver.find_elements_by_class_name("botaoSEI")[0]
-        incluir_doc.click()
-        items = self.driver.find_elements_by_class_name("ancoraOpcao")
-        items[code].click()
+        self._processoBarraBotoes(0).click()  # botao[0] incluir doc
+        items = wait(self.driver, 10).until(
+            expected_conditions.visibility_of_all_elements_located(
+            (By.CLASS_NAME, "ancoraOpcao")))
+        items[code].click() # Externo / Analise / Declaracao etc....
 
+    def ProcessoIncluiAEspecial(self, option=1, obs=None):
+        """ 1 == analises andre """
+        self._processoBarraBotoes(3).click() # botao[3] acompanhamento especial
+        drop_down = wait(self.driver, 10).until(
+            expected_conditions.element_to_be_clickable((By.ID, 'selGrupoAcompanhamento')))
+        select = Select(drop_down)
+        select.options[option].click()
+        botoes = wait(self.driver, 10).until(
+            expected_conditions.presence_of_all_elements_located(
+            (By.CLASS_NAME, "infraButton")))
+        botoes[0].click() # Salvar
 
-
-
-
-
-
+    def ProcessoAtribuir(self, option=12):
+        """ 12 == chefe"""
+        self._processoBarraBotoes(7).click() # botao[7] atribuir
+        drop_down = wait(self.driver, 10).until(
+            expected_conditions.element_to_be_clickable((By.ID, 'selAtribuicao')))
+        select = Select(drop_down)
+        select.options[option].click()
+        botoes = wait(self.driver, 10).until(
+            expected_conditions.presence_of_all_elements_located(
+            (By.CLASS_NAME, "infraButton")))
+        botoes[0].click() # Salvar
 
 
 

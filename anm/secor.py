@@ -88,7 +88,7 @@ def IncluiDocumentoExternoSEI(sei, ProcessoNUP, doc=0, pdf_path=None):
         alert.accept()
     except:
         pass
-    sei.driver.switch_to.default_content() # go back from iframe
+    sei.driver.switch_to.default_content() # go back to main document
 
 userhome = str(Path.home()) # get userhome folder
 # eventos que inativam or ativam processo
