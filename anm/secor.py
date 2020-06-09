@@ -478,3 +478,66 @@ def EstudoBatchRun(wpage, processos):
             estudo.getTabelaInterferenciaTodos()
             estudo.excelInterferencia()
             estudo.excelInterferenciaAssociados()
+
+
+
+### Inclui todos os pdfs nas pastas specificadas no SEI
+# Seguindo nome se é licença ou minuta
+from anm import secor
+from anm import SEI
+from anm import scm
+from web import htmlscrap
+import tqdm
+import importlib
+import glob
+import os
+import re
+from bs4 import BeautifulSoup
+
+def IncluiDocumentosSEIFolders(sei, nfirst=1, tipo='Requerimento', path="Batch"):
+    """
+    Inclui first process folders `nfirst` (list of folders) docs on SEI.
+    Follow order of glob(*) using `chdir(tipo) + chdir(path)`
+
+    - Estudo
+    - Minuta
+    - Marca Acompanhamento Especial
+
+    TODO:
+        - Despacho
+    """
+    os.chdir(__secor_path__)
+    os.chdir(tipo)
+    os.chdir(path)
+
+    process_folders = glob.glob('*')
+    process_folders = process_folders[:nfirst]
+
+    for process_folder in process_folders:
+        process_path = os.path.join(os.getcwd(), process_folder)
+        #  GET NUP and tipo from html
+        scm_html = os.path.join(process_path,
+                 'scm_basicos_'+process_folder.replace('-', '')+'.html')
+        with open(scm_html, 'r') as f: # get NUP by html scm
+            html = f.read()
+        soup = BeautifulSoup(html, features="lxml")
+        data = htmlscrap.dictDataText(soup, scm.scm_data_tags)
+        NUP = data['NUP'].strip()
+        tipo = data['tipo'].strip()
+        # Estudo de Interferência deve chamar 'R.pdf'
+        pdf_interferencia = os.path.join(process_path, 'R.pdf')
+        # Inclui Estudo pdf como Doc Externo no SEI
+        IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
+        # pdf adicional Minuta de Licenciamento ou Pré Minuta de Alvará deve chamar 'Imprimir.pdf'
+        pdf_adicional = os.path.join(process_path, 'Imprimir.pdf')
+        if os.path.isfile(pdf_adicional):
+            if tipo == 'Requerimento de Registro de Licença':
+                # 2 - Minuta - 'de Licenciamento'
+                IncluiDocumentoExternoSEI(sei, NUP, 2, pdf_adicional)
+            elif tipo == 'Requerimento de Autorização de Pesquisa':
+                # 1 - Minuta - 'Pré de Alvará'
+                IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)
+            # IncluiDespacho(sei, NUP, 6) - Recomenda análise de plano
+        else: # Despacho diferente se não existe segundo pdf
+            pass
+        sei.ProcessoIncluiAEspecial(1) # 1 - me
