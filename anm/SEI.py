@@ -17,6 +17,9 @@ class SEI:
         headless : True
               don't start visible window
 
+        TODO:
+            Only use explicit wait as recommended in SO
+
         """
         options = ChromeOptions()
         if headless:
@@ -35,19 +38,52 @@ class SEI:
 
     def Pesquisa(self, ProcessoNUP):
         self.driver.switch_to.default_content() # go back main document
-        processo = self.driver.find_element_by_id("txtPesquisaRapida")
+        processo = wait(self.driver, 10).until(
+            expected_conditions.visibility_of_element_located((By.ID, 'txtPesquisaRapida')))
         processo.send_keys(ProcessoNUP)
+        processo = wait(self.driver, 10).until( # migth be unnecessary
+            expected_conditions.visibility_of_element_located((By.ID, 'txtPesquisaRapida')))
         processo.send_keys(Keys.ENTER)
 
     def _processoMainMenu(self):
         """back to main menu processo"""
+
+        # not working
+        # # getting when StaleElement happens
+        # # getting one element from the right frame
+        # # guarantee the right frame has been refreshed too
+        # self.driver.switch_to.default_content() # go back parent main document
+        # wait(self.driver, 10).until(
+        #     expected_conditions.frame_to_be_available_and_switch_to_it(
+        #     (By.CSS_SELECTOR,'iframe#ifrVisualizacao')))
+        # botoes = wait(self.driver, 10).until(
+        #    expected_conditions.presence_of_all_elements_located(
+        #    (By.CSS_SELECTOR, ".botaoSEI")))
+        # botao = botoes[0]
+
         self.driver.switch_to.default_content() # go to parent main document
-        self.driver.switch_to.frame(0) # then go to frame panel left
+        wait(self.driver, 10).until( # then go to frame panel left
+            expected_conditions.frame_to_be_available_and_switch_to_it(
+            (By.CSS_SELECTOR,'iframe#ifrArvore')))
         anchors = wait(self.driver, 10).until(
             expected_conditions.presence_of_all_elements_located(
             (By.CSS_SELECTOR,'#topmenu a')))
+
+        # the click
+        # forces a redraw of left frame and after 2/3 seconds
+        # of the right frame
+        # when that is finished we can return the control
+        # otherwise StaleElementReferenceException
+        # will be thrown when getting .botaoSEI
         anchors[1].click() # # 1 click to open main menu on processo name
-        self.driver.switch_to.default_content() # go back parent main document
+
+        # not working with above 
+        # # guarantee the right frame has been refreshed too
+        # wait(self.driver, 10).until(
+        #    expected_conditions.staleness_of(botao))
+
+        self.driver.switch_to.default_content()
+
 
     def _processoBarraBotoes(self, index):
         """
@@ -60,9 +96,12 @@ class SEI:
             expected_conditions.frame_to_be_available_and_switch_to_it(
             (By.CSS_SELECTOR,'iframe#ifrVisualizacao')))
         # wait for infraBarraComandos botoes available
+        wait(self.driver, 10).until(
+            expected_conditions.element_to_be_clickable(
+            (By.CSS_SELECTOR,'div#divArvoreAcoes.infraBarraComandos')))
         botoes = wait(self.driver, 10).until(
-            expected_conditions.visibility_of_all_elements_located(
-            (By.CLASS_NAME, "botaoSEI")))
+           expected_conditions.presence_of_all_elements_located(
+           (By.CSS_SELECTOR, ".botaoSEI")))
         return botoes[index]
 
     def ProcessoIncluiDoc(self, code=0):
