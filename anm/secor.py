@@ -515,11 +515,12 @@ def IncluiDocumentosSEIFolders(sei, nfirst=1, tipo='Requerimento', path="Batch")
 
     for process_folder in process_folders:
         process_path = os.path.join(os.getcwd(), process_folder)
+        os.chdir(process_folder) # enter on process folder
         #  GET NUP and tipo from html
-        scm_html = os.path.join(process_path,
-                 'scm_basicos_'+process_folder.replace('-', '')+'.html')
+        scm_html = glob.glob('*.html')[0] # first html file on folder
         with open(scm_html, 'r') as f: # get NUP by html scm
             html = f.read()
+        os.chdir('..') # go back from process folder
         soup = BeautifulSoup(html, features="lxml")
         data = htmlscrap.dictDataText(soup, scm.scm_data_tags)
         NUP = data['NUP'].strip()

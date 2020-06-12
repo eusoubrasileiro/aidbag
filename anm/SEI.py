@@ -5,6 +5,7 @@ from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait as wait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select # drop down select
+import time
 
 class SEI:
     def __init__(self, user, passwd, headless=False, implicit_wait=10):
@@ -60,7 +61,6 @@ class SEI:
         #    expected_conditions.presence_of_all_elements_located(
         #    (By.CSS_SELECTOR, ".botaoSEI")))
         # botao = botoes[0]
-
         self.driver.switch_to.default_content() # go to parent main document
         wait(self.driver, 10).until( # then go to frame panel left
             expected_conditions.frame_to_be_available_and_switch_to_it(
@@ -68,7 +68,6 @@ class SEI:
         anchors = wait(self.driver, 10).until(
             expected_conditions.presence_of_all_elements_located(
             (By.CSS_SELECTOR,'#topmenu a')))
-
         # the click
         # forces a redraw of left frame and after 2/3 seconds
         # of the right frame
@@ -77,11 +76,13 @@ class SEI:
         # will be thrown when getting .botaoSEI
         anchors[1].click() # # 1 click to open main menu on processo name
 
-        # not working with above 
+        # not working with above
         # # guarantee the right frame has been refreshed too
         # wait(self.driver, 10).until(
         #    expected_conditions.staleness_of(botao))
-
+        # solved all problems created above
+        # of refreshing delay
+        time.sleep(3)
         self.driver.switch_to.default_content()
 
 
