@@ -292,7 +292,8 @@ class Estudo:
 
         self.tabela_interf_eventos = pd.DataFrame()
         for row in self.tabela_interf.iterrows():
-            # TODO remove getEventosSimples and extract everything from dados basicos
+            # cannot remove getEventosSimples and extract everything from dados basicos
+            # dados basico scm data nao inclui hora! cant use only scm
             processo_events = getEventosSimples(self.wpage, row[1][1])
             # get columns 'Publicação D.O.U' & 'Observação' from dados_basicos
             processo_dados = self.processes_interf[fmtPname(row[1][1])].dados
@@ -307,6 +308,11 @@ class Estudo:
             processo_events['Ativo'] = row[1]['Ativo']
             processo_events['Obs'] = dfbasicos['Observação']
             processo_events['DOU'] = dfbasicos['Publicação D.O.U']
+            # SICOP parte if fisico main available
+            # might have more or less lines than SCM eventos
+            # use only what we have rest will be empty
+            #processo_events['SICOP FISICO PRINCIPAL MOVIMENTACAO']
+            # DATA:HORA	SITUAÇÃO	UF	ÓRGÃO	PRIORIDADE	MOVIMENTADO	RECEBIDO	DATA REC.	REC. POR	GUIA
             self.tabela_interf_eventos = self.tabela_interf_eventos.append(processo_events)
 
         # strdate to datetime comparacao prioridade
@@ -494,6 +500,79 @@ import os
 import re
 from bs4 import BeautifulSoup
 
+
+def IncluiDocumentosSEIFolder(sei, process_folder, tipo='Requerimento', path="Batch", empty=False, verbose=True):
+    """
+    Inclui process on specified folder:
+    `__secor_path__\\tipo\\path\\process_folder`
+    Follow order of glob(*) using `chdir(tipo) + chdir(path)`
+
+    * verbose: True
+        avisa ausência de pdfs, quando cria documentos sem anexos
+    * empty : True
+        cria documentos sem anexos
+
+    - Estudo
+    - Minuta
+    - Marca Acompanhamento Especial
+
+    TODO:
+        - Despacho
+    """
+    os.chdir(os.path.join(__secor_path__, tipo , path))
+    process_path = os.path.join(os.getcwd(), process_folder)
+    os.chdir(process_folder) # enter on process folder
+    #  GET NUP and tipo from html
+    scm_html = glob.glob('*.html')[0] # first html file on folder
+    with open(scm_html, 'r') as f: # get NUP by html scm
+        html = f.read()
+
+    if not empty: # busca pdfs e adiciona só os existentes
+        # Estudo de Interferência deve chamar 'R.pdf' ou qualquer coisa
+        # que glob.glob("R*.pdf")[0] seja o primeiro
+        pdf_interferencia = glob.glob("R*.pdf")
+        # turn empty list to None
+        pdf_interferencia = pdf_interferencia[0] if pdf_interferencia else None
+        if not pdf_interferencia is None:
+            pdf_interferencia = os.path.join(process_path, pdf_interferencia)
+        elif verbose:
+            print('Nao encontrou pdf R*.pdf', file=sys.stderr)
+        # pdf adicional Minuta de Licenciamento ou Pré Minuta de Alvará
+        # deve chamar 'Imprimir.pdf'
+        # ou qualquer coisa que glob.glob("Imprimir*.pdf")[0] seja o primeiro
+        pdf_adicional = glob.glob("Imprimir*.pdf")
+        # turn empty list to None
+        pdf_adicional = pdf_adicional[0] if pdf_adicional else None
+        if not pdf_adicional is None:
+            pdf_adicional = os.path.join(process_path, pdf_adicional)
+        elif verbose:
+            print('Nao encontrou pdf Imprimir*.pdf', file=sys.stderr)
+        os.chdir('..') # go back from process folder
+
+    # get NUP
+    soup = BeautifulSoup(html, features="lxml")
+    data = htmlscrap.dictDataText(soup, scm.scm_data_tags)
+    NUP = data['NUP'].strip()
+    tipo = data['tipo'].strip()
+
+    if empty:
+        pdf_adicional = None
+        pdf_interferencia = None
+
+    # Inclui Estudo pdf como Doc Externo no SEI
+    IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
+    # Inclui pdf adicional Minuta de Licenciamento ou Pré Minuta de Alvará
+    if tipo == 'Requerimento de Registro de Licença':
+        # 2 - Minuta - 'de Licenciamento'
+        IncluiDocumentoExternoSEI(sei, NUP, 2, pdf_adicional)
+    elif tipo == 'Requerimento de Autorização de Pesquisa':
+        # 1 - Minuta - 'Pré de Alvará'
+        IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)
+    # IncluiDespacho(sei, NUP, 6) - Recomenda análise de plano
+    # else: # Despacho diferente se não existe segundo pdf
+    #     pass
+    sei.ProcessoIncluiAEspecial(1) # 1 - me
+
 def IncluiDocumentosSEIFolders(sei, nfirst=1, tipo='Requerimento', path="Batch"):
     """
     Inclui first process folders `nfirst` (list of folders) docs on SEI.
@@ -506,39 +585,10 @@ def IncluiDocumentosSEIFolders(sei, nfirst=1, tipo='Requerimento', path="Batch")
     TODO:
         - Despacho
     """
-    os.chdir(__secor_path__)
-    os.chdir(tipo)
-    os.chdir(path)
+    os.chdir(os.path.join(__secor_path__, 'Requerimento' , 'Batch'))
 
     process_folders = glob.glob('*')
     process_folders = process_folders[:nfirst]
 
     for process_folder in process_folders:
-        process_path = os.path.join(os.getcwd(), process_folder)
-        os.chdir(process_folder) # enter on process folder
-        #  GET NUP and tipo from html
-        scm_html = glob.glob('*.html')[0] # first html file on folder
-        with open(scm_html, 'r') as f: # get NUP by html scm
-            html = f.read()
-        os.chdir('..') # go back from process folder
-        soup = BeautifulSoup(html, features="lxml")
-        data = htmlscrap.dictDataText(soup, scm.scm_data_tags)
-        NUP = data['NUP'].strip()
-        tipo = data['tipo'].strip()
-        # Estudo de Interferência deve chamar 'R.pdf'
-        pdf_interferencia = os.path.join(process_path, 'R.pdf')
-        # Inclui Estudo pdf como Doc Externo no SEI
-        IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
-        # pdf adicional Minuta de Licenciamento ou Pré Minuta de Alvará deve chamar 'Imprimir.pdf'
-        pdf_adicional = os.path.join(process_path, 'Imprimir.pdf')
-        if os.path.isfile(pdf_adicional):
-            if tipo == 'Requerimento de Registro de Licença':
-                # 2 - Minuta - 'de Licenciamento'
-                IncluiDocumentoExternoSEI(sei, NUP, 2, pdf_adicional)
-            elif tipo == 'Requerimento de Autorização de Pesquisa':
-                # 1 - Minuta - 'Pré de Alvará'
-                IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)
-            # IncluiDespacho(sei, NUP, 6) - Recomenda análise de plano
-        else: # Despacho diferente se não existe segundo pdf
-            pass
-        sei.ProcessoIncluiAEspecial(1) # 1 - me
+        IncluiDocumentosSEIFolder(sei, process_folder, tipo, path)

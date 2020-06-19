@@ -281,7 +281,7 @@ class Processo:
             with mutex:
                 print("dadosBasicosGet - parsing: ", self.processostr, file=sys.stderr)
 
-        new_dados = dictDataText(soup, data_tags)
+        new_dados = htmlscrap.dictDataText(soup, data_tags)
         self.dados.update(new_dados)
 
         if self.dados['data_protocolo'] == '': # might happen
