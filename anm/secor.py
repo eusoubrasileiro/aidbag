@@ -568,11 +568,11 @@ def IncluiDocumentosSEIFolder(sei, process_folder, tipo='Requerimento', path="Ba
         # 2 - Minuta - 'de Licenciamento'
         IncluiDocumentoExternoSEI(sei, NUP, 2, pdf_adicional)
     else:
-        if 'pesquisa' in tipo.lower(): # 1 - Minuta - 'Pré de Alvará'
-            IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)
-        # tipo - requerimento de cessão parcial
+        # tipo - requerimento de cessão parcial ou outros
         if 'lavra' in fase.lower(): # minuta portaria de Lavra
             IncluiDocumentoExternoSEI(sei, NUP, 4, pdf_adicional)
+        elif 'pesquisa' in tipo.lower(): # 1 - Minuta - 'Pré de Alvará'
+            IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)
 
     # IncluiDespacho(sei, NUP, 6) - Recomenda análise de plano
     # else: # Despacho diferente se não existe segundo pdf
