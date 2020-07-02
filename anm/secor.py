@@ -49,10 +49,11 @@ def getEventosSimples(wpage, processostr):
 
 
 docs_externos_sei_tipo = [ 'Estudo',
-        'Minuta', 'Minuta', 'Estudo', 'Minuta']
+        'Minuta', 'Minuta', 'Estudo', 'Minuta', 'Minuta']
 
 docs_externos_sei_txt = [ 'de Retirada de Interferência', # Nome na Arvore
-        'Pré de Alvará', 'de Licenciamento', 'de Opção', 'de Portaria de Lavra']
+        'Pré de Alvará', 'de Licenciamento', 'de Opção', 'de Portaria de Lavra',
+        'de Permissão de Lavra Garimpeira']
 
 def IncluiDocumentoExternoSEI(sei, ProcessoNUP, doc=0, pdf_path=None):
     """
@@ -64,6 +65,7 @@ def IncluiDocumentoExternoSEI(sei, ProcessoNUP, doc=0, pdf_path=None):
         2 - Minuta - 'de Licenciamento'
         3 - Estudo - 'de Opção'
         4 - Minuta - 'de Portaria de Lavra'
+        6 - Minuta - 'de Permissão de Lavra Garimpeira'
 
     pdf_path :
         if None cria sem anexo
@@ -567,6 +569,9 @@ def IncluiDocumentosSEIFolder(sei, process_folder, tipo='Requerimento', path="Ba
     if 'licen' in tipo.lower():
         # 2 - Minuta - 'de Licenciamento'
         IncluiDocumentoExternoSEI(sei, NUP, 2, pdf_adicional)
+    elif 'garimpeira' in tipo.lower():
+        if 'requerimento' in fase.lower(): # Minuta de P. de Lavra Garimpeira
+            IncluiDocumentoExternoSEI(sei, NUP, 5, pdf_adicional)
     else:
         # tipo - requerimento de cessão parcial ou outros
         if 'lavra' in fase.lower(): # minuta portaria de Lavra
