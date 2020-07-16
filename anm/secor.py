@@ -582,7 +582,8 @@ def IncluiDocumentosSEIFolder(sei, process_folder, tipo='Requerimento', path="Ba
     # IncluiDespacho(sei, NUP, 6) - Recomenda análise de plano
     # else: # Despacho diferente se não existe segundo pdf
     #     pass
-    sei.ProcessoIncluiAEspecial(1) # 1 - me
+    # sei.ProcessoIncluiAEspecial(1) # 1 - me desnecessario e
+    # lota todos os Acompanhamentos
 
 def IncluiDocumentosSEIFolders(sei, nfirst=1, tipo='Requerimento', path="Batch"):
     """
