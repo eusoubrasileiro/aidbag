@@ -526,6 +526,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, tipo='Requerimento', path="Ba
     process_path = os.path.join(os.getcwd(), process_folder)
     os.chdir(process_folder) # enter on process folder
     #  GET NUP and tipo from html
+    # GetProcesso(fathername, self.wpage))
     scm_html = glob.glob('*.html')[0] # first html file on folder
     with open(scm_html, 'r') as f: # get NUP by html scm
         html = f.read()
