@@ -329,16 +329,21 @@ def GetProcesso(processostr, wpagentlm, dados=3, verbose=True):
 
     processostr : numero processo format xxx.xxx/ano
     wpage : wPage html webpage scraping class com login e passwd preenchidos
+
+    dados :
+                    1 - scm dados basicos page
+                    2 - anterior + processos associados (father and direct sons)
+                    3 - anterior + correção prioridade ancestor list
     """
     processo = None
     processostr = fmtPname(processostr)
     if processostr in ProcessStorage:
-        if verbose:
+        if verbose: # only for pretty orinting
             with mutex:
                 print("Processo __new___ getting from storage ", processostr, file=sys.stderr)
         processo = ProcessStorage[processostr]
     else:
-        if verbose:
+        if verbose: # only for pretty orinting
             with mutex:
                 print("Processo __new___ placing on storage ", processostr, file=sys.stderr)
     processo = Processo(processostr, wpagentlm,  verbose)
