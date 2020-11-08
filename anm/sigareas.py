@@ -43,6 +43,9 @@ def memoPoligonPA(filestr, crs=None, cfile=True):
 
     Dando resultados identicos ao do site INPE Calculadora
     http://www.dpi.inpe.br/calcula/
+    Testado contra o CONVNAV dandos resultados na ordem em média < 1 metro de diferença.
+    Quase certeza que é diferença de abordagem provavelmente na hora de contruir a navegação.
+    CONVNAV mantem longitude constante quando N, S rumos verdadeiros.
 
     cfile: default True
         Cria arquivo COORDS.txt adequado
@@ -140,7 +143,11 @@ def memoPoligonPA(filestr, crs=None, cfile=True):
         # print coordendas format fformatPoligonal
         # possa criar um arquivo para inserier poligonal
         strfile = ''
-        for v in vertices_degree[1:]:
+        # fechamento perfeito primeiro ponto e
+        # ignora primeiro (PA) - MUST BE rumos diversos
+        vs = vertices_degree.copy()
+        vs.append(vs[1])
+        for v in vs[1:]:
             line = '{:} {:} {:} {:} {:} {:} {:} {:} \n'.format(
                 *decdeg2dmsd(v[0]), *decdeg2dmsd(v[1]))
             strfile = strfile + line
