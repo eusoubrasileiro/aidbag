@@ -1,9 +1,10 @@
 import re
 from pyproj import CRS
-from pyproj import Transformer
+from pyproj.aoi import AreaOfInterest
+from pyproj.database import query_utm_crs_info
 import numpy as np
 
-# Ignorando sinal -S e -O latitude longitado consierando somente negativos
+# Ignorando sinal -S e -O latitude longitado considerando somente negativos
 # o sinal é inserido somente no arquivo antes do ';'
 reg = re.compile('\D*(\d{2})\D*(\d{2})\D*(\d{2})\D*(\d{3,})')
 def fformatPoligonal(mlinestring, filename='CCOORDS.TXT', verbose=True):
@@ -28,18 +29,28 @@ def fformatPoligonal(mlinestring, filename='CCOORDS.TXT', verbose=True):
 ### Memorial descritivo através de PA e survey de estação total
 # might be useful https://github.com/totalopenstation
 
-def memoPoligonPA(crscodEPSG, filestr):
+def memoPoligonPA(filestr, crs=None, cfile=True):
     """
-    Cria sequencia de vertices a partir de arquivo texto de
+    Cria sequencia de vertices a partir de string de arquivo texto de
     memorial descritivo da poligonal de requerimento usando ponto de amarração.
+    Vertices output em SIRGAS 2000.
 
-    crscodeEPSG:
-        Código EPSG do CRS (sistema de coordendas) do datum do
-        Ponto de Amarração na zona UTM correta.
-        Eg. 5533
-        <Projected CRS: EPSG:5533>
-        Name: SAD69(96) / UTM zone 23S
+    crs: default p/ SAD69(96)
+        prj4 string
+        based on
+        https://wiki.osgeo.org/wiki/Brazilian_Coordinate_Reference_Systems#Ellipsoids_in_use
         ....
+
+    Dando resultados identicos ao do site INPE Calculadora
+    http://www.dpi.inpe.br/calcula/
+
+    cfile: default True
+        Cria arquivo COORDS.txt adequado
+        para inserir no SIGAREAS->Administrador->Inserir Poligonal
+
+
+    Conforme Emilio todo o banco de dados do SCM foi convertido
+    considerando que os dados já estavam no datum SAD69(96).
 
     Exemplos:
 
@@ -65,20 +76,37 @@ def memoPoligonPA(crscodEPSG, filestr):
     140  NW 00 00
 
     """
-    crs = CRS.from_epsg(crscodEPSG)# 5533) # UTM SAD69
-    print(crs)
-    print(crs.geodetic_crs)
+    if crs is not None:
+        crs = CRS(crs)
+    else:
+        # older sad69
+        #crs = CRS('+proj=longlat +ellps=aust_SA +towgs84=-66.87,4.37,-38.52,0,0,0,0 +no_defs')
+        crs = CRS("+proj=longlat +ellps=aust_SA +towgs84=-67.35,3.88,-38.22,0,0,0,0 +no_defs") # sad69(96) lat lon
+    print("Input CRS: ", crs)
     lines = filestr.split('\n')
     # PA information
     latpa = get_graus(lines[0])
     lonpa = get_graus(lines[1])
-    print(latpa, lonpa)
+    print("Input lat, lon : {:.6f} {:.6f} {:}".format(latpa, lonpa, 'SAD69(96)'))
+    # convert PA geografica de datum de SAD69(96)  para SIRGAS 2000
+    # conforme Emilio todo o banco de dados do SCM foi convertido
+    # considerando que os dados eram SAD69(96)
+    sirgas = CRS("+proj=longlat +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs")
+    tosirgas = Transformer.from_crs(crs, sirgas)
+    lonpa, latpa =  tosirgas.transform(lonpa, latpa)
+    print("Input lat, lon: {:.6f} {:.6f} {:}".format(latpa, lonpa, 'SIRGAS2000'))
     # Projection transformation
-    proj = Transformer.from_crs(crs.geodetic_crs, crs)
-    xpa, ypa =  proj.transform(latpa, lonpa)
-    print("{:.1f} {:.1f}".format(xpa, ypa))
+    # get adequate UTM zone
+    # by using the simple Formulario
+    # 1 + np.floor((-44 + 180)/6) % 60
+    zone = 1 + np.floor((lonpa + 180)/6) % 60
+    utm_crs = CRS("+proj=utm +zone={:} +south +units=m +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs".format(zone))
+    print("PRJ4 string UTM:", utm_crs)
+    proj = Transformer.from_crs(sirgas, utm_crs)
+    xpa, ypa =  proj.transform(lonpa, latpa)
+    print("PA UTM {:.2f} {:.2f} {:}".format(xpa, ypa, 'SIRGAS'))
     # Deprojection transformation UTM to Geographic
-    deproj =Transformer.from_crs(crs, crs.geodetic_crs)
+    deproj =Transformer.from_crs(utm_crs, sirgas)
 
     lines = lines[3:]
     vertices_utm = []
@@ -102,11 +130,21 @@ def memoPoligonPA(crscodEPSG, filestr):
         vertices_utm.append([cx, cy])
 
     vertices_degree = []
-    for vetex in vertices_utm:
-        lat, lon = deproj.transform(vetex[0], vetex[1])
+    for vertex in vertices_utm:
+        lon, lat = deproj.transform(vertex[0], vertex[1])
         vertices_degree.append([lat, lon])
         print("UTM X {:10.1f} Y {:10.1f} Lat {:4.6f} Lon {:4.6f}".format(
-            vetex[0], vetex[1], lat, lon))
+            vertex[0], vertex[1], lat, lon))
+
+    if cfile:
+        # print coordendas format fformatPoligonal
+        # possa criar um arquivo para inserier poligonal
+        strfile = ''
+        for v in vertices_degree[1:]:
+            line = '{:} {:} {:} {:} {:} {:} {:} {:} \n'.format(
+                *decdeg2dmsd(v[0]), *decdeg2dmsd(v[1]))
+            strfile = strfile + line
+        fformatPoligonal(strfile)
 
     return vertices_degree, vertices_utm
 
@@ -149,3 +187,18 @@ def get_graus(coord):
     dsc = float(dsc)/(10.**len(dsc))
     print(sign, dg, mn, sc, dsc)
     return dg + sign*float(mn)/60. + sign*float(sc)/3600. + sign*dsc/3600.
+
+def decdeg2dmsd(dd):
+    negative = dd < 0
+    dd = abs(dd)
+    minutes,seconds = divmod(dd*3600,60)
+    degrees,minutes = divmod(minutes,60)
+    if negative:
+        if degrees > 0:
+            degrees = -degrees
+        elif minutes > 0:
+            minutes = -minutes
+        else:
+            seconds = -seconds
+    dseconds = seconds - int(seconds)
+    return (int(degrees), int(minutes), int(seconds), int(1000*dseconds))
