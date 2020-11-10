@@ -1,5 +1,6 @@
 import re
 from pyproj import CRS
+from pyproj import Transformer
 from pyproj.aoi import AreaOfInterest
 from pyproj.database import query_utm_crs_info
 import numpy as np
@@ -91,6 +92,8 @@ def memoPoligonPA(filestr, crs=None, cfile=True):
     latpa = get_graus(lines[0])
     lonpa = get_graus(lines[1])
     print("Input lat, lon : {:.6f} {:.6f} {:}".format(latpa, lonpa, 'SAD69(96)'))
+    print("lat {:} {:} {:} {:} | lon {:} {:} {:} {:}".format(
+        *decdeg2dmsd(latpa), *decdeg2dmsd(lonpa)))
     # convert PA geografica de datum de SAD69(96)  para SIRGAS 2000
     # conforme Emilio todo o banco de dados do SCM foi convertido
     # considerando que os dados eram SAD69(96)
@@ -98,6 +101,8 @@ def memoPoligonPA(filestr, crs=None, cfile=True):
     tosirgas = Transformer.from_crs(crs, sirgas)
     lonpa, latpa =  tosirgas.transform(lonpa, latpa)
     print("Input lat, lon: {:.6f} {:.6f} {:}".format(latpa, lonpa, 'SIRGAS2000'))
+    print("lat {:} {:} {:} {:} | lon {:} {:} {:} {:}".format(
+        *decdeg2dmsd(latpa), *decdeg2dmsd(lonpa)))
     # Projection transformation
     # get adequate UTM zone
     # by using the simple Formulario
@@ -107,7 +112,7 @@ def memoPoligonPA(filestr, crs=None, cfile=True):
     print("PRJ4 string UTM:", utm_crs)
     proj = Transformer.from_crs(sirgas, utm_crs)
     xpa, ypa =  proj.transform(lonpa, latpa)
-    print("PA UTM {:.2f} {:.2f} {:}".format(xpa, ypa, 'SIRGAS'))
+    print("PA UTM {:.3f} {:.3f} {:}".format(xpa, ypa, 'SIRGAS'))
     # Deprojection transformation UTM to Geographic
     deproj =Transformer.from_crs(utm_crs, sirgas)
 
@@ -115,9 +120,13 @@ def memoPoligonPA(filestr, crs=None, cfile=True):
     vertices_utm = []
     cx, cy = xpa, ypa
     for line in lines:
-        result = re.findall('(\d+)\W*([NSEW]+)\W*(\d{1,2})\D+(\d{1,2})*', line) # rumos diversos
+        # replace ',' with '.' decimal only . on python
+        line = line.replace(',', '.')
+        result = re.findall('(\d+\.*\d*)\W*([NSEW]+)\W*(\d{1,2})\D+(\d{1,2})*', line) # rumos diversos
         if not result: # rumos verdadeiros
-            result = re.findall('(\d+)\W*([NSEW]+)', line)
+        # an azimuth is defined as a horizontal angle measured clockwise
+        # from a north base line or meridian
+            result = re.findall('(\d+\.*\d*)\W*([NSEW]+)', line)
         if not result:
             break
         result = result[0] # list of 1 item
@@ -128,7 +137,7 @@ def memoPoligonPA(filestr, crs=None, cfile=True):
             if len(result) == 4:
                 angle += float(result[3])/60.
         dx, dy = projectxy(dist, quad, angle)
-        print("{:>+9.1f} {:<4} {:>+4.2f} {:>+9.2f} {:>+9.2f}".format(dist, quad.ljust(8), angle, dx, dy))
+        print("{:>+9.3f} {:<4} {:>+4.2f} {:>+9.2f} {:>+9.2f}".format(dist, quad.ljust(8), angle, dx, dy))
         cx += dx; cy += dy
         vertices_utm.append([cx, cy])
 
@@ -136,7 +145,7 @@ def memoPoligonPA(filestr, crs=None, cfile=True):
     for vertex in vertices_utm:
         lon, lat = deproj.transform(vertex[0], vertex[1])
         vertices_degree.append([lat, lon])
-        print("UTM X {:10.1f} Y {:10.1f} Lat {:4.6f} Lon {:4.6f}".format(
+        print("UTM X {:10.3f} Y {:10.3f} Lat {:4.7f} Lon {:4.7f}".format(
             vertex[0], vertex[1], lat, lon))
 
     if cfile:
@@ -158,7 +167,7 @@ def memoPoligonPA(filestr, crs=None, cfile=True):
 def projectxy(dist, quad, ang):
     """
     Recebe distancia, quadrante e angulo com relação a N-S
-        1000, SW, 75.15
+        2153, SE, 17.05
     Retorna projeções em DX, DY
     """
     angle = ang*np.pi/180.
