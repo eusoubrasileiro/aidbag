@@ -1,8 +1,8 @@
 import re
 from pyproj import CRS
 from pyproj import Transformer
-from pyproj.aoi import AreaOfInterest
-from pyproj.database import query_utm_crs_info
+from geographiclib import geodesic as gd
+
 import numpy as np
 
 # Ignorando sinal -S e -O latitude longitado considerando somente negativos
@@ -30,20 +30,35 @@ def fformatPoligonal(mlinestring, filename='CCOORDS.TXT', verbose=True):
 ### Memorial descritivo através de PA e survey de estação total
 # might be useful https://github.com/totalopenstation
 
-def memoPoligonPA(filestr, crs=None, cfile=True):
+def memoPoligonPA(filestr, crs=None, geodesic=True, cfile=True):
     """
     Cria sequencia de vertices a partir de string de arquivo texto de
     memorial descritivo da poligonal de requerimento usando ponto de amarração.
     Vertices output em SIRGAS 2000.
 
-    crs: default p/ SAD69(96)
+    crs: crs do memorial default p/ SAD69(96)
         prj4 string
         based on
         https://wiki.osgeo.org/wiki/Brazilian_Coordinate_Reference_Systems#Ellipsoids_in_use
         ....
 
-    Dando resultados identicos ao do site INPE Calculadora
-    http://www.dpi.inpe.br/calcula/
+    geodesic: default True  - calculos geodésicos
+                      False - calculos planimetricos UTM projetado
+
+    ### Calculos Geodésicos - SIGAREAS/SCM
+    Usa pacote Geographiclib (Charles F. F. Karney)
+    p/ calculos e distâncias, azimutes geodesicos (isso é direto no elipsoide)
+    usa matemática esférica/elipsoidal para calculo direto ou inverso.
+
+    ### Calculos Planimetricos
+    Utiliza pacote Pyproj/PRJ4 para projeção em UTM e calculo distâncias. azimutes
+    considerando o norte do GRID UTM.
+
+    ### Transformações entre datuns
+    Transformaçao de coordenadas entre datuns utilizando pacote Pyproj/PRJ4.
+    Testado dando resultados identicos ao do site INPE Calculadora http://www.dpi.inpe.br/calcula/
+    Mais precisos que o CONVNAV.
+
     Testado contra o CONVNAV dandos resultados na ordem em média < 1 metro de diferença.
     Quase certeza que é diferença de abordagem provavelmente na hora de contruir a navegação.
     CONVNAV mantem longitude constante quando N, S rumos verdadeiros.
@@ -91,7 +106,7 @@ def memoPoligonPA(filestr, crs=None, cfile=True):
     # PA information
     latpa = get_graus(lines[0])
     lonpa = get_graus(lines[1])
-    print("Input lat, lon : {:.6f} {:.6f} {:}".format(latpa, lonpa, 'SAD69(96)'))
+    print("Input lat, lon : {:.7f} {:.7f} {:}".format(latpa, lonpa, 'SAD69(96)'))
     print("lat {:} {:} {:} {:} | lon {:} {:} {:} {:}".format(
         *decdeg2dmsd(latpa), *decdeg2dmsd(lonpa)))
     # convert PA geografica de datum de SAD69(96)  para SIRGAS 2000
@@ -100,53 +115,63 @@ def memoPoligonPA(filestr, crs=None, cfile=True):
     sirgas = CRS("+proj=longlat +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs")
     tosirgas = Transformer.from_crs(crs, sirgas)
     lonpa, latpa =  tosirgas.transform(lonpa, latpa)
-    print("Input lat, lon: {:.6f} {:.6f} {:}".format(latpa, lonpa, 'SIRGAS2000'))
+    print("Input lat, lon: {:.7f} {:.7f} {:}".format(latpa, lonpa, 'SIRGAS2000'))
     print("lat {:} {:} {:} {:} | lon {:} {:} {:} {:}".format(
         *decdeg2dmsd(latpa), *decdeg2dmsd(lonpa)))
+
     # Projection transformation
-    # get adequate UTM zone
-    # by using the simple Formulario
+    # get adequate UTM zone by using the simple equation
     # 1 + np.floor((-44 + 180)/6) % 60
     zone = 1 + np.floor((lonpa + 180)/6) % 60
     utm_crs = CRS("+proj=utm +zone={:} +south +units=m +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs".format(zone))
+    # custom CRS LTM primeiro vertice
+    # utm_crs = """+proj=tmerc +ellps=WGS84 +datum=WGS84 +units=m +no_defs +lon_0={:} +x_0=50000 +y_0=0 +k_0=0.9996
+    #+towgs84=0,0,0,0,0,0,0""".format(lonpa)
+    # Lambert Azimuthal Equal Area
+    # utm_crs = """+proj=laea +ellps=WGS84 +datum=WGS84 +units=m +no_defs +lon_0={:} +lat_0={:} +x_0=0 +y_0=0 +towgs84=0,0,0,0,0,0,0""".format(lonpa, latpa)
     print("PRJ4 string UTM:", utm_crs)
     proj = Transformer.from_crs(sirgas, utm_crs)
-    xpa, ypa =  proj.transform(lonpa, latpa)
-    print("PA UTM {:.3f} {:.3f} {:}".format(xpa, ypa, 'SIRGAS'))
-    # Deprojection transformation UTM to Geographic
-    deproj =Transformer.from_crs(utm_crs, sirgas)
-
-    lines = lines[3:]
-    vertices_utm = []
-    cx, cy = xpa, ypa
-    for line in lines:
-        # replace ',' with '.' decimal only . on python
-        line = line.replace(',', '.')
-        result = re.findall('(\d+\.*\d*)\W*([NSEW]+)\W*(\d{1,2})\D+(\d{1,2})*', line) # rumos diversos
-        if not result: # rumos verdadeiros
-        # an azimuth is defined as a horizontal angle measured clockwise
-        # from a north base line or meridian
-            result = re.findall('(\d+\.*\d*)\W*([NSEW]+)', line)
-        if not result:
-            break
-        result = result[0] # list of 1 item
-        dist, quad = float(result[0]), result[1] # distance and quadrant
-        angle = 0.0 # angle may or may not be present
-        if len(result) > 2:
-            angle = float(result[2])
-            if len(result) == 4:
-                angle += float(result[3])/60.
-        dx, dy = projectxy(dist, quad, angle)
-        print("{:>+9.3f} {:<4} {:>+4.2f} {:>+9.2f} {:>+9.2f}".format(dist, quad.ljust(8), angle, dx, dy))
-        cx += dx; cy += dy
-        vertices_utm.append([cx, cy])
+    deproj = Transformer.from_crs(utm_crs, sirgas) # Deprojection
 
     vertices_degree = []
-    for vertex in vertices_utm:
-        lon, lat = deproj.transform(vertex[0], vertex[1])
-        vertices_degree.append([lat, lon])
-        print("UTM X {:10.3f} Y {:10.3f} Lat {:4.7f} Lon {:4.7f}".format(
-            vertex[0], vertex[1], lat, lon))
+    vertices_utm = []
+    if geodesic: # geodesic calculations
+        geod = gd.Geodesic.WGS84 # define the WGS84 ellipsoid - SIRGAS 2000 same
+        #The point 20000 km SW of Perth, Australia (32.06S, 115.74E) using Direct():
+        # g = geod.Direct(-32.06, 115.74, 225, 20000e3)
+        # print("The position is ({:.8f}, {:.8f}).".format(g['lat2'],g['lon2']))
+        clat, clon = latpa, lonpa # start point
+        vertices_degree.append([clat, clon])
+        lines = lines[3:]
+        for line in lines:
+            dist, quad, angle = memoLineRead(line)
+            azimuth = getazimuth(quad, angle)
+            print("{:>+9.3f} {:<4} {:>+4.2f} {:>+9.2f}".format(dist, quad.ljust(8), angle, azimuth))
+            g = geod.Direct(clat, clon, azimuth, dist)
+            vertices_degree.append([g['lat2'], g['lon2']])
+            clat, clon = g['lat2'], g['lon2']
+        for vertex in vertices_degree:
+            utmx, utmy = proj.transform(vertex[1], vertex[0])
+            vertices_utm.append([utmx, utmy])
+            print("UTM X {:10.3f} Y {:10.3f} Lat {:4.7f} Lon {:4.7f}".format(
+                utmx, utmy, vertex[0], vertex[1]))
+
+    else: # planimetric calculations
+        xpa, ypa =  proj.transform(lonpa, latpa)
+        vertices_utm.append([xpa, ypa])
+        lines = lines[3:] #
+        cx, cy = xpa, ypa
+        for line in lines:
+            dist, quad, angle = memoLineRead(line)
+            dx, dy = projectxy(dist, quad, angle)
+            print("{:>+9.3f} {:<4} {:>+4.2f} {:>+9.2f} {:>+9.2f}".format(dist, quad.ljust(8), angle, dx, dy))
+            cx += dx; cy += dy
+            vertices_utm.append([cx, cy])
+        for vertex in vertices_utm:
+            lon, lat = deproj.transform(vertex[0], vertex[1])
+            vertices_degree.append([lat, lon])
+            print("UTM X {:10.3f} Y {:10.3f} Lat {:4.7f} Lon {:4.7f}".format(
+                vertex[0], vertex[1], lat, lon))
 
     if cfile:
         # print coordendas format fformatPoligonal
@@ -154,15 +179,46 @@ def memoPoligonPA(filestr, crs=None, cfile=True):
         strfile = ''
         # fechamento perfeito primeiro ponto e
         # ignora primeiro (PA) - MUST BE rumos diversos
-        vs = vertices_degree.copy()
+        vs = vertices_degree.copy()[1:]
         vs.append(vs[1])
         for v in vs[1:]:
-            line = '{:} {:} {:} {:} {:} {:} {:} {:} \n'.format(
+            line = ('{:03d} {:02d} {:02d} {:03d} '*2).format(
                 *decdeg2dmsd(v[0]), *decdeg2dmsd(v[1]))
-            strfile = strfile + line
+            print(line)
+            strfile = strfile + "\n" + line
         fformatPoligonal(strfile)
 
     return vertices_degree, vertices_utm
+
+def memoLineRead(line):
+    """
+    read line like:
+
+        4836 NE 51 12 # rumos diversos
+    or
+        1350 S # rumos verdadeiros
+
+    returns:
+        dist, quadrant, angle
+    """
+    # replace ',' with '.' decimal only . on python
+    line = line.replace(',', '.')
+    result = re.findall('(\d+\.*\d*)\W*([NSEW]+)\W*(\d{1,2})\D+(\d{1,2})*', line) # rumos diversos
+    if not result: # rumos verdadeiros
+        # an azimuth is defined as a horizontal angle measured clockwise
+        # from a north base line or meridian
+        result = re.findall('(\d+\.*\d*)\W*([NSEW]+)', line)
+    if not result:
+        raise Exception("cant parse line for azimuth")
+    result = result[0] # list of 1 item
+    dist, quad = float(result[0]), result[1] # distance and quadrant
+    angle = 0.0 # angle may or may not be present
+    if len(result) > 2:
+        angle = float(result[2])
+        if len(result) == 4:
+            angle += float(result[3])/60.
+
+    return dist, quad, angle
 
 def projectxy(dist, quad, ang):
     """
@@ -190,6 +246,32 @@ def projectxy(dist, quad, ang):
         return 0.0, -dist
     if quad == 'E':
         return +dist, 0.0
+
+def getazimuth(quad, ang):
+    """
+    converte
+        SE, 17.05
+    em azimute com relação ao norte e clock-wise
+    geographiclib convention
+    """
+    # rumos diversos
+    if quad == 'SW':
+        return 180.+ang
+    if quad == 'SE':
+        return 180.-ang
+    if quad == 'NE':
+        return ang
+    if quad == 'NW':
+        return -ang
+    # rumos verdadeiros
+    if quad == 'N':
+        return 0.
+    if quad == 'W':
+        return -90.
+    if quad == 'S':
+        return 180.
+    if quad == 'E':
+        return  90.
 
 def get_graus(coord):
     """parse coordinates string like:
