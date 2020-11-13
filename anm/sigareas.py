@@ -30,7 +30,7 @@ def fformatPoligonal(mlinestring, filename='CCOORDS.TXT', verbose=True):
 ### Memorial descritivo através de PA e survey de estação total
 # might be useful https://github.com/totalopenstation
 
-def memoPoligonPA(filestr, crs=None, geodesic=True, cfile=True):
+def memoPoligonPA(filestr, crs=None, geodesic=True, cfile=True, verbose=False):
     """
     Cria sequencia de vertices a partir de string de arquivo texto de
     memorial descritivo da poligonal de requerimento usando ponto de amarração.
@@ -184,7 +184,8 @@ def memoPoligonPA(filestr, crs=None, geodesic=True, cfile=True):
         for v in vs[1:]:
             line = ('{:03d} {:02d} {:02d} {:03d} '*2).format(
                 *decdeg2dmsd(v[0]), *decdeg2dmsd(v[1]))
-            print(line)
+            if verbose:
+                print(line)
             strfile = strfile + "\n" + line
         fformatPoligonal(strfile)
 
@@ -300,3 +301,56 @@ def decdeg2dmsd(dd):
             seconds = -seconds
     dseconds = seconds - int(seconds)
     return (int(degrees), int(minutes), int(seconds), int(1000*dseconds))
+
+
+## Tests
+
+import geopandas as gp
+import pandas as pd
+import numpy as np
+from shapely.geometry import Point
+from geographiclib import geodesic as gd
+from geographiclib import polygonarea as pa
+
+def test_memoPoligonPA():
+    """Testa código
+    Compara resultados Python Geographiclib vs CONVNAV.
+    Exemplo de 1 quadrado abaixo
+    """
+    # sample square
+    filestr="""-21 19 20 0
+    -44 57 38 6
+
+    2153 SE 17 03
+    590 S
+    780 W
+    590 N
+    780 E"""
+    thruth_perimeter = 590*2+780*2
+    thruth_area = 46.02
+
+    vertices, utm =  memoPoligonPA(filestr, geodesic=True, cfile=False)
+    convnav_vertices = np.array([[-44.955068889, -21.341296111],
+        [-44.955068889, -21.346624722],
+        [-44.962588611, -21.346624444],
+        [-44.962588611, -21.341295833]])
+
+    geoobj = gd.Geodesic(gd.Constants.WGS84_a, gd.Constants.WGS84_f)
+    poly = pa.PolygonArea(geoobj)
+    for p in convnav_vertices:
+        poly.AddPoint(*p[::-1])
+    convnav_num, convnav_perim, convnav_area = poly.Compute(True)
+    convnav_area = convnav_area*10**(-4) # to hectares
+
+    poly = pa.PolygonArea(geoobj)
+    for p in vertices[1:-1]:
+        poly.AddPoint(*p)
+    poly.Compute(True)
+    py_num, py_perim, py_area = poly.Compute(True)
+    py_area = py_area*10**(-4) # to hectares
+
+    print("convnav errors - area {:>+9.6f} perimeter {:>+9.6f}".format(
+            thruth_area-convnav_area, thruth_perimeter-convnav_perim))
+
+    print("python  errors - area {:>+9.6f} perimeter {:>+9.6f}".format(
+            thruth_area-py_area, thruth_perimeter-py_perim))
