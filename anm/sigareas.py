@@ -1,8 +1,11 @@
 import re
+import pyproj
 from pyproj import CRS
 from pyproj import Transformer
 from geographiclib import geodesic as gd
-
+from geographiclib import polygonarea as pa
+from shapely.geometry import Polygon
+import geopandas as gp
 import numpy as np
 
 # Ignorando sinal -S e -O latitude longitado considerando somente negativos
@@ -30,7 +33,7 @@ def fformatPoligonal(mlinestring, filename='CCOORDS.TXT', verbose=True):
 ### Memorial descritivo através de PA e survey de estação total
 # might be useful https://github.com/totalopenstation
 
-def memoPoligonPA(filestr, crs=None, geodesic=True, cfile=True, verbose=False):
+def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True, cfile=True, verbose=False, saveshape=True):
     """
     Cria sequencia de vertices a partir de string de arquivo texto de
     memorial descritivo da poligonal de requerimento usando ponto de amarração.
@@ -189,6 +192,16 @@ def memoPoligonPA(filestr, crs=None, geodesic=True, cfile=True, verbose=False):
             strfile = strfile + "\n" + line
         fformatPoligonal(strfile)
 
+    # Create polygon shape file
+    if saveshape:
+        vertices = np.array(vertices_degree)
+        temp = np.copy(vertices[:, 0])
+        vertices[:, 0] = vertices[:, 1]
+        vertices[:, 1] = temp
+        gdfvs = gp.GeoSeries(Polygon(vertices))
+        gdfvs.set_crs(pyproj.CRS("""+proj=longlat +ellps=GRS80 +towgs84=0,0,0 +no_defs""")) # SIRGAS 2000
+        gdfvs.to_file(shpname+'.shp')
+
     return vertices_degree, vertices_utm
 
 def memoLineRead(line):
@@ -210,7 +223,7 @@ def memoLineRead(line):
         # from a north base line or meridian
         result = re.findall('(\d+\.*\d*)\W*([NSEW]+)', line)
     if not result:
-        raise Exception("cant parse line for azimuth")
+        raise Exception("Cant parse line for dist/azimuth! Empty line?")
     result = result[0] # list of 1 item
     dist, quad = float(result[0]), result[1] # distance and quadrant
     angle = 0.0 # angle may or may not be present
@@ -305,12 +318,7 @@ def decdeg2dmsd(dd):
 
 ## Tests
 
-import geopandas as gp
-import pandas as pd
-import numpy as np
-from shapely.geometry import Point
-from geographiclib import geodesic as gd
-from geographiclib import polygonarea as pa
+
 
 def test_memoPoligonPA():
     """Testa código
