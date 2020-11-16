@@ -4,6 +4,7 @@ from pyproj import CRS
 from pyproj import Transformer
 from geographiclib import geodesic as gd
 from geographiclib import polygonarea as pa
+from . import geolib as geocpp
 from shapely.geometry import Polygon
 import geopandas as gp
 import numpy as np
@@ -33,7 +34,8 @@ def fformatPoligonal(mlinestring, filename='CCOORDS.TXT', verbose=True):
 ### Memorial descritivo através de PA e survey de estação total
 # might be useful https://github.com/totalopenstation
 
-def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True, cfile=True, verbose=False, saveshape=True):
+def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
+        cfile=True, verbose=False, saveshape=True, wincpp=True):
     """
     Cria sequencia de vertices a partir de string de arquivo texto de
     memorial descritivo da poligonal de requerimento usando ponto de amarração.
@@ -70,6 +72,9 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True, cfile=True
         Cria arquivo COORDS.txt adequado
         para inserir no SIGAREAS->Administrador->Inserir Poligonal
 
+    wincpp : default True
+        use geographiclib compiled on windows/pybind11 vstudio by Andre
+        8th order
 
     Conforme Emilio todo o banco de dados do SCM foi convertido
     considerando que os dados já estavam no datum SAD69(96).
@@ -109,7 +114,7 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True, cfile=True
     # PA information
     latpa = get_graus(lines[0])
     lonpa = get_graus(lines[1])
-    print("Input lat, lon : {:.7f} {:.7f} {:}".format(latpa, lonpa, 'SAD69(96)'))
+    print("Input lat, lon : {:.9f} {:.9f} {:}".format(latpa, lonpa, 'SAD69(96)'))
     print("lat {:} {:} {:} {:} | lon {:} {:} {:} {:}".format(
         *decdeg2dmsd(latpa), *decdeg2dmsd(lonpa)))
     # convert PA geografica de datum de SAD69(96)  para SIRGAS 2000
@@ -118,7 +123,7 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True, cfile=True
     sirgas = CRS("+proj=longlat +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs")
     tosirgas = Transformer.from_crs(crs, sirgas)
     lonpa, latpa =  tosirgas.transform(lonpa, latpa)
-    print("Input lat, lon: {:.7f} {:.7f} {:}".format(latpa, lonpa, 'SIRGAS2000'))
+    print("Input lat, lon: {:.9f} {:.9f} {:}".format(latpa, lonpa, 'SIRGAS2000'))
     print("lat {:} {:} {:} {:} | lon {:} {:} {:} {:}".format(
         *decdeg2dmsd(latpa), *decdeg2dmsd(lonpa)))
 
@@ -139,7 +144,6 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True, cfile=True
     vertices_degree = []
     vertices_utm = []
     if geodesic: # geodesic calculations
-        geod = gd.Geodesic.WGS84 # define the WGS84 ellipsoid - SIRGAS 2000 same
         #The point 20000 km SW of Perth, Australia (32.06S, 115.74E) using Direct():
         # g = geod.Direct(-32.06, 115.74, 225, 20000e3)
         # print("The position is ({:.8f}, {:.8f}).".format(g['lat2'],g['lon2']))
@@ -150,13 +154,12 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True, cfile=True
             dist, quad, angle = memoLineRead(line)
             azimuth = getazimuth(quad, angle)
             print("{:>+9.3f} {:<4} {:>+4.2f} {:>+9.2f}".format(dist, quad.ljust(8), angle, azimuth))
-            g = geod.Direct(clat, clon, azimuth, dist)
-            vertices_degree.append([g['lat2'], g['lon2']])
-            clat, clon = g['lat2'], g['lon2']
+            clat, clon = GeoDirectWGS84(clat, clon, azimuth, dist, wincpp)
+            vertices_degree.append([clat, clon])
         for vertex in vertices_degree:
             utmx, utmy = proj.transform(vertex[1], vertex[0])
             vertices_utm.append([utmx, utmy])
-            print("UTM X {:10.3f} Y {:10.3f} Lat {:4.7f} Lon {:4.7f}".format(
+            print("UTM X {:10.3f} Y {:10.3f} Lat {:4.9f} Lon {:4.9f}".format(
                 utmx, utmy, vertex[0], vertex[1]))
 
     else: # planimetric calculations
@@ -173,7 +176,7 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True, cfile=True
         for vertex in vertices_utm:
             lon, lat = deproj.transform(vertex[0], vertex[1])
             vertices_degree.append([lat, lon])
-            print("UTM X {:10.3f} Y {:10.3f} Lat {:4.7f} Lon {:4.7f}".format(
+            print("UTM X {:10.3f} Y {:10.3f} Lat {:4.9f} Lon {:4.9f}".format(
                 vertex[0], vertex[1], lat, lon))
 
     if cfile:
@@ -267,10 +270,11 @@ def getazimuth(quad, ang):
         SE, 17.05
     em azimute com relação ao norte e clock-wise
     geographiclib convention
+    range [+180,-180]
     """
     # rumos diversos
     if quad == 'SW':
-        return 180.+ang
+        return -180.+ang
     if quad == 'SE':
         return 180.-ang
     if quad == 'NE':
@@ -280,10 +284,10 @@ def getazimuth(quad, ang):
     # rumos verdadeiros
     if quad == 'N':
         return 0.
-    if quad == 'W':
-        return -90.
     if quad == 'S':
         return 180.
+    if quad == 'W':
+        return -90.
     if quad == 'E':
         return  90.
 
@@ -337,7 +341,7 @@ def test_memoPoligonPA():
     thruth_perimeter = 590*2+780*2
     thruth_area = 46.02
 
-    vertices, utm =  memoPoligonPA(filestr, geodesic=True, cfile=False)
+    vertices, utm =  memoPoligonPA(filestr, geodesic=True, cfile=False, saveshape=False)
     convnav_vertices = np.array([[-44.955068889, -21.341296111],
         [-44.955068889, -21.346624722],
         [-44.962588611, -21.346624444],
@@ -357,8 +361,19 @@ def test_memoPoligonPA():
     py_num, py_perim, py_area = poly.Compute(True)
     py_area = py_area*10**(-4) # to hectares
 
-    print("convnav errors - area {:>+9.6f} perimeter {:>+9.6f}".format(
+    print("convnav errors - area {:>+9.9f} perimeter {:>+9.9f}".format(
             thruth_area-convnav_area, thruth_perimeter-convnav_perim))
 
-    print("python  errors - area {:>+9.6f} perimeter {:>+9.6f}".format(
+    print("python  errors - area {:>+9.9f} perimeter {:>+9.9f}".format(
             thruth_area-py_area, thruth_perimeter-py_perim))
+
+def GeoDirectWGS84(lat1, lon1, az1, s12, wincpp=True):
+    """Use geographiclib python package or
+    pybind11 wrapping geographiclib by Andre"""
+    if wincpp: # use cpp compiled vstudio windows 8th order
+        geocpp.WGS84()
+        return geocpp.Direct(lat1, lon1, az1, s12)
+    else:
+        geod = gd.Geodesic.WGS84 # define the WGS84 ellipsoid - SIRGAS 2000 same
+        res = geod.Direct(lat1, lon1, az1, s12)
+        return res['lat2'], res['lon2']
