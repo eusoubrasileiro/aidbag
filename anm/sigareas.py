@@ -12,27 +12,62 @@ import numpy as np
 # Ignorando sinal -S e -O latitude longitado considerando somente negativos
 # o sinal é inserido somente no arquivo antes do ';'
 reg = re.compile('\D*(\d{2})\D*(\d{2})\D*(\d{2})\D*(\d{3,})')
-def fformatPoligonal(mlinestring, filename='CCOORDS.TXT', verbose=True):
-    "formated file de poligonal para uso em SIGAREAS->Administrador->Inserir Poligonal"
-    #reg.findall(string)[:3]
+
+def fformatPoligonal(mlinestring, filename='CCOORDS.TXT',
+    endfirst=True, verbose=True, force=5):
+    """
+    Create formated file de poligonal para uso no SIGAREAS
+        SIGAREAS->Administrador->Inserir Poligonal
+
+    force: default 5
+        number of miliseconds to round to 'make' it rumos verdadeiros
+
+    endfirst: default True
+        copy first point in the end
+    """
+
     fields = reg.findall(mlinestring)
     if len(fields)%2 != 0:
         print('Algo errado faltando campo em coordenada (lat. ou lon.)')
     else:
+        lines = []
+        for i in range(0, len(fields)-1, 2):
+            # line = lat , lon
+            # [ dg, mn, sc, dsc , dg, mn, sc, dsc ]
+            line = list(map(int,fields[i])) + list(map(int,fields[i+1]))
+            lines.append(line)
+
+        # Force rumos verdadeiros
+        # passing all coordinates and subtracting if zero in msc
+        if force != 0:
+            tomsecs = np.array([3600*10**3, 60*10**3, 10**3, 1])
+            for i in range(len(lines)):
+                rlat = np.array(lines[i][:4])*tomsecs
+                rlon = np.array(lines[i][4:])*tomsecs
+                for j in range(i+1,len(lines)):
+                    lat = np.array(lines[j][:4])*tomsecs
+                    lon = np.array(lines[j][4:])*tomsecs
+                    if np.sum(np.abs(rlat-lat)) < 5:
+                        lines[j][:4] = lines[i][:4]
+                    if np.sum(np.abs(rlon-lon)) < 5:
+                        lines[j][4:] = lines[i][4:]
+
+        if endfirst:  # copy first point in the end
+            lines.append(lines[0])
+
         with open(filename.upper(), 'w') as f: # must be CAPS otherwise system doesnt load
-            for i in range(0,len(fields)-1, 2):
-                lat = "-;{:03};{:02};{:02};{:03};-;".format(*list(map(int,fields[i])))
-                lon = "{:03};{:02};{:02};{:03}".format(*list(map(int,fields[i+1])))
-                f.write(lat+lon)
-                f.write('\n')
+            for line in lines:
+                line = "-;{:03};{:02};{:02};{:03};-;{:03};{:02};{:02};{:03}\n".format(*line)
+                f.write(line)
                 if verbose:
-                    print(lat+lon)
+                    print(line[:-1])
     print("Output filename is: ", filename.upper())
 
 
 
 ### Memorial descritivo através de PA e survey de estação total
 # might be useful https://github.com/totalopenstation
+wincpp=True
 
 def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
         cfile=True, verbose=False, saveshape=True, wincpp=True):
@@ -103,6 +138,7 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
     140  NW 00 00
 
     """
+    wincpp = wincpp
     if crs is not None:
         crs = CRS(crs)
     else:
@@ -141,41 +177,56 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
     proj = Transformer.from_crs(sirgas, utm_crs)
     deproj = Transformer.from_crs(utm_crs, sirgas) # Deprojection
 
-    vertices_degree = []
+    # read all lines of segments defining the polygon
+    # assumed clockwise
+    directions_xy = []
+    directions_az = []
+    lines = lines[3:]
+    idx = 0
+    print("First vertex at index 1, 0 is PA")
+    for line in lines:
+        dist, quad, angle = memoLineRead(line)
+        azimuth = getazimuth(quad, angle)
+        dx, dy = projectxy(dist, quad, angle)
+        directions_xy.append([dx, dy])
+        directions_az.append([dist, azimuth])
+        print("{:3d} : {:>+9.3f} {:>5} {:>+7.2f} {:>+7.2f} {:>+9.2f} {:>+9.2f}".format(idx, dist, quad.ljust(5), angle, azimuth, dx, dy))
+        idx += 1
+
+    vertices_dg = []
     vertices_utm = []
-    if geodesic: # geodesic calculations
-        #The point 20000 km SW of Perth, Australia (32.06S, 115.74E) using Direct():
-        # g = geod.Direct(-32.06, 115.74, 225, 20000e3)
-        # print("The position is ({:.8f}, {:.8f}).".format(g['lat2'],g['lon2']))
-        clat, clon = latpa, lonpa # start point
-        vertices_degree.append([clat, clon])
-        lines = lines[3:]
-        for line in lines:
-            dist, quad, angle = memoLineRead(line)
-            azimuth = getazimuth(quad, angle)
-            print("{:>+9.3f} {:<4} {:>+4.2f} {:>+9.2f}".format(dist, quad.ljust(8), angle, azimuth))
-            clat, clon = GeoDirectWGS84(clat, clon, azimuth, dist, wincpp)
-            vertices_degree.append([clat, clon])
-        for vertex in vertices_degree:
+    if geodesic: # geodesic calculations # go to first vertex
+        # assume clockwise, assume closed polygon otherwise BROKE
+        first_vertex = geodesic_walk((latpa, lonpa), directions_az[:1])[1]
+        # ignora  PA not vertex, remove from directions also
+        directions_az = directions_az[1:]
+        # simpler approach but second is better compared with CONVNAV
+        # vertices_dg = geodesic_walk(first_vertex, directions_az)
+        # aproach going to both sides from first vertex
+        ndirs = len(directions_az)
+        nfst = ndirs//2 # first group number of directions
+        nscd = ndirs-nfst # second group number of directions
+        fst_group = geodesic_walk(first_vertex, directions_az[:nfst])
+        scd_group = geodesic_walk(first_vertex, directions_az[nfst:][::-1], inverse=True)
+        mid_vertex = np.mean([fst_group[-1]]+[scd_group[-1]], axis=0).tolist() # it is better!
+        vertices_dg = fst_group[:-1] + [mid_vertex] + scd_group[1:-1][::-1]
+        # create UTM equivalents
+        for vertex in vertices_dg:
             utmx, utmy = proj.transform(vertex[1], vertex[0])
-            vertices_utm.append([utmx, utmy])
+            vertices_utm += [utmx, utmy]
             print("UTM X {:10.3f} Y {:10.3f} Lat {:4.9f} Lon {:4.9f}".format(
                 utmx, utmy, vertex[0], vertex[1]))
 
     else: # planimetric calculations
         xpa, ypa =  proj.transform(lonpa, latpa)
-        vertices_utm.append([xpa, ypa])
-        lines = lines[3:] #
         cx, cy = xpa, ypa
-        for line in lines:
-            dist, quad, angle = memoLineRead(line)
-            dx, dy = projectxy(dist, quad, angle)
-            print("{:>+9.3f} {:<4} {:>+4.2f} {:>+9.2f} {:>+9.2f}".format(dist, quad.ljust(8), angle, dx, dy))
+        for segment in directions_xy:
+            dx, dy = segment
             cx += dx; cy += dy
             vertices_utm.append([cx, cy])
         for vertex in vertices_utm:
             lon, lat = deproj.transform(vertex[0], vertex[1])
-            vertices_degree.append([lat, lon])
+            vertices_dg.append([lat, lon])
             print("UTM X {:10.3f} Y {:10.3f} Lat {:4.9f} Lon {:4.9f}".format(
                 vertex[0], vertex[1], lat, lon))
 
@@ -183,21 +234,17 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
         # print coordendas format fformatPoligonal
         # possa criar um arquivo para inserier poligonal
         strfile = ''
-        # fechamento perfeito primeiro ponto e
-        # ignora primeiro (PA) - MUST BE rumos diversos
-        vs = vertices_degree.copy()[1:]
-        vs.append(vs[1])
-        for v in vs[1:]:
+        for v in vertices_dg:
             line = ('{:03d} {:02d} {:02d} {:03d} '*2).format(
                 *decdeg2dmsd(v[0]), *decdeg2dmsd(v[1]))
+            strfile = strfile + "\n" + line
             if verbose:
                 print(line)
-            strfile = strfile + "\n" + line
-        fformatPoligonal(strfile)
+        fformatPoligonal(strfile, verbose=verbose, endfirst=True)
 
     # Create polygon shape file
     if saveshape:
-        vertices = np.array(vertices_degree)
+        vertices = np.array(vertices_dg)
         temp = np.copy(vertices[:, 0])
         vertices[:, 0] = vertices[:, 1]
         vertices[:, 1] = temp
@@ -205,7 +252,7 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
         gdfvs.set_crs(pyproj.CRS("""+proj=longlat +ellps=GRS80 +towgs84=0,0,0 +no_defs""")) # SIRGAS 2000
         gdfvs.to_file(shpname+'.shp')
 
-    return vertices_degree, vertices_utm
+    return vertices_dg, vertices_utm
 
 def memoLineRead(line):
     """
@@ -320,6 +367,45 @@ def decdeg2dmsd(dd):
     return (int(degrees), int(minutes), int(seconds), int(1000*dseconds))
 
 
+def GeoDirectWGS84(lat1, lon1, az1, s12, wincpp=True):
+    """Use geographiclib python package or
+    pybind11 wrapping geographiclib by Andre"""
+    if wincpp: # use cpp compiled vstudio windows 8th order
+        geocpp.WGS84()
+        return geocpp.Direct(lat1, lon1, az1, s12)
+    else:
+        geod = gd.Geodesic.WGS84 # define the WGS84 ellipsoid - SIRGAS 2000 same
+        res = geod.Direct(lat1, lon1, az1, s12)
+        return res['lat2'], res['lon2']
+
+
+def geodesic_walk(rpoint, directions, inverse=False):
+        """create points starting at rpoint for all directions passed
+
+        rpoint : lat, lon
+            reference point
+
+        directions: list of lists
+            [distance, angle]
+
+        inverse : bool
+            wether walking backwards, -distance
+        """
+        #The point 20000 km SW of Perth, Australia (32.06S, 115.74E) using Direct():
+        # g = geod.Direct(-32.06, 115.74, 225, 20000e3)
+        # print("The position is ({:.8f}, {:.8f}).".format(g['lat2'],g['lon2']))
+        vertices = []
+        clat, clon = rpoint # start point
+        vertices.append([clat, clon])
+
+        inverse = -1 if inverse else 1
+        for segment in directions:
+            dist, azimuth = segment
+            clat, clon = GeoDirectWGS84(clat, clon, azimuth, dist*inverse, wincpp)
+            vertices.append([clat, clon])
+
+        return vertices
+
 ## Tests
 
 
@@ -341,7 +427,7 @@ def test_memoPoligonPA():
     thruth_perimeter = 590*2+780*2
     thruth_area = 46.02
 
-    vertices, utm =  memoPoligonPA(filestr, geodesic=True, cfile=False, saveshape=False)
+    vertices, utm =  memoPoligonPA(filestr, geodesic=True, shpname='test_memo', verbose=True)
     convnav_vertices = np.array([[-44.955068889, -21.341296111],
         [-44.955068889, -21.346624722],
         [-44.962588611, -21.346624444],
@@ -355,7 +441,7 @@ def test_memoPoligonPA():
     convnav_area = convnav_area*10**(-4) # to hectares
 
     poly = pa.PolygonArea(geoobj)
-    for p in vertices[1:-1]:
+    for p in vertices:
         poly.AddPoint(*p)
     poly.Compute(True)
     py_num, py_perim, py_area = poly.Compute(True)
@@ -366,14 +452,3 @@ def test_memoPoligonPA():
 
     print("python  errors - area {:>+9.9f} perimeter {:>+9.9f}".format(
             thruth_area-py_area, thruth_perimeter-py_perim))
-
-def GeoDirectWGS84(lat1, lon1, az1, s12, wincpp=True):
-    """Use geographiclib python package or
-    pybind11 wrapping geographiclib by Andre"""
-    if wincpp: # use cpp compiled vstudio windows 8th order
-        geocpp.WGS84()
-        return geocpp.Direct(lat1, lon1, az1, s12)
-    else:
-        geod = gd.Geodesic.WGS84 # define the WGS84 ellipsoid - SIRGAS 2000 same
-        res = geod.Direct(lat1, lon1, az1, s12)
-        return res['lat2'], res['lon2']
