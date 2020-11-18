@@ -5,7 +5,7 @@ from pyproj import Transformer
 from geographiclib import geodesic as gd
 from geographiclib import polygonarea as pa
 from . import geolib as geocpp
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, Point
 import geopandas as gp
 import numpy as np
 
@@ -13,55 +13,126 @@ import numpy as np
 # o sinal é inserido somente no arquivo antes do ';'
 reg = re.compile('\D*(\d{2})\D*(\d{2})\D*(\d{2})\D*(\d{3,})')
 
-def fformatPoligonal(mlinestring, filename='CCOORDS.TXT',
-    endfirst=True, verbose=True, force=5):
+# não lê sinal ASSUME SUL E OESTE, NEGATIVO em LAT e LON
+def memorialRead(latlonstr, decimal=False, verbose=False):
     """
-    Create formated file de poligonal para uso no SIGAREAS
-        SIGAREAS->Administrador->Inserir Poligonal
+    Read lat, lon string from memorial descritivo
+    convert to list of coordenates.
 
-    force: default 5
-        number of miliseconds to round to 'make' it rumos verdadeiros
-
-    endfirst: default True
-        copy first point in the end
+    item on list is a line : lat , lon
+    [dg, mn, sc, msc, dg, mn, sc, msc]
     """
-
-    fields = reg.findall(mlinestring)
+    fields = reg.findall(latlonstr)
     if len(fields)%2 != 0:
-        print('Algo errado faltando campo em coordenada (lat. ou lon.)')
+        raise Exception('Algo errado faltando campo em coordenada (lat. ou lon.)')
     else:
         lines = []
         for i in range(0, len(fields)-1, 2):
             # line = lat , lon
             # [ dg, mn, sc, dsc , dg, mn, sc, dsc ]
             line = list(map(int,fields[i])) + list(map(int,fields[i+1]))
+            if decimal:
+                line = [-(line[0]+line[1]/60.+line[2]/3600.+(10**-3)*line[3]/3600.),
+                        -(line[4]+line[5]/60.+line[6]/3600.+(10**-3)*line[7]/3600.)]
+            if verbose:
+                print(line)
             lines.append(line)
+    return lines
 
-        # Force rumos verdadeiros
-        # passing all coordinates and subtracting if zero in msc
-        if force != 0:
-            tomsecs = np.array([3600*10**3, 60*10**3, 10**3, 1])
-            for i in range(len(lines)):
-                rlat = np.array(lines[i][:4])*tomsecs
-                rlon = np.array(lines[i][4:])*tomsecs
-                for j in range(i+1,len(lines)):
-                    lat = np.array(lines[j][:4])*tomsecs
-                    lon = np.array(lines[j][4:])*tomsecs
-                    if np.sum(np.abs(rlat-lat)) < 5:
-                        lines[j][:4] = lines[i][:4]
-                    if np.sum(np.abs(rlon-lon)) < 5:
-                        lines[j][4:] = lines[i][4:]
 
-        if endfirst:  # copy first point in the end
-            lines.append(lines[0])
+def snap_coordinates(coords, snap_latlon, snap_dist=1.5):
+    """
+    coords: list
+        [[lat0, lon0],[lat1, lon1]...]
 
-        with open(filename.upper(), 'w') as f: # must be CAPS otherwise system doesnt load
-            for line in lines:
-                line = "-;{:03};{:02};{:02};{:03};-;{:03};{:02};{:02};{:03}\n".format(*line)
-                f.write(line)
-                if verbose:
-                    print(line[:-1])
-    print("Output filename is: ", filename.upper())
+    snap_latlonstr: str or list
+         memorial descritvo de referencia
+         para snapping das coordenadas
+         ou
+         list de coordenadas para snapping
+
+    snap_dist: default 1.5
+        maximum distance for snaping coordinates (meters)
+
+    """
+    snap_points = []
+    if isinstance(snap_latlon, str):
+        snap_points = memorialRead(snap_latlonstr, decimal=True, verbose=True)
+    elif isinstance(snap_latlon, list):
+        snap_points = snap_latlon.copy()
+    else:
+        return
+    coords = coords.copy()
+    for spoint in snap_points: # list of lat, lon points
+        for i in range(len(coords)):
+            distance = GeoInverseWGS84(*spoint, *coords[i])
+            #print('distance: ', distance)
+            if(distance < snap_dist):
+                print("Snaping: distance from snap-vertex : Lat {:>4.8f} Lon {:>4.8f} to "
+                    "vertex : {:>3d} is {:>5.3f} m".format(*spoint, i, distance))
+                coords[i] = spoint
+                break # can only snap once with this point
+    return coords
+
+
+def fformatPoligonal(latlon, filename='CCOORDS.TXT',
+    endfirst=False, verbose=True, force=3):
+    """
+    Create formated file de poligonal para uso no SIGAREAS
+        SIGAREAS->Administrador->Inserir Poligonal
+
+    latlon: str/list
+        memorial descritivo string
+        or
+        [[lat,lon]...] list
+
+    force: default 3
+        number of miliseconds to round to 'make' it rumos verdadeiros
+        use with care, this is not real coordinate snapping can cause
+        unexpected results. Must be very small number.
+
+    endfirst: default True
+        copy first point in the end
+    """
+    tomsecs = np.array([3600*10**3, 60*10**3, 10**3, 1])
+
+    lines = []
+    if isinstance(latlon, str):
+        lines = memorialRead(latlon, verbose=True)
+    elif isinstance(latlon, list):
+        latlons = latlon.copy()
+        for ll in latlons:
+            # gambiarra - sign to print without care for sign
+            # allways considering W, S lon, lat
+            line = [*decdeg2dmsd(-ll[0]), *decdeg2dmsd(-ll[1])]
+            lines.append(line)
+    else:
+        return
+
+    # Force rumos verdadeiros
+    # passing all coordinates and subtracting if zero in msc
+    if force != 0:
+        for i in range(len(lines)):
+            rlat = np.array(lines[i][:4])*tomsecs
+            rlon = np.array(lines[i][4:])*tomsecs
+            for j in range(i+1,len(lines)):
+                lat = np.array(lines[j][:4])*tomsecs
+                lon = np.array(lines[j][4:])*tomsecs
+                if np.sum(np.abs(rlat-lat)) < force:
+                    lines[j][:4] = lines[i][:4]
+                if np.sum(np.abs(rlon-lon)) < force:
+                    lines[j][4:] = lines[i][4:]
+
+    if endfirst:  # copy first point in the end
+        lines.append(lines[0])
+
+    with open(filename.upper(), 'w') as f: # must be CAPS otherwise system doesnt load
+        for line in lines:
+            line = "-;{:03};{:02};{:02};{:03};-;{:03};{:02};{:02};{:03}\n".format(*line)
+            f.write(line)
+            if verbose:
+                print(line[:-1])
+        print("Output filename is: ", filename.upper())
 
 
 
@@ -70,7 +141,8 @@ def fformatPoligonal(mlinestring, filename='CCOORDS.TXT',
 wincpp=True
 
 def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
-        cfile=True, verbose=False, saveshape=True, wincpp=True):
+        cfile=True, verbose=False, saveshape=True,  wincpp=True,
+        snap_points=[], snap_dist=10.):
     """
     Cria sequencia de vertices a partir de string de arquivo texto de
     memorial descritivo da poligonal de requerimento usando ponto de amarração.
@@ -82,8 +154,16 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
         https://wiki.osgeo.org/wiki/Brazilian_Coordinate_Reference_Systems#Ellipsoids_in_use
         ....
 
+    snap_points: list [ [lat, lon] ]
+        snap coordinate considering `snap_dist` to ONLY ONE point and
+        recalculate walking vertices
+        TODO: implement for 2/3 ... more points
+
+
     geodesic: default True  - calculos geodésicos
                       False - calculos planimetricos UTM projetado
+
+
 
     ### Calculos Geodésicos - SIGAREAS/SCM
     Usa pacote Geographiclib (Charles F. F. Karney)
@@ -137,6 +217,7 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
     302  SE 90 00
     140  NW 00 00
 
+    Aproximadamente 0.001 (1 mm) walk changes 8 casa ou 10-8 grau decimal.
     """
     wincpp = wincpp
     if crs is not None:
@@ -150,7 +231,7 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
     # PA information
     latpa = get_graus(lines[0])
     lonpa = get_graus(lines[1])
-    print("Input lat, lon : {:.9f} {:.9f} {:}".format(latpa, lonpa, 'SAD69(96)'))
+    print("Input lat, lon : {:.8f} {:.8f} {:}".format(latpa, lonpa, 'SAD69(96)'))
     print("lat {:} {:} {:} {:} | lon {:} {:} {:} {:}".format(
         *decdeg2dmsd(latpa), *decdeg2dmsd(lonpa)))
     # convert PA geografica de datum de SAD69(96)  para SIRGAS 2000
@@ -159,7 +240,7 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
     sirgas = CRS("+proj=longlat +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs")
     tosirgas = Transformer.from_crs(crs, sirgas)
     lonpa, latpa =  tosirgas.transform(lonpa, latpa)
-    print("Input lat, lon: {:.9f} {:.9f} {:}".format(latpa, lonpa, 'SIRGAS2000'))
+    print("Input lat, lon: {:.8f} {:.8f} {:}".format(latpa, lonpa, 'SIRGAS2000'))
     print("lat {:} {:} {:} {:} | lon {:} {:} {:} {:}".format(
         *decdeg2dmsd(latpa), *decdeg2dmsd(lonpa)))
 
@@ -200,21 +281,30 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
         first_vertex = geodesic_walk((latpa, lonpa), directions_az[:1])[1]
         # ignora  PA not vertex, remove from directions also
         directions_az = directions_az[1:]
-        # simpler approach but second is better compared with CONVNAV
-        # vertices_dg = geodesic_walk(first_vertex, directions_az)
-        # aproach going to both sides from first vertex
-        ndirs = len(directions_az)
-        nfst = ndirs//2 # first group number of directions
-        nscd = ndirs-nfst # second group number of directions
-        fst_group = geodesic_walk(first_vertex, directions_az[:nfst])
-        scd_group = geodesic_walk(first_vertex, directions_az[nfst:][::-1], inverse=True)
-        mid_vertex = np.mean([fst_group[-1]]+[scd_group[-1]], axis=0).tolist() # it is better!
-        vertices_dg = fst_group[:-1] + [mid_vertex] + scd_group[1:-1][::-1]
+        vertices_dg = geodesic_poly_walk(first_vertex, directions_az, 0)
+
+        rsnap_points = [] # new reference points from snapping points
+        if snap_points:
+            for spoint in snap_points: # list of lat, lon points
+                for i in range(len(vertices_dg)):
+                    distance = GeoInverseWGS84(*spoint, *vertices_dg[i])
+                    #print(distance)
+                    if(distance < snap_dist):
+                        print("Snaping: distance from snap-vertex : Lat {:>4.8f} Lon {:>4.8f} to "
+                                "vertex : {:>3d} is {:>5.3f} m".format(*spoint, i, distance))
+                        #print("accept?")
+                        rsnap_points.append([i, spoint])
+            if rsnap_points: # at least one acceptable snap_point
+                print("Recalculating vertices")
+                if len(rsnap_points) == 1:
+                    vertices_dg = geodesic_poly_walk(rsnap_points[0][1],
+                                            directions_az, rsnap_points[0][0])
+
         # create UTM equivalents
         for vertex in vertices_dg:
             utmx, utmy = proj.transform(vertex[1], vertex[0])
             vertices_utm += [utmx, utmy]
-            print("UTM X {:10.3f} Y {:10.3f} Lat {:4.9f} Lon {:4.9f}".format(
+            print("UTM X {:10.3f} Y {:10.3f} Lat {:4.8f} Lon {:4.8f}".format(
                 utmx, utmy, vertex[0], vertex[1]))
 
     else: # planimetric calculations
@@ -227,32 +317,31 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
         for vertex in vertices_utm:
             lon, lat = deproj.transform(vertex[0], vertex[1])
             vertices_dg.append([lat, lon])
-            print("UTM X {:10.3f} Y {:10.3f} Lat {:4.9f} Lon {:4.9f}".format(
+            print("UTM X {:10.3f} Y {:10.3f} Lat {:4.8f} Lon {:4.8f}".format(
                 vertex[0], vertex[1], lat, lon))
 
     if cfile:
-        # print coordendas format fformatPoligonal
-        # possa criar um arquivo para inserier poligonal
-        strfile = ''
-        for v in vertices_dg:
-            line = ('{:03d} {:02d} {:02d} {:03d} '*2).format(
-                *decdeg2dmsd(v[0]), *decdeg2dmsd(v[1]))
-            strfile = strfile + "\n" + line
-            if verbose:
-                print(line)
-        fformatPoligonal(strfile, verbose=verbose, endfirst=True)
+        fformatPoligonal(vertices_dg, verbose=verbose, endfirst=True)
 
     # Create polygon shape file
     if saveshape:
-        vertices = np.array(vertices_dg)
-        temp = np.copy(vertices[:, 0])
-        vertices[:, 0] = vertices[:, 1]
-        vertices[:, 1] = temp
-        gdfvs = gp.GeoSeries(Polygon(vertices))
+        savePolygonWGS84(vertices_dg, shpname)
+        gdfvs = gp.GeoSeries(list(map(Point, vertices_dg)), index=np.arange(len(vertices_dg)))
         gdfvs.set_crs(pyproj.CRS("""+proj=longlat +ellps=GRS80 +towgs84=0,0,0 +no_defs""")) # SIRGAS 2000
-        gdfvs.to_file(shpname+'.shp')
+        gdfvs.to_file(shpname+'points.shp')
 
-    return vertices_dg, vertices_utm
+    return vertices_dg, vertices_utm, gdfvs
+
+
+def savePolygonWGS84(vertices, shpname):
+    vertices = np.array(vertices)
+    temp = np.copy(vertices[:, 0])
+    vertices[:, 0] = vertices[:, 1]
+    vertices[:, 1] = temp
+    gdfvs = gp.GeoSeries(Polygon(vertices))
+    gdfvs.set_crs(pyproj.CRS("""+proj=longlat +ellps=GRS80 +towgs84=0,0,0 +no_defs""")) # SIRGAS 2000
+    gdfvs.to_file(shpname+'.shp')
+
 
 def memoLineRead(line):
     """
@@ -378,6 +467,16 @@ def GeoDirectWGS84(lat1, lon1, az1, s12, wincpp=True):
         res = geod.Direct(lat1, lon1, az1, s12)
         return res['lat2'], res['lon2']
 
+def GeoInverseWGS84(lat1, lon1, lat2, lon2, wincpp=True):
+    """Use geographiclib python package or
+    pybind11 wrapping geographiclib by Andre"""
+    if wincpp: # use cpp compiled vstudio windows 8th order
+        geocpp.WGS84()
+        return geocpp.Inverse(lat1, lon1, lat2, lon2)
+    else:
+        geod = gd.Geodesic.WGS84 # define the WGS84 ellipsoid - SIRGAS 2000 same
+        res = geod.Inverse(lat1, lon1, lat2, lon2)
+        return res
 
 def geodesic_walk(rpoint, directions, inverse=False):
         """create points starting at rpoint for all directions passed
@@ -405,6 +504,31 @@ def geodesic_walk(rpoint, directions, inverse=False):
             vertices.append([clat, clon])
 
         return vertices
+
+def geodesic_poly_walk(start_vertex, directions, start_idx=0, closed=True):
+    """
+    create vertices of polygon walking using directions from one start_vertex
+    start_vertex: (lat, lon)
+        coordinates of starting point
+    start_idx : default 0
+        specify where in the directions list is the start_vertex
+        (max value len(directions) - 1)
+    Note: clockwise directions ONLY
+    """
+    # rool directions to specified start_vertex using start_idx
+    # start_idx=0 does nothing
+    directions = directions[start_idx:] + directions[:start_idx]
+    # simpler approach but second is better compared with CONVNAV
+    # vertices_dg = geodesic_walk(first_vertex, directions_az)
+    # aproach going to both sides from first vertex
+    ndirs = len(directions)
+    nfst = ndirs//2 # first group number of directions
+    nscd = ndirs-nfst # second group number of directions
+    fst_group = geodesic_walk(start_vertex, directions[:nfst])
+    scd_group = geodesic_walk(start_vertex, directions[nfst:][::-1], inverse=True)
+    mid_vertex = np.mean([fst_group[-1]]+[scd_group[-1]], axis=0).tolist() # it is better!
+    vertices_dg = fst_group[:-1] + [mid_vertex] + scd_group[1:-1][::-1]
+    return vertices_dg
 
 ## Tests
 
@@ -447,8 +571,8 @@ def test_memoPoligonPA():
     py_num, py_perim, py_area = poly.Compute(True)
     py_area = py_area*10**(-4) # to hectares
 
-    print("convnav errors - area {:>+9.9f} perimeter {:>+9.9f}".format(
+    print("convnav errors - area {:>+9.8f} perimeter {:>+9.8f}".format(
             thruth_area-convnav_area, thruth_perimeter-convnav_perim))
 
-    print("python  errors - area {:>+9.9f} perimeter {:>+9.9f}".format(
+    print("python  errors - area {:>+9.8f} perimeter {:>+9.8f}".format(
             thruth_area-py_area, thruth_perimeter-py_perim))
