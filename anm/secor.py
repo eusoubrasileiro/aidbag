@@ -73,15 +73,16 @@ class Estudo:
         self.processo = GetProcesso(processostr, wpage, dados, verbose)
         self.wpage = wpage
         self.verbose = verbose
-        # pasta padrao salvar processos formulario 1
-        if option == 0:
-            self.secorpath = os.path.join(__secor_path__, 'Requerimento')
-        elif option ==  1:
-            self.secorpath = os.path.join(__secor_path__, 'Formulario1')
-        elif option == 2:
-            self.secorpath = os.path.join(__secor_path__, 'Opcao')
-        elif option == 3:
-            self.secorpath = os.path.join(__secor_path__, r'Requerimento\Batch')
+        # pasta padrao salvar processos todos, mais simples
+        self.secorpath = os.path.join(__secor_path__, 'Processos')
+        # if option == 0:
+        #     self.secorpath = os.path.join(__secor_path__, 'Requerimento')
+        # elif option ==  1:
+        #     self.secorpath = os.path.join(__secor_path__, 'Formulario1')
+        # elif option == 2:
+        #     self.secorpath = os.path.join(__secor_path__, 'Opcao')
+        # elif option == 3:
+        #     self.secorpath = os.path.join(__secor_path__, r'Requerimento\Batch')
         # pasta deste processo
         self.processo_path = os.path.join(self.secorpath,
                     self.processo.number+'-'+self.processo.year )

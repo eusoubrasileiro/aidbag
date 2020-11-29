@@ -89,10 +89,10 @@ def EstudoBatchRun(wpage, processos, option=3, verbose=False):
 
 
 
-def IncluiDocumentosSEIFolder(sei, process_folder, tipo='Requerimento', path='', empty=False, verbose=True):
+def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, verbose=True):
     """
     Inclui process on specified folder:
-    `__secor_path__\\tipo\\path\\process_folder`
+    `__secor_path__\\path\\process_folder`
     Follow order of glob(*) using `chdir(tipo) + chdir(path)`
 
     * verbose: True
@@ -100,14 +100,10 @@ def IncluiDocumentosSEIFolder(sei, process_folder, tipo='Requerimento', path='',
     * empty : True
         cria documentos sem anexos
 
-    - Estudo
-    - Minuta
-    - Marca Acompanhamento Especial
-
     TODO:
         - Despacho
     """
-    os.chdir(os.path.join(secor.__secor_path__, tipo , path))
+    os.chdir(os.path.join(secor.__secor_path__, path))
     process_path = os.path.join(os.getcwd(), process_folder)
     os.chdir(process_folder) # enter on process folder
     #  GET NUP and tipo from html

@@ -330,7 +330,18 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
         gdfvs.set_crs(pyproj.CRS("""+proj=longlat +ellps=GRS80 +towgs84=0,0,0 +no_defs""")) # SIRGAS 2000
         gdfvs.to_file(shpname+'points.shp')
 
-    return vertices_dg, vertices_utm, gdfvs
+    if verbose:
+        elipsoide = gd.Geodesic(gd.Constants.WGS84_a, gd.Constants.WGS84_f) # same as SIRGAS
+        poly = pa.PolygonArea(elipsoide)
+        for p in vertices_dg:
+            poly.AddPoint(*p)
+        poly.Compute(True)
+        py_num, py_perim, py_area = poly.Compute(True)
+        py_area = py_area*10**(-4) # to hectares
+        print("nvertices {:} area {:>9.8f} perimeter {:>9.8f}".format(
+                py_num, py_area, py_perim))
+
+    return vertices_dg, vertices_utm
 
 
 def savePolygonWGS84(vertices, shpname):
@@ -478,7 +489,7 @@ def GeoInverseWGS84(lat1, lon1, lat2, lon2, wincpp=True):
         res = geod.Inverse(lat1, lon1, lat2, lon2)
         return res
 
-def geodesic_walk(rpoint, directions, inverse=False):
+def geodesic_walk(rpoint, directions, inverse=False, force_verd=True):
         """create points starting at rpoint for all directions passed
 
         rpoint : lat, lon
@@ -489,6 +500,10 @@ def geodesic_walk(rpoint, directions, inverse=False):
 
         inverse : bool
             wether walking backwards, -distance
+
+        force_verd:
+            wether repeat last latitude or longitude based on
+            'rumos verdadeiros'
         """
         #The point 20000 km SW of Perth, Australia (32.06S, 115.74E) using Direct():
         # g = geod.Direct(-32.06, 115.74, 225, 20000e3)
@@ -501,8 +516,12 @@ def geodesic_walk(rpoint, directions, inverse=False):
         for segment in directions:
             dist, azimuth = segment
             clat, clon = GeoDirectWGS84(clat, clon, azimuth, dist*inverse, wincpp)
+            if force_verd:
+                if azimuth == 0. or azimuth == 180.: # walking N/S
+                    _, clon = vertices[-1] # ignore computed lon
+                elif azimuth == -90. or azimuth == 90.: # walking W,E
+                    clat , _ = vertices[-1] # ignore computed lat                
             vertices.append([clat, clon])
-
         return vertices
 
 def geodesic_poly_walk(start_vertex, directions, start_idx=0, closed=True):
