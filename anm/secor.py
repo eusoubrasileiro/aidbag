@@ -173,8 +173,8 @@ class Estudo:
 
     def getTabelaInterferencia(self):
         self.tabela_interf = None
-        os.chdir(self.processo_path)
         interf_html = 'sigareas_rinterferencia_'+self.processo.number+self.processo.year+'.html'
+        interf_html = os.path.join(self.processo_path, interf_html)
         with open(interf_html, 'r') as f:
             htmltxt = f.read()
         soup = BeautifulSoup(htmltxt, features="lxml")
@@ -321,6 +321,7 @@ class Estudo:
         interf_eventos.DataPrior = interf_eventos.DataPrior.apply(dataformat)
         excelname = ('eventos_prioridade_' + self.processo.number
                             + self.processo.year+'.xlsx')
+        excelname = os.path.join(self.processo_path, excelname)
         # Get max string size each collum for setting excel width column
         txt_table = interf_eventos.values.astype(str).T
         minsize = np.apply_along_axis(lambda array: np.max([ len(string) for string in array ] ),
@@ -380,6 +381,7 @@ class Estudo:
             return
         excelname = ('eventos_prioridade_assoc_' + self.processo.number
                             + self.processo.year+'.xlsx')
+        excelname = os.path.join(self.processo_path, excelname)
         self.tabela_assoc.to_excel(excelname, index=False)
 
     def recebeSICOP(self):

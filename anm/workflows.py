@@ -166,6 +166,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, verbose
     #     pass
     # sei.ProcessoIncluiAEspecial(1) # 1 - me desnecessario e
     # lota todos os Acompanhamentos
+    os.chdir('..\..\..') # go back and back, to not lock the folder-path
 
 def IncluiDocumentosSEIFolders(sei, nfirst=1, tipo='Requerimento', path=''):
     """
