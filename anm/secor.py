@@ -259,9 +259,11 @@ class Estudo:
             processo_events = getEventosSimples(self.wpage, row[1][1])
             # get columns 'Publicação D.O.U' & 'Observação' from dados_basicos
             processo_dados = self.processes_interf[fmtPname(row[1][1])].dados
+            # to add an additional row caso a primeira data dos eventos diferente
+            # da prioritária correta
+            #prioridadec = self.processes_interf[fmtPname(row[1][1])].prioridadec
             dfbasicos = pd.DataFrame(processo_dados['eventos'][1:],
                         columns=processo_dados['eventos'][0])
-
             processo_events['EvSeq'] = len(processo_events)-processo_events.index.values.astype(int) # set correct order of events
             processo_events['Evento'] = processo_events['Evento'].astype(int)
             # put count of associados father and sons
@@ -380,7 +382,7 @@ class Estudo:
             cell_fmt = (fmt_ok1 if i%2==0 else fmt_ok2)
             # prioritário ou não pela coluna 'Prior' primeiro value
             alive = events['Prior'].values[0]
-            if alive < 0:
+            if alive == 0 and events['Ativo'].values[0] == r'Não':
                 cell_fmt = (fmt_dead1 if i%2==0 else fmt_dead2)
             for idx, row in events.iterrows(): # processo row by row set format
             #excel row index is not zero based, that's why idx+1 bellow
