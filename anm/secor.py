@@ -247,9 +247,8 @@ class Estudo:
             - cria index ordem eventos para
         """
         if not hasattr(self, 'tabela_interf'):
-            if not self.getTabelaInterferencia(): # there is no interference !
+            if self.getTabelaInterferencia() is None: # there is no interference !
                 return False
-
         if hasattr(self, 'tabela_interf_eventos'):
             return self.tabela_interf_eventos
 
@@ -341,6 +340,7 @@ class Estudo:
         workbook  = writer.book
         worksheet = writer.sheets['Sheet1']
         # Add a background color format.
+        # 1/2 to alternate for cleaner view
         fmt_ok1 = workbook.add_format( # ligh blue from GIMP
                 {'bg_color': '#78B0DE', 'font_color': 'black',
                 'align' : 'center'})
@@ -348,24 +348,36 @@ class Estudo:
                 {'bg_color': '#FFFFFF', 'font_color': 'black',
                 'align' : 'center'})
         # dont have clone method (copy)
-        fmt_dead1 = workbook.add_format(
+        # 1/2 to alternate for cleaner view
+        fmt_dead1 = workbook.add_format( # ligh blue from GIMP
                 {'bg_color': '#78B0DE', 'font_color': 'red',
                 'align' : 'center'})
-        fmt_dead2 = workbook.add_format(
+        fmt_dead2 = workbook.add_format( # white
                 {'bg_color': '#FFFFFF', 'font_color': 'red',
                 'align' : 'center'})
-        #bg_fmt_dead = workbook.add_format({'bg_color': '#FFFFFF'}) # nao prioritario
-        #bg_fmt_dead.set_font_color('#FF0000')
+        # those bellow do not alternate odd/even color background they highligh
+        fmt_dead_h = workbook.add_format( # ligth green highligh dead event
+                {'bg_color': '#9FEDA8', 'font_color': 'red',
+                'align' : 'center'})
+        fmt_reborn_h = workbook.add_format( # ligth yellow highligh reborn event
+                {'bg_color': '#E2E07A', 'font_color': 'red',
+                'align' : 'center'})
         i=0 # each process row share the same bg color
-        for processo in interf_eventos.groupby('Processo', sort=False):
+        for process, events in interf_eventos.groupby('Processo', sort=False):
             # odd or even color change by process
             cell_fmt = (fmt_ok1 if i%2==0 else fmt_ok2)
-            # dead or alive check summing eventos inativam/ativam
-            alive = np.sum(processo[1].Inativ.values)
+            # prioritário ou não pela coluna 'Prior' primeiro value
+            alive = events['Prior'].values[0]
             if alive < 0:
                 cell_fmt = (fmt_dead1 if i%2==0 else fmt_dead2)
-            for row in processo[1].index:
-                worksheet.set_row(row+1, None, cell_fmt)
+            for idx, row in events.iterrows(): # processo row by row set format
+            #excel row index is not zero based, that's why idx+1 bellow
+                if row['Inativ'] > 0: # revival event
+                    worksheet.set_row(idx+1, None, fmt_reborn_h)
+                elif row['Inativ'] < 0: # die event
+                    worksheet.set_row(idx+1, None, fmt_dead_h)
+                else: # 0
+                    worksheet.set_row(idx+1, None, cell_fmt)
             i += 1
         # Set column width
         for i in range(len(colwidths)):
