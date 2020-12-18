@@ -300,9 +300,21 @@ class Estudo:
         self.tabela_interf_eventos.Inativ = self.tabela_interf_eventos.Inativ.fillna(0) # not an important event
         # Add a 'Prior' (Prioridade) Collumn At the Beggining
         self.tabela_interf_eventos['Prior'] = 1
-        for name, events in self.tabela_interf_eventos.groupby('Processo'):
-            self.tabela_interf_eventos.loc[self.tabela_interf_eventos.Processo == name, 'Prior'] = (
-            1*(events.EvPrior.sum() > 0 and events.Inativ.sum() > -1))
+        # Prioridade considerando quando houve evento de inativação
+        # se antes do atual não é prioritário
+        for process, events in self.tabela_interf_eventos.groupby('Processo', sort=False):
+            # assume prioritário ou não pela data do primeiro evento
+            prior = 1 if events.iloc[-1]['EvPrior'] > 0 else 0
+            alive = np.sum(events.Inativ.values) # alive or dead
+            if alive < 0: # DEAD - get by data da última inativação
+                data_inativ = events.loc[events.Inativ == -1]['Data'].values[0]
+                if data_inativ  <= np.datetime64(self.processo.prioridadec):
+                    # morreu antes do atual, não é prioritário
+                    prior = 0
+            self.tabela_interf_eventos.loc[
+                self.tabela_interf_eventos.Processo == process, 'Prior'] = prior
+            #self.tabela_interf_eventos.loc[self.tabela_interf_eventos.Processo == name, 'Prior'] = (
+            #1*(events.EvPrior.sum() > 0 and events.Inativ.sum() > -1))
         # re-rearrange columns
         newcolumns = ['Prior'] + self.tabela_interf_eventos.columns[:-1].tolist()
         self.tabela_interf_eventos = self.tabela_interf_eventos[newcolumns]
