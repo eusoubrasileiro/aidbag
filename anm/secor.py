@@ -259,9 +259,6 @@ class Estudo:
             processo_events = getEventosSimples(self.wpage, row[1][1])
             # get columns 'Publicação D.O.U' & 'Observação' from dados_basicos
             processo_dados = self.processes_interf[fmtPname(row[1][1])].dados
-            # to add an additional row caso a primeira data dos eventos diferente
-            # da prioritária correta
-            #prioridadec = self.processes_interf[fmtPname(row[1][1])].prioridadec
             dfbasicos = pd.DataFrame(processo_dados['eventos'][1:],
                         columns=processo_dados['eventos'][0])
             processo_events['EvSeq'] = len(processo_events)-processo_events.index.values.astype(int) # set correct order of events
@@ -272,6 +269,16 @@ class Estudo:
             processo_events['Ativo'] = row[1]['Ativo']
             processo_events['Obs'] = dfbasicos['Observação']
             processo_events['DOU'] = dfbasicos['Publicação D.O.U']
+            # strdate to datetime comparacao prioridade
+            processo_events.Data = processo_events.Data.apply(
+                lambda strdate: datetime.strptime(strdate, "%d/%m/%Y %H:%M:%S"))
+            # to add an additional row caso a primeira data dos eventos diferente
+            # da prioritária correta
+            processo_prioridadec = self.processes_interf[fmtPname(row[1][1])].prioridadec
+            if processo_events['Data'].values[-1] > np.datetime64(processo_prioridadec):
+                processo_events = processo_events.append(processo_events.tail(1), ignore_index=True) # repeat the last/or first
+                processo_events.loc[processo_events.index[-1], 'Data'] = np.datetime64(processo_prioridadec)
+                processo_events.loc[processo_events.index[-1], 'EvSeq'] = 0 # represents added by here
             # SICOP parte if fisico main available
             # might have more or less lines than SCM eventos
             # use only what we have rest will be empty
@@ -279,9 +286,6 @@ class Estudo:
             # DATA:HORA	SITUAÇÃO	UF	ÓRGÃO	PRIORIDADE	MOVIMENTADO	RECEBIDO	DATA REC.	REC. POR	GUIA
             self.tabela_interf_eventos = self.tabela_interf_eventos.append(processo_events)
 
-        # strdate to datetime comparacao prioridade
-        self.tabela_interf_eventos.Data = self.tabela_interf_eventos.Data.apply(
-                 lambda strdate: datetime.strptime(strdate, "%d/%m/%Y %H:%M:%S"))
         self.tabela_interf_eventos.reset_index(inplace=True,drop=True)
         # rearrange collumns in more meaningfully viewing
         columns_order = ['Ativo','Processo', 'Evento', 'EvSeq', 'Descrição', 'Data', 'Dads', 'Sons', 'Obs', 'DOU']
@@ -291,7 +295,7 @@ class Estudo:
         self.tabela_interf_eventos['DataPrior'] = self.processo.prioridade
         self.tabela_interf_eventos['EvPrior'] = 0 # 1 prioritario 0 otherwise
         self.tabela_interf_eventos['EvPrior'] = self.tabela_interf_eventos.apply(
-            lambda row: 1 if row['Data'] < self.processo.prioridade else 0, axis=1)
+            lambda row: 1 if row['Data'] <= self.processo.prioridade else 0, axis=1)
         ### fill-in column with inativam or ativam processo for each event
         ### using excel 'eventos_scm_09102019.xls'
         eventos = pd.read_excel(__eventos_scm__)
