@@ -357,45 +357,51 @@ class Estudo:
         # Get the xlsxwriter workbook and worksheet objects.
         workbook  = writer.book
         worksheet = writer.sheets['Sheet1']
-        # Add a background color format.
-        # 1/2 to alternate for cleaner view
-        fmt_ok1 = workbook.add_format( # ligh blue from GIMP
-                {'bg_color': '#78B0DE', 'font_color': 'black',
-                'align' : 'center'})
-        fmt_ok2 = workbook.add_format(  # white
-                {'bg_color': '#FFFFFF', 'font_color': 'black',
-                'align' : 'center'})
-        # dont have clone method (copy)
-        # 1/2 to alternate for cleaner view
-        fmt_dead1 = workbook.add_format( # ligh blue from GIMP
-                {'bg_color': '#78B0DE', 'font_color': 'red',
-                'align' : 'center'})
-        fmt_dead2 = workbook.add_format( # white
-                {'bg_color': '#FFFFFF', 'font_color': 'red',
-                'align' : 'center'})
-        # those bellow do not alternate odd/even color background they highligh
-        fmt_dead_h = workbook.add_format( # ligth green highligh dead event
-                {'bg_color': '#9FEDA8', 'font_color': 'red',
-                'align' : 'center'})
-        fmt_reborn_h = workbook.add_format( # ligth yellow highligh reborn event
-                {'bg_color': '#E2E07A', 'font_color': 'red',
-                'align' : 'center'})
+        #######################################
+        # Solution for troublesome
+        # format managament on xlsxwriter
+        # dict as a storage of excel workbook formats
+        fmt_storage = {} # store unique workbook formats
+        # alternating colors for background
+        color1 = '#78B0DE' # ligh blue from GIMP
+        color2 = '#FFFFFF'  # white
+        # colors for dim or not fade a process
+        fcolor1 = 'black' # alive by events
+        fcolor2 = 'red' # fade process
+        fmt = {'bg_color': '#FFFFFF', 'font_color': 'black',
+               'align' : 'center', 'bold' : False}
+        def row_fmt(i, dim, event=False):
+            fmt['bg_color'] = (color1 if i%2==0 else color2) # odd or even color change by process
+            if dim:
+                fmt['font_color'] = 'red'
+            else:
+                fmt['font_color'] = 'black'
+            if event:
+                fmt['bold'] = True
+            else:
+                fmt['bold'] = False
+            key = hash(str(fmt))
+            excel_fmt = None
+            if key in fmt_storage:
+                excel_fmt = fmt_storage[key]
+            else:
+                excel_fmt = workbook.add_format(fmt)
+                fmt_storage[key] = excel_fmt
+            return excel_fmt
+        #######################################
         i=0 # each process row share the same bg color
         for process, events in interf_eventos.groupby('Processo', sort=False):
-            # odd or even color change by process
-            cell_fmt = (fmt_ok1 if i%2==0 else fmt_ok2)
             # prioritário ou não pela coluna 'Prior' primeiro value
-            alive = events['Prior'].values[0]
-            if alive == 0 and events['Ativo'].values[0] == r'Não':
-                cell_fmt = (fmt_dead1 if i%2==0 else fmt_dead2)
+            prior = events['Prior'].values[0] # prioritário
+            dead = events['Ativo'].values[0] == r'Não'
+            dead_nprior = dead and (not prior) # only fade/dim/paint dead and not prior
             for idx, row in events.iterrows(): # processo row by row set format
-            #excel row index is not zero based, that's why idx+1 bellow
-                if row['Inativ'] > 0: # revival event
-                    worksheet.set_row(idx+1, None, fmt_reborn_h)
-                elif row['Inativ'] < 0: # die event
-                    worksheet.set_row(idx+1, None, fmt_dead_h)
+                #excel row index is not zero based, that's why idx+1 bellow
+                if row['Inativ'] > 0 or row['Inativ'] < 0: # revival event / die event
+                    # make text bold
+                    worksheet.set_row(idx+1, None, row_fmt(i, dead_nprior, True))
                 else: # 0
-                    worksheet.set_row(idx+1, None, cell_fmt)
+                    worksheet.set_row(idx+1, None, row_fmt(i, dead_nprior, False))
             i += 1
         # Set column width
         for i in range(len(colwidths)):
