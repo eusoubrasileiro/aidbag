@@ -393,7 +393,7 @@ class Estudo:
         i=0 # each process row share the same bg color
         for process, events in interf_eventos.groupby('Processo', sort=False):
             # prioritário ou não pela coluna 'Prior' primeiro value
-            prior = events['Prior'].values[0] # prioritário
+            prior = events['Prior'].values[0] >= 0 # prioritário ou unknown
             dead = events['Ativo'].values[0] == r'Não'
             dead_nprior = dead and (not prior) # only fade/dim/paint dead and not prior
             for idx, row in events.iterrows(): # processo row by row set format
