@@ -278,7 +278,7 @@ class Estudo:
             if processo_events['Data'].values[-1] > np.datetime64(processo_prioridadec):
                 processo_events = processo_events.append(processo_events.tail(1), ignore_index=True) # repeat the last/or first
                 processo_events.loc[processo_events.index[-1], 'Data'] = np.datetime64(processo_prioridadec)
-                processo_events.loc[processo_events.index[-1], 'EvSeq'] = 0 # represents added by here
+                processo_events.loc[processo_events.index[-1], 'EvSeq'] = -3 # represents added by here
             # SICOP parte if fisico main available
             # might have more or less lines than SCM eventos
             # use only what we have rest will be empty
@@ -310,13 +310,14 @@ class Estudo:
         # se antes do atual não é prioritário
         for process, events in self.tabela_interf_eventos.groupby('Processo', sort=False):
             # assume prioritário ou não pela data do primeiro evento
+            # ou 0 se não se sabe
             prior = 1 if events.iloc[-1]['EvPrior'] > 0 else 0
             alive = np.sum(events.Inativ.values) # alive or dead
             if alive < 0: # DEAD - get by data da última inativação
                 data_inativ = events.loc[events.Inativ == -1]['Data'].values[0]
                 if data_inativ  <= np.datetime64(self.processo.prioridadec):
                     # morreu antes do atual, não é prioritário
-                    prior = 0
+                    prior = -1
             self.tabela_interf_eventos.loc[
                 self.tabela_interf_eventos.Processo == process, 'Prior'] = prior
             #self.tabela_interf_eventos.loc[self.tabela_interf_eventos.Processo == name, 'Prior'] = (
