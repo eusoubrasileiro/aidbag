@@ -70,7 +70,7 @@ class Estudo:
         processostr : numero processo format xxx.xxx/ano
         wpage : wPage html webpage scraping class com login e passwd preenchidos
         """
-        self.processo = GetProcesso(processostr, wpage, dados, verbose)
+        self.processo = Processo.Get(processostr, wpage, dados, verbose)
         self.wpage = wpage
         self.verbose = verbose
         # pasta padrao salvar processos todos, mais simples
@@ -213,7 +213,7 @@ class Estudo:
         #                                 self.processes_interf))
         self.processes_interf = {}
         for process_name in processos_interferentes:
-            processo = GetProcesso(process_name, self.wpage, 3, self.verbose)
+            processo = Processo.Get(process_name, self.wpage, 3, self.verbose)
             self.processes_interf[process_name] = processo
 
         # self.processes_interf[processo_name] = processo # save on interf process object list
