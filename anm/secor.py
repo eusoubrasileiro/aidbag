@@ -90,21 +90,12 @@ class Estudo:
             os.mkdir(self.processo_path)
 
     def salvaDadosBasicosSCM(self):
-        # entra na pagina dados básicos do Processo do Cadastro  Mineiro
-        if not hasattr(self, 'scm_dadosbasicosmain_response'):
-            self.processo._dadosBasicosRetrieve()
-        dadosbasicosfname = 'scm_basicos_'+self.processo.number+self.processo.year
-        # sobrescreve
-        self.processo.wpage.save(os.path.join(self.processo_path, dadosbasicosfname))
+        self.processo.salvaDadosBasicosHtml(self.processo_path)
 
     def salvaDadosPoligonalSCM(self):
-        # entra na pagina dados básicos do Processo do Cadastro  Mineiro (Poligonal)
-        if not hasattr(self, 'scm_dadosbasicospoli_response'):
-            self.processo._dadosPoligonalRetrieve()
-        # sobrescreve
-        dadospolyfname = 'scm_poligonal_'+self.processo.number+self.processo.year
-        self.processo.wpage.save(os.path.join(self.processo_path, dadospolyfname))
+        self.processo.salvaDadosPoligonalHtml(self.processo_path)
 
+    # THIS stays here
     def salvaRetiradaInterferencia(self):
         self.wpage.get('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1')
         formcontrols = {

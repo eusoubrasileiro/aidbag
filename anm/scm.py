@@ -1,4 +1,5 @@
-import sys
+import sys, os
+import glob
 from bs4 import BeautifulSoup
 
 sys.path.append("..") # Adds higher directory to python modules path.
@@ -49,7 +50,7 @@ scm_data_tags = { # "data name" ; soup.find fields( "tag", "attributes")
 }
 
 """
-Use `GetProcesso` to avoid creating duplicate Processo's
+Use `Processo.Get` to avoid creating duplicate Processo's
 """
 class Processo:
 
@@ -133,7 +134,14 @@ class Processo:
             raise Exception("Processo._dadosBasicosRetrieve - did not receive page")
         # may give False
         self.scm_dadosbasicosmain_response = self.wpage.response
+        self.scm_dadosbasicosmain_html = self.wpage.response.text
         return True
+
+    def salvaDadosBasicosHtml(self, html_path):
+        self._dadosBasicosRetrieve() # self.wpage.response will be filled
+        dadosbasicosfname = 'scm_basicos_'+self.number+self.year
+        # sobrescreve
+        self.wpage.save(os.path.join(html_path, dadosbasicosfname))
 
     def _dadosPoligonalRetrieve(self):
         if hasattr(self, 'scm_dadosbasicospoli_response'): # already downloaded
@@ -146,8 +154,14 @@ class Processo:
         self.wpage.post('https://sistemas.anm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx',
                       data=formdata)
         self.scm_dadosbasicospoli_response = self.wpage.response
+        self.scm_dadosbasicospoli_html = self.wpage.response.text
         return True
 
+    def salvaDadosPoligonalHtml(self, html_path):
+        self._dadosPoligonalRetrieve() # self.wpage.response will be filled
+        # sobrescreve
+        dadospolyfname = 'scm_poligonal_'+self.number+self.year
+        self.wpage.save(os.path.join(html_path, dadospolyfname))
 
     def fathernSons(self, ass_ignore=''):
         """
@@ -200,7 +214,7 @@ class Processo:
                 with ThreadPool(len(self.assprocesses_str)) as pool:
                     # Open the URLs in their own threads and return the results
                     # processo = Processo(aprocess, self.wpage, True, False, False, verbose=self.verbose)
-                    self.assprocesses = pool.starmap(GetProcesso, zip(self.assprocesses_str,
+                    self.assprocesses = pool.starmap(Processo.Get, zip(self.assprocesses_str,
                                                     itertools.repeat(self.wpage),
                                                     itertools.repeat(1),
                                                     itertools.repeat(self.verbose)))
@@ -255,7 +269,7 @@ class Processo:
                     break
                 self.anscestors.append(parent.anscestors[0])
                 son_name = parent.processostr
-                parent = GetProcesso(parent.anscestors[0], self.wpage, 1, self.verbose)
+                parent = Processo.Get(parent.anscestors[0], self.wpage, 1, self.verbose)
                 self.prioridadec = parent.prioridade
         self.ancestry_run = True
 
@@ -266,17 +280,20 @@ class Processo:
         self.data_protocolo = datetime.strptime(self.dados['data_protocolo'], "%d/%m/%Y %H:%M:%S")
         return self.prioridade
 
-    def dadosBasicosGet(self, data_tags=None, redo=False):
+    def dadosBasicosGet(self, data_tags=None, redo=False, parse_only=False):
         """check your nltm authenticated session
         if getting empty dict dados"""
         if data_tags is None: # data tags to fill in 'dados' with
             data_tags = scm_data_tags.copy()
-        if not hasattr(self, 'dados') or redo == True:
-            self._dadosBasicosRetrieve()
+        if not parse_only:
+            if not hasattr(self, 'dados') or redo == True:
+                self._dadosBasicosRetrieve()
+                self.dados = {}
+            else:
+                return len(self.dados) == len(data_tags)
+        else: # dont need to retrieve anything
             self.dados = {}
-        else:
-            return len(self.dados) == len(data_tags)
-        soup = BeautifulSoup(self.wpage.response.text, features="lxml")
+        soup = BeautifulSoup(self.scm_dadosbasicosmain_html, features="lxml")
         if self.verbose:
             with mutex:
                 print("dadosBasicosGet - parsing: ", self.processostr, file=sys.stderr)
@@ -316,7 +333,7 @@ class Processo:
         fathername = self.dados['processos_associados'][1][5]
         if fmtPname(fathername) == fmtPname(self.processostr): # doesn't have father
             return False
-        father = GetProcesso(fathername, self.wpage)
+        father = Processo.Get(fathername, self.wpage)
         father.dadosBasicosGet(miss_data_tags)
         self.dados.update(father.dados)
         del father
@@ -326,7 +343,20 @@ class Processo:
         pass
 
     @staticmethod
-    def Get(processostr, wpagentlm, dados=3, verbose=True):
+    def fromHtml(path, processostr, wpagentlm, verbose=True):
+        processo = Processo.Get(processostr, wpagentlm, None, verbose, run=False)
+        os.chdir(path)
+        path_main_html = glob.glob('*basicos*.html')[0] # html file on folder
+        main_html = None
+        with open(path_main_html, 'r') as f: # read html scm
+            main_html = f.read()
+        processo.scm_dadosbasicosmain_html = main_html
+        processo.dadosBasicosGet(parse_only=True)
+        os.chdir('..') # go back from process folder?
+        return processo
+
+    @staticmethod
+    def Get(processostr, wpagentlm, dados=3, verbose=True, run=True):
         """
         Create a new or get a Processo from ProcessStorage
 
@@ -351,7 +381,8 @@ class Processo:
                     print("Processo __new___ placing on storage ", processostr, file=sys.stderr)
         processo = Processo(processostr, wpagentlm,  verbose)
         ProcessStorage[processostr] = processo   # store this new guy
-        processo.runtask(cdados=dados)
+        if run: # wether run the task, sometimes loading from file no run
+            processo.runtask(cdados=dados)
         return processo
 
 ############################################################

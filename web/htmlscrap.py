@@ -126,7 +126,7 @@ def tableDataText(table):
     return rows
 
 
-def dictDataText(soup, data_tags):
+def dictDataText(soup, data_tags, strip=True):
     """
     Parse Html tags from dict `data_tags` like bellow:
 
@@ -154,5 +154,7 @@ def dictDataText(soup, data_tags):
                 result = tableDataText(result)
             else:
                 result = result.text
+                if strip: # strip text
+                    result = result.strip()
             dados.update({data : result})
     return dados
