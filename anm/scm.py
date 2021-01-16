@@ -343,16 +343,19 @@ class Processo:
         pass
 
     @staticmethod
-    def fromHtml(path, processostr, wpagentlm, verbose=True):
-        processo = Processo.Get(processostr, wpagentlm, None, verbose, run=False)
+    def fromHtml(path='.', processostr=None, verbose=True):
+        curdir = os.getcwd()
         os.chdir(path)
         path_main_html = glob.glob('*basicos*.html')[0] # html file on folder
+        if not processostr: # get process str name by file name
+            processostr= fmtPname(glob.glob('*basicos*.html')[0])
+        processo = Processo.Get(processostr, htmlscrap.wPageNtlm('', ''), None, verbose, run=False)
         main_html = None
         with open(path_main_html, 'r') as f: # read html scm
             main_html = f.read()
         processo.scm_dadosbasicosmain_html = main_html
         processo.dadosBasicosGet(parse_only=True)
-        os.chdir('..') # go back from process folder?
+        os.chdir(curdir) # go back
         return processo
 
     @staticmethod
