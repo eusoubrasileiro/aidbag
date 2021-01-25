@@ -2,9 +2,9 @@ import re
 import pyproj
 from pyproj import CRS
 from pyproj import Transformer
-from geographiclib import geodesic as gd
-from geographiclib import polygonarea as pa
-from . import geolib as geocpp
+from geographiclib import geodesic as gd #  PyP package Geographiclib
+from geographiclib import polygonarea as pa # PyP package Geographiclib
+from . import geolib as geocpp # Geographiclib wrapped in pybind11 by me py38
 from shapely.geometry import Polygon, Point
 import geopandas as gp
 import numpy as np
@@ -140,6 +140,9 @@ def fformatPoligonal(latlon, filename='CCOORDS.TXT',
 # might be useful https://github.com/totalopenstation
 wincpp=True
 
+CRS_SAD69_96 = "+proj=longlat +ellps=aust_SA +towgs84=-67.35,3.88,-38.22,0,0,0,0 +no_defs" # sad69(96) lat lon
+CRS_SIRGAS2000 = "+proj=longlat +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs"
+
 def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
         cfile=True, verbose=False, saveshape=True,  wincpp=True,
         snap_points=[], snap_dist=10.):
@@ -225,7 +228,7 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
     else:
         # older sad69
         #crs = CRS('+proj=longlat +ellps=aust_SA +towgs84=-66.87,4.37,-38.52,0,0,0,0 +no_defs')
-        crs = CRS("+proj=longlat +ellps=aust_SA +towgs84=-67.35,3.88,-38.22,0,0,0,0 +no_defs") # sad69(96) lat lon
+        crs = CRS(CRS_SAD69_96) # sad69(96) lat lon
     print("Input CRS: ", crs)
     lines = filestr.split('\n')
     # PA information
@@ -237,7 +240,7 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
     # convert PA geografica de datum de SAD69(96)  para SIRGAS 2000
     # conforme Emilio todo o banco de dados do SCM foi convertido
     # considerando que os dados eram SAD69(96)
-    sirgas = CRS("+proj=longlat +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs")
+    sirgas = CRS_SIRGAS2000
     tosirgas = Transformer.from_crs(crs, sirgas)
     lonpa, latpa =  tosirgas.transform(lonpa, latpa)
     print("Input lat, lon: {:.8f} {:.8f} {:}".format(latpa, lonpa, 'SIRGAS2000'))
@@ -254,7 +257,8 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
     #+towgs84=0,0,0,0,0,0,0""".format(lonpa)
     # Lambert Azimuthal Equal Area
     # utm_crs = """+proj=laea +ellps=WGS84 +datum=WGS84 +units=m +no_defs +lon_0={:} +lat_0={:} +x_0=0 +y_0=0 +towgs84=0,0,0,0,0,0,0""".format(lonpa, latpa)
-    print("PRJ4 string UTM:", utm_crs)
+    if not geodesic:
+        print("PRJ4 string UTM:", utm_crs)
     proj = Transformer.from_crs(sirgas, utm_crs)
     deproj = Transformer.from_crs(utm_crs, sirgas) # Deprojection
 
@@ -327,7 +331,7 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
     if saveshape:
         savePolygonWGS84(vertices_dg, shpname)
         gdfvs = gp.GeoSeries(list(map(Point, vertices_dg)), index=np.arange(len(vertices_dg)))
-        gdfvs.set_crs(pyproj.CRS("""+proj=longlat +ellps=GRS80 +towgs84=0,0,0 +no_defs""")) # SIRGAS 2000
+        gdfvs.set_crs(pyproj.CRS(CRS_SIRGAS2000)) # SIRGAS 2000
         gdfvs.to_file(shpname+'points.shp')
 
     if verbose:
@@ -520,7 +524,7 @@ def geodesic_walk(rpoint, directions, inverse=False, force_verd=True):
                 if azimuth == 0. or azimuth == 180.: # walking N/S
                     _, clon = vertices[-1] # ignore computed lon
                 elif azimuth == -90. or azimuth == 90.: # walking W,E
-                    clat , _ = vertices[-1] # ignore computed lat                
+                    clat , _ = vertices[-1] # ignore computed lat
             vertices.append([clat, clon])
         return vertices
 
@@ -549,9 +553,22 @@ def geodesic_poly_walk(start_vertex, directions, start_idx=0, closed=True):
     vertices_dg = fst_group[:-1] + [mid_vertex] + scd_group[1:-1][::-1]
     return vertices_dg
 
+def PolygonArea(cords):
+    """
+    cords = [[lat,lon]...] list
+    Use geodesics on WGS84  for calculations.
+    return nvertices, perimeter, area (hectares)
+    """
+    geoobj = gd.Geodesic(gd.Constants.WGS84_a, gd.Constants.WGS84_f)
+    poly = pa.PolygonArea(geoobj)
+
+    for p in cords:
+        poly.AddPoint(*p)
+    n, perim, area = poly.Compute(True)
+    area = area*10**(-4) # to hectares
+    return n, perim, area
+
 ## Tests
-
-
 
 def test_memoPoligonPA():
     """Testa código
@@ -571,24 +588,13 @@ def test_memoPoligonPA():
     thruth_area = 46.02
 
     vertices, utm =  memoPoligonPA(filestr, geodesic=True, shpname='test_memo', verbose=True)
-    convnav_vertices = np.array([[-44.955068889, -21.341296111],
-        [-44.955068889, -21.346624722],
-        [-44.962588611, -21.346624444],
-        [-44.962588611, -21.341295833]])
+    convnav_vertices = [[-21.34129611, -44.95506889],
+       [-21.34662472, -44.95506889],
+       [-21.34662444, -44.96258861],
+       [-21.34129583, -44.96258861]]
 
-    geoobj = gd.Geodesic(gd.Constants.WGS84_a, gd.Constants.WGS84_f)
-    poly = pa.PolygonArea(geoobj)
-    for p in convnav_vertices:
-        poly.AddPoint(*p[::-1])
-    convnav_num, convnav_perim, convnav_area = poly.Compute(True)
-    convnav_area = convnav_area*10**(-4) # to hectares
-
-    poly = pa.PolygonArea(geoobj)
-    for p in vertices:
-        poly.AddPoint(*p)
-    poly.Compute(True)
-    py_num, py_perim, py_area = poly.Compute(True)
-    py_area = py_area*10**(-4) # to hectares
+    convnav_num, convnav_perim, convnav_area = PolygonArea(convnav_vertices)
+    py_num, py_perim, py_area = PolygonArea(vertices)
 
     print("convnav errors - area {:>+9.8f} perimeter {:>+9.8f}".format(
             thruth_area-convnav_area, thruth_perimeter-convnav_perim))

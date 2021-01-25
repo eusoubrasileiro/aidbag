@@ -53,8 +53,6 @@ scm_data_tags = { # "data name" ; soup.find fields( "tag", "attributes")
 Use `Processo.Get` to avoid creating duplicate Processo's
 """
 class Processo:
-
-
     def __init__(self, processostr, wpagentlm, verbose=True):
         """
         Hint: Use `Processo.Get` to avoid creating duplicate Processo's
