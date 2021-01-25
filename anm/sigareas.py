@@ -192,10 +192,13 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
         8th order
 
     verdadeiro: default True
+        force 'rumos verdadeiros'
         force decimal coordinates lat, lon to repeat last lat, lon
 
     tolerance: default 1e-6 (decimal degrees)
         diference to previous lat or lon to force 'verdadeiro' option
+        WARNING:
+        If navigation is very detailed this parameter may change it COMPLETELY        
 
     Conforme Emilio todo o banco de dados do SCM foi convertido
     considerando que os dados já estavam no datum SAD69(96).
