@@ -76,7 +76,7 @@ def snap_coordinates(coords, snap_latlon, snap_dist=1.5):
 
 
 def fformatPoligonal(latlon, filename='CCOORDS.TXT',
-    endfirst=False, verbose=True, force=3):
+    endfirst=False, verbose=True):
     """
     Create formated file de poligonal para uso no SIGAREAS
         SIGAREAS->Administrador->Inserir Poligonal
@@ -85,11 +85,6 @@ def fformatPoligonal(latlon, filename='CCOORDS.TXT',
         memorial descritivo string
         or
         [[lat,lon]...] list
-
-    force: default 3
-        number of miliseconds to round to 'make' it rumos verdadeiros
-        use with care, this is not real coordinate snapping can cause
-        unexpected results. Must be very small number.
 
     endfirst: default True
         copy first point in the end
@@ -109,20 +104,6 @@ def fformatPoligonal(latlon, filename='CCOORDS.TXT',
     else:
         return
 
-    # Force rumos verdadeiros
-    # passing all coordinates and subtracting if zero in msc
-    if force != 0:
-        for i in range(len(lines)):
-            rlat = np.array(lines[i][:4])*tomsecs
-            rlon = np.array(lines[i][4:])*tomsecs
-            for j in range(i+1,len(lines)):
-                lat = np.array(lines[j][:4])*tomsecs
-                lon = np.array(lines[j][4:])*tomsecs
-                if np.sum(np.abs(rlat-lat)) < force:
-                    lines[j][:4] = lines[i][:4]
-                if np.sum(np.abs(rlon-lon)) < force:
-                    lines[j][4:] = lines[i][4:]
-
     if endfirst:  # copy first point in the end
         lines.append(lines[0])
 
@@ -136,15 +117,31 @@ def fformatPoligonal(latlon, filename='CCOORDS.TXT',
 
 
 
+def force_verd(vertices, tolerance=2e-6, verbose=True):
+    """force decimal coordinates lat, lon to repeat last lat, lon"""
+    vertices = np.copy(np.array(vertices))
+    lats = np.copy(vertices[:, 0])
+    lons = np.copy(vertices[:, 1])
+    for i, pair in enumerate(list(zip(np.diff(lats), np.diff(lons)))):
+        dlat, dlon = pair
+        if(abs(dlat) < tolerance and dlat != 0.0):
+            if verbose:
+                print('lat {:.8f} changed to {:.8f}'.format(vertices[i+1, 0], lats[i]))
+            vertices[i+1, 0] = lats[i]
+        elif(abs(dlon) < tolerance and dlon != 0.0):
+            if verbose:
+                print('lon {:.8f} changed to {:.8f}'.format(vertices[i+1, 1], lons[i]))
+            vertices[i+1, 1] = lons[i]
+    return vertices
+
 ### Memorial descritivo através de PA e survey de estação total
 # might be useful https://github.com/totalopenstation
 wincpp=True
-
 CRS_SAD69_96 = "+proj=longlat +ellps=aust_SA +towgs84=-67.35,3.88,-38.22,0,0,0,0 +no_defs" # sad69(96) lat lon
 CRS_SIRGAS2000 = "+proj=longlat +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs"
 
 def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
-        cfile=True, verbose=False, saveshape=True,  wincpp=True,
+        cfile=True, verbose=False, saveshape=True,  wincpp=True, verdadeiro=True, tolerance=1e-6,
         snap_points=[], snap_dist=10.):
     """
     Cria sequencia de vertices a partir de string de arquivo texto de
@@ -193,6 +190,12 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
     wincpp : default True
         use geographiclib compiled on windows/pybind11 vstudio by Andre
         8th order
+
+    verdadeiro: default True
+        force decimal coordinates lat, lon to repeat last lat, lon
+
+    tolerance: default 1e-6 (decimal degrees)
+        diference to previous lat or lon to force 'verdadeiro' option
 
     Conforme Emilio todo o banco de dados do SCM foi convertido
     considerando que os dados já estavam no datum SAD69(96).
@@ -323,6 +326,9 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
             vertices_dg.append([lat, lon])
             print("UTM X {:10.3f} Y {:10.3f} Lat {:4.8f} Lon {:4.8f}".format(
                 vertex[0], vertex[1], lat, lon))
+
+    if verdadeiro: # force verdadeiro
+        vertices_dg = force_verd(vertices_dg, tolerance).tolist()
 
     if cfile:
         fformatPoligonal(vertices_dg, verbose=verbose, endfirst=True)
