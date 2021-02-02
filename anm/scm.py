@@ -7,10 +7,11 @@ from web import htmlscrap
 from datetime import datetime
 import re
 
-from multiprocessing.dummy import Pool as ThreadPool
-import itertools
+import concurrent.futures
+import urllib.request
+
 import threading
-from threading import Thread, Lock
+from threading import Lock
 
 mutex = Lock()
 
@@ -172,6 +173,9 @@ class Processo:
         if not self.dadosbasicos_run:
             self.dadosBasicosGet()
 
+        if self.fathernsons_run:
+            return self.associados
+
        # process 'processos associados' to get father, grandfather etc.
         self.anscestors = []
         self.dsons = []
@@ -209,16 +213,28 @@ class Processo:
             # ignoring empty lists
             # only one son or father that is ignored
             if self.assprocesses_str:
-                with ThreadPool(len(self.assprocesses_str)) as pool:
-                    # Open the URLs in their own threads and return the results
-                    # processo = Processo(aprocess, self.wpage, True, False, False, verbose=self.verbose)
-                    self.assprocesses = pool.starmap(Processo.Get, zip(self.assprocesses_str,
-                                                    itertools.repeat(self.wpage),
-                                                    itertools.repeat(1),
-                                                    itertools.repeat(self.verbose)))
+                #with ThreadPool(len(self.assprocesses_str)) as pool:
+                #    # Open the URLs in their own threads and return the results
+                #    self.assprocesses = pool.starmap(Processo.Get, zip(self.assprocesses_str,
+                #                                    itertools.repeat(self.wpage),
+                #                                    itertools.repeat(1),
+                #                                    itertools.repeat(self.verbose)))
+                # We can use a with statement to ensure threads are cleaned up promptly
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    # Start the load operations and mark each future with its process_name
+                    future_processes = {executor.submit(Processo.Get, process_name, self.wpage, 1, self.verbose) :
+                        process_name for process_name in self.assprocesses_str}
+                    self.assprocesses = {}
+                    for future in concurrent.futures.as_completed(future_processes):
+                        process_name = future_processes[future]
+                        try:
+                            process = future.result()
+                            self.assprocesses.update({process_name : process})
+                        except Exception as exc:
+                            raise(exc)
                 # create dict of key process name , value process objects
-                self.assprocesses = dict(zip(list(map(lambda p: p.processostr, self.assprocesses)),
-                                                self.assprocesses))
+                #self.assprocesses = dict(zip(list(map(lambda p: p.processostr, self.assprocesses)),
+                #                                    self.assprocesses))
                 if self.verbose:
                     with mutex:
                         print("fathernSons - finished associados: ", self.processostr, file=sys.stderr)
@@ -235,21 +251,28 @@ class Processo:
         self.fathernsons_run = True
         return self.associados
 
-    def ancestrySearch(self):
+    def ancestrySearch(self, ass_ignore=''):
         """
         upsearch for ancestry of this process
         - create the 'correct' prioridade (self.prioridadec)
         - complete the self.anscestors lists ( ..., grandfather, great-grandfather etc.) from
         closer to farther
         """
+        if self.ancestry_run:
+            return
+
+        if self.verbose:
+            with mutex:
+                print("ancestrySearch - starting: ", self.processostr, file=sys.stderr)
+
         if not self.fathernsons_run:
-            self.fathernSons()
+            self.fathernSons(ass_ignore)
 
         self.prioridadec = self.prioridade
         if self.associados and len(self.anscestors) > 0:
             # first father already has an process class object (get it)
             self.anscestorsprocesses = [] # storing the ancestors processes objects
-            parent = self.assprocesses[self.anscestors[0]] # first father
+            parent = self.assprocesses[self.anscestors[0]] #first father get by process name string
             son_name = self.processostr # self is the son
             if self.verbose:
                 with mutex:
@@ -258,17 +281,25 @@ class Processo:
             while True: # how long will this take?
                 # must run on same thread to block the sequence
                 # of instructions just after this
-                parent.runtask((parent.fathernSons,{'ass_ignore':son_name}))
+                parent.runtask((parent.ancestrySearch,{'ass_ignore':son_name}))
                 # remove circular reference to son
                 self.anscestorsprocesses.append(parent)
                 if len(parent.anscestors) > 1:
                     raise Exception("ancestrySearch - failed More than one parent: ", parent.processostr)
-                if len(parent.anscestors) == 0:
-                    break
-                self.anscestors.append(parent.anscestors[0])
-                son_name = parent.processostr
-                parent = Processo.Get(parent.anscestors[0], self.wpage, 1, self.verbose)
-                self.prioridadec = parent.prioridade
+                else:
+                    if len(parent.anscestors) == 0: # case only 1 parent, FINISHED
+                        if parent.prioridadec < self.prioridadec:
+                            self.prioridadec = parent.prioridadec
+                        if self.verbose:
+                            with mutex:
+                                print("ancestrySearch - finished: ", self.processostr, file=sys.stderr)
+                        break
+                    else: # 1 anscestors, LOOP again
+                        self.anscestors.append(parent.anscestors[0]) # store its name string
+                        son_name = parent.processostr
+                        parent = Processo.Get(parent.anscestors[0], self.wpage, 1, self.verbose)
+                        # its '1' above because the loop will ask for 3 `ancestrySearch`
+                        # do not correct prioridadec until end is reached
         self.ancestry_run = True
 
     def _toDates(self):
