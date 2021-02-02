@@ -283,10 +283,10 @@ class Estudo:
         self.tabela_interf_eventos = self.tabela_interf_eventos[columns_order]
         ### Todos os eventos posteriores a data de prioridade são marcados
         # como 0 na coluna Prioridade otherwise 1
-        self.tabela_interf_eventos['DataPrior'] = self.processo.prioridade
+        self.tabela_interf_eventos['DataPrior'] = self.processo.prioridadec
         self.tabela_interf_eventos['EvPrior'] = 0 # 1 prioritario 0 otherwise
         self.tabela_interf_eventos['EvPrior'] = self.tabela_interf_eventos.apply(
-            lambda row: 1 if row['Data'] <= self.processo.prioridade else 0, axis=1)
+            lambda row: 1 if row['Data'] <= self.processo.prioridadec else 0, axis=1)
         ### fill-in column with inativam or ativam processo for each event
         ### using excel 'eventos_scm_09102019.xls'
         eventos = pd.read_excel(__eventos_scm__)
