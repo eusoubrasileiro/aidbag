@@ -112,9 +112,10 @@ class SEI:
         code:
             0 - Externo - default
             1 - Analise
-            2 - Declaração
-            3 - Despacho
+            3 - Declaração
+            4 - Despacho
         ...
+            26 - Termo de abertura de processo eletronico
 
         """
         self._processoBarraBotoes(0).click()  # botao[0] incluir doc
@@ -135,8 +136,8 @@ class SEI:
             (By.CLASS_NAME, "infraButton")))
         botoes[0].click() # Salvar
 
-    def ProcessoAtribuir(self, option=12):
-        """ 12 == chefe"""
+    def ProcessoAtribuir(self, option=13):
+        """ 13 == chefe"""
         self._processoBarraBotoes(7).click() # botao[7] atribuir
         drop_down = wait(self.driver, 10).until(
             expected_conditions.element_to_be_clickable((By.ID, 'selAtribuicao')))
