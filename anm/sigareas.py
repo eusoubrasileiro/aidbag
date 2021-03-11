@@ -1,4 +1,5 @@
 import re
+import sys
 import pyproj
 from pyproj import CRS
 from pyproj import Transformer
@@ -40,39 +41,60 @@ def memorialRead(latlonstr, decimal=False, verbose=False):
     return lines
 
 
-def snap_coordinates(coords, snap_latlon, snap_dist=1.5):
+### Corrige deslocamento, acostando poligono à outro tomando 1 como referência
+# Calcula vetor de deslocamento e aplica ele.
+# **Solução ruim** - não acosta realmente se é necessário englobamento
+# TODO: melhor subsituir coordenadas e ajustar lat,lon para garantir rumos verdadeiros.
+def translate_coordinates(coords, ref_coords, displace_dist=1.5):
     """
+    Translate (displace) coordinates in x,y using one point from a reference polygon
+
     coords: list
+        coordinates to be translated in x,y degrees
         [[lat0, lon0],[lat1, lon1]...]
 
-    snap_latlonstr: str or list
+    ref_coords: str or list
          memorial descritvo de referencia
-         para snapping das coordenadas
+         para translate das coordenadas
          ou
-         list de coordenadas para snapping
+         list de coordenadas para translate
 
-    snap_dist: default 1.5
-        maximum distance for snaping coordinates (meters)
+    displace_dist: default 1.5 (meters)
+        displace distance
+        maximum distance for translate coordinates (meters)
+        only first 1 point will be used as reference
 
     """
-    snap_points = []
-    if isinstance(snap_latlon, str):
-        snap_points = memorialRead(snap_latlonstr, decimal=True, verbose=True)
-    elif isinstance(snap_latlon, list):
-        snap_points = snap_latlon.copy()
+    ref_points = ref_coords.copy()
+    points = coords.copy()
+    if isinstance(ref_points, str):
+        ref_points = memorialRead(ref_points, decimal=True, verbose=True)
+    elif( (isinstance(ref_points, list) or isinstance(ref_points, np.ndarray)) and
+        (isinstance(points, list) or isinstance(points, np.ndarray)) ):
+        pass
     else:
+        print("Invalid input formats")
         return
-    coords = coords.copy()
-    for spoint in snap_points: # list of lat, lon points
-        for i in range(len(coords)):
-            distance = GeoInverseWGS84(*spoint, *coords[i])
-            #print('distance: ', distance)
-            if(distance < snap_dist):
-                print("Snaping: distance from snap-vertex : Lat {:>4.8f} Lon {:>4.8f} to "
-                    "vertex : {:>3d} is {:>5.3f} m".format(*spoint, i, distance))
-                coords[i] = spoint
-                break # can only snap once with this point
-    return coords
+    dx, dy = 0., 0.
+    def dydx_by_dist():
+        for j, ref_point in enumerate(ref_points):
+            for i, point in enumerate(points):
+                distance = GeoInverseWGS84(*ref_point, *point)
+                #print(distance)
+                if(distance < displace_dist):
+                    print("Translate: distance from ref-vertex {:>3d} : Lat {:>4.8f} Lon {:>4.8f} to "
+                    "vertex {:>3d} : Lat {:>4.8f} Lon {:>4.8f} is {:>5.3f} m".format(j, *ref_point, i, *point, distance))
+                    print(r"Accept?(y/n)")
+                    inx = input()
+                    if inx.capitalize() == 'Y':
+                        dy, dx = np.array(point)-np.array(ref_point)
+                        print("DLat, Dlon vector: {:>4.8f} {:>4.8f} ".format(dy, dx))
+                        return dy, dx
+        return 0, 0
+    dx, dy = dydx_by_dist()
+    if dx != 0 or dy != 0:
+        points = np.array(points)+np.array([dy, dx])
+    return points
 
 
 def fformatPoligonal(latlon, filename='CCOORDS.TXT',
@@ -94,6 +116,9 @@ def fformatPoligonal(latlon, filename='CCOORDS.TXT',
     lines = []
     if isinstance(latlon, str):
         lines = memorialRead(latlon, verbose=True)
+    elif isinstance(latlon, np.ndarray):
+        fformatPoligonal(latlon.tolist(), filename,
+            endfirst, verbose)
     elif isinstance(latlon, list):
         latlons = latlon.copy()
         for ll in latlons:
@@ -198,7 +223,7 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
     tolerance: default 1e-6 (decimal degrees)
         diference to previous lat or lon to force 'verdadeiro' option
         WARNING:
-        If navigation is very detailed this parameter may change it COMPLETELY        
+        If navigation is very detailed this parameter may change it COMPLETELY
 
     Conforme Emilio todo o banco de dados do SCM foi convertido
     considerando que os dados já estavam no datum SAD69(96).
@@ -365,6 +390,17 @@ def savePolygonWGS84(vertices, shpname):
     gdfvs = gp.GeoSeries(Polygon(vertices))
     gdfvs.set_crs(pyproj.CRS("""+proj=longlat +ellps=GRS80 +towgs84=0,0,0 +no_defs""")) # SIRGAS 2000
     gdfvs.to_file(shpname+'.shp')
+
+
+import geopandas as gp
+import numpy as np
+
+def readPolygonWGS84(shpname):
+    gdf = gp.read_file(shpname)
+    lon = gdf.geometry.exterior.xs(0).coords.xy[0]
+    lat = gdf.geometry.exterior.xs(0).coords.xy[1]
+    points = np.array(list(zip(lat, lon)))
+    return points
 
 
 def memoLineRead(line):
