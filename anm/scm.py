@@ -173,7 +173,7 @@ class Processo:
         if not self.dadosbasicos_run:
             self.dadosBasicosGet()
 
-        if self.fathernsons_run:
+        if self.fathernsons_run: # might need to run more than once
             return self.associados
 
        # process 'processos associados' to get father, grandfather etc.
@@ -192,53 +192,47 @@ class Processo:
             # dados['associados'][1][5] # coluna 5 'processo original'
             # dados['associados'][1][0] # coluna 0 'processo'
             nrows = len(self.dados['associados'])
-            self.assprocesses_str = ([self.dados['associados'][i][0] for i in range(1, nrows) ] +
+            assprocesses_name = ([self.dados['associados'][i][0] for i in range(1, nrows) ] +
                              [ self.dados['associados'][i][5] for i in range(1, nrows) ])
-            self.assprocesses_str = list(set(self.assprocesses_str)) # Unique Process Only
-            self.assprocesses_str = list(map(fmtPname, self.assprocesses_str)) # formatted process names
-            self.assprocesses_str.remove(self.processostr)# remove SELF from list
+            assprocesses_name = list(set(assprocesses_name)) # Unique Process Only
+            assprocesses_name = list(map(fmtPname, assprocesses_name)) # formatted process names
+            assprocesses_name.remove(self.processostr)# remove SELF from list
             ass_ignore = fmtPname(ass_ignore)
-            if ass_ignore in self.assprocesses_str:  # ignore this process (son)
-                self.assprocesses_str.remove(ass_ignore) # removing circular reference
+            if ass_ignore in assprocesses_name:  # ignore this process (son)
+                assprocesses_name.remove(ass_ignore) # removing circular reference
             if self.verbose:
                 with mutex:
                     print("fathernSons - getting associados: ", self.processostr,
                     ' - ass_ignore: ', ass_ignore, file=sys.stderr)
-            # for aprocess in self.assprocesses_str:
-            #     processo = Processo(aprocess, self.wpage,  1, self.verbose)
-            #     self.assprocesses[aprocess] = processo
-            #create multiple python requests sessions
-            # get 'data_protocolo' of every_body
-            self.assprocesses = None
+            self.assprocesses = {} #dict of key process name : value process objects
             # ignoring empty lists
             # only one son or father that is ignored
-            if self.assprocesses_str:
-                #with ThreadPool(len(self.assprocesses_str)) as pool:
+            if assprocesses_name:
+                #with ThreadPool(len(assprocesses_name)) as pool:
                 #    # Open the URLs in their own threads and return the results
-                #    self.assprocesses = pool.starmap(Processo.Get, zip(self.assprocesses_str,
+                #    self.assprocesses = pool.starmap(Processo.Get, zip(assprocesses_name,
                 #                                    itertools.repeat(self.wpage),
                 #                                    itertools.repeat(1),
                 #                                    itertools.repeat(self.verbose)))
-                # We can use a with statement to ensure threads are cleaned up promptly
+                # use a with statement to ensure threads are cleaned up promptly
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     # Start the load operations and mark each future with its process_name
+                    # deadlock if run with 3?
                     future_processes = {executor.submit(Processo.Get, process_name, self.wpage, 1, self.verbose) :
-                        process_name for process_name in self.assprocesses_str}
-                    self.assprocesses = {}
+                        process_name for process_name in assprocesses_name}
                     for future in concurrent.futures.as_completed(future_processes):
                         process_name = future_processes[future]
                         try:
                             process = future.result()
+                            # create dict of key process name , value process objects
                             self.assprocesses.update({process_name : process})
                         except Exception as exc:
                             raise(exc)
-                # create dict of key process name , value process objects
-                #self.assprocesses = dict(zip(list(map(lambda p: p.processostr, self.assprocesses)),
-                #                                    self.assprocesses))
                 if self.verbose:
                     with mutex:
                         print("fathernSons - finished associados: ", self.processostr, file=sys.stderr)
-                #from here we get dsons
+                #from here we get dsons, first run (might be wrong)
+                # TODO: run again once prioridade is fixed
                 for kname, vprocess in self.assprocesses.items():
                     if vprocess.data_protocolo >= self.prioridade:
                         self.dsons.append(kname)
