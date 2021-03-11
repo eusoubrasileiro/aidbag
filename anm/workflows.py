@@ -13,13 +13,13 @@ from anm import scm
 from web import htmlscrap
 from .SEI import *
 
-
 docs_externos_sei_tipo = [ 'Estudo',
         'Minuta', 'Minuta', 'Estudo', 'Minuta', 'Minuta']
 
-docs_externos_sei_txt = [ 'de Retirada de Interferência', # Nome na Arvore
-        'Pré de Alvará', 'de Licenciamento', 'de Opção', 'de Portaria de Lavra',
-        'de Permissão de Lavra Garimpeira']
+# needs u"" unicode string because of latim characters
+docs_externos_sei_txt = [ u"de Retirada de Interferência", # Nome na Arvore
+        u"Pré de Alvará", 'de Licenciamento', u"de Opção", 'de Portaria de Lavra',
+        u"de Permissão de Lavra Garimpeira"]
 
 
 def IncluiDocumentoExternoSEI(sei, ProcessoNUP, doc=0, pdf_path=None):
@@ -50,6 +50,46 @@ def IncluiDocumentoExternoSEI(sei, ProcessoNUP, doc=0, pdf_path=None):
         file = sei.driver.find_element_by_id('filArquivo') # Upload PDF
         file.send_keys(pdf_path)
     # save = sei.driver.find_element_by_id('btnSalvar')
+    save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'btnSalvar')))
+    save.click()
+    try :
+        # wait 5 seconds
+        alert = wait(sei.driver, 5).until(expected_conditions.alert_is_present()) # may sometimes show
+        alert.accept()
+    except:
+        pass
+    sei.driver.switch_to.default_content() # go back to main document
+
+def IncluiDespacho(sei, ProcessoNUP, mcodigo='1132737'):
+    """
+    Inclui Despacho - por modelo código
+    """
+    sei.Pesquisa(ProcessoNUP) # Entra neste processo
+    sei.ProcessoIncluiDoc(4) # Despacho
+    sei.driver.find_element_by_id('lblProtocoloDocumentoTextoBase').click() # Documento Modelo
+    sei.driver.find_element_by_id('txtProtocoloDocumentoTextoBase').send_keys(mcodigo) # Analise de PLano
+    sei.driver.find_element_by_id('txtDestinatario').send_keys(u"Setor de Controle e Registro (SECOR-MG)")
+    destinatario_set = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'divInfraAjaxtxtDestinatario')))
+    destinatario_set.click() # wait a little pop-up show up to click or send ENTER
+    # sei.driver.find_element_by_id('txtDestinatario').send_keys(Keys.ENTER) #ENTER
+    sei.driver.find_element_by_id('lblPublico').click() # Publico
+    save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'btnSalvar')))
+    save.click()
+    try :
+        # wait 5 seconds
+        alert = wait(sei.driver, 5).until(expected_conditions.alert_is_present()) # may sometimes show
+        alert.accept()
+    except:
+        pass
+    sei.driver.switch_to.default_content() # go back to main document
+
+def IncluiTermoAberturaPE(sei, ProcessoNUP):
+    """
+    Inclui Termo de Abertura de Processo Eletronico
+    """
+    sei.Pesquisa(ProcessoNUP) # Entra neste processo
+    sei.ProcessoIncluiDoc(26) # Despacho
+    sei.driver.find_element_by_id('lblPublico').click() # Publico
     save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'btnSalvar')))
     save.click()
     try :
@@ -145,6 +185,8 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, verbose
         pdf_adicional = None
         pdf_interferencia = None
 
+    # Inclui termo de abertura de processo eletronico - qualquer coisa só apagar
+    IncluiTermoAberturaPE(sei, NUP)
     # Inclui Estudo pdf como Doc Externo no SEI
     IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
     # Inclui pdf adicional Minuta de Licenciamento ou Pré Minuta de Alvará
@@ -161,14 +203,15 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, verbose
         elif 'pesquisa' in tipo.lower(): # 1 - Minuta - 'Pré de Alvará'
             IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)
 
-    # IncluiDespacho(sei, NUP, 6) - Recomenda análise de plano
+    IncluiDespacho(sei, NUP) # - Recomenda análise de plano
     # else: # Despacho diferente se não existe segundo pdf
     #     pass
-    # sei.ProcessoIncluiAEspecial(1) # 1 - me desnecessario e
-    # lota todos os Acompanhamentos
+    sei.ProcessoAtribuir(13)
     os.chdir('..\..\..') # go back and back, to not lock the folder-path
+    if verbose:
+        print(NUP)
 
-def IncluiDocumentosSEIFolders(sei, nfirst=1, tipo='Requerimento', path=''):
+def IncluiDocumentosSEIFolders(sei, nfirst=1, path='', verbose=True):
     """
     Inclui first process folders `nfirst` (list of folders) docs on SEI.
     Follow order of glob(*) using `chdir(tipo) + chdir(path)`
@@ -180,10 +223,12 @@ def IncluiDocumentosSEIFolders(sei, nfirst=1, tipo='Requerimento', path=''):
     TODO:
         - Despacho
     """
-    os.chdir(os.path.join(secor.__secor_path__, tipo, path))
-
-    process_folders = glob.glob('*')
-    process_folders = process_folders[:nfirst]
-
-    for process_folder in process_folders:
-        IncluiDocumentosSEIFolder(sei, process_folder, tipo, path)
+    os.chdir(os.path.join(secor.__secor_path__, path))
+    paths_folders = glob.glob('*')
+    # get only process folders with '-' on its name like 830324-1997
+    for path in paths_folders: # remove what is NOT a process folder
+        if path.find('-') == -1 and (not os.path.isdir(path)):
+            paths_folders.remove(path)
+    paths_folders = paths_folders[:nfirst]
+    for process_folder in paths_folders:
+        IncluiDocumentosSEIFolder(sei, process_folder, path, verbose)
