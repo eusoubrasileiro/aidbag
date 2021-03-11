@@ -140,9 +140,8 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, verbose
     * empty : True
         cria documentos sem anexos
 
-    TODO:
-        - Despacho
     """
+    print(secor.__secor_path__, path)
     os.chdir(os.path.join(secor.__secor_path__, path))
     process_path = os.path.join(os.getcwd(), process_folder)
     os.chdir(process_folder) # enter on process folder
@@ -224,11 +223,12 @@ def IncluiDocumentosSEIFolders(sei, nfirst=1, path='', verbose=True):
         - Despacho
     """
     os.chdir(os.path.join(secor.__secor_path__, path))
-    paths_folders = glob.glob('*')
+    files_folders = glob.glob('*')
     # get only process folders with '-' on its name like 830324-1997
-    for path in paths_folders: # remove what is NOT a process folder
-        if path.find('-') == -1 and (not os.path.isdir(path)):
-            paths_folders.remove(path)
-    paths_folders = paths_folders[:nfirst]
-    for process_folder in paths_folders:
-        IncluiDocumentosSEIFolder(sei, process_folder, path, verbose)
+    process_folders = []
+    for cur_path in files_folders: # remove what is NOT a process folder
+        if cur_path.find('-') != -1 and os.path.isdir(cur_path):
+            process_folders.append(cur_path)
+    process_folders = process_folders[:nfirst]
+    for folder_name in process_folders:        
+        IncluiDocumentosSEIFolder(sei, folder_name, path, verbose=verbose)
