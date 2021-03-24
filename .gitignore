@@ -34,3 +34,7 @@
 *.idb
 *.enc
 *.TMP
+*.shp
+*.shx
+*.cpg
+*.dbf
