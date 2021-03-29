@@ -14,12 +14,12 @@ from web import htmlscrap
 from .SEI import *
 
 docs_externos_sei_tipo = [ 'Estudo',
-        'Minuta', 'Minuta', 'Estudo', 'Minuta', 'Minuta']
+        'Minuta', 'Minuta', 'Estudo', 'Minuta', 'Minuta', u'Formulário']
 
 # needs u"" unicode string because of latim characters
 docs_externos_sei_txt = [ u"de Retirada de Interferência", # Nome na Arvore
         u"Pré de Alvará", 'de Licenciamento', u"de Opção", 'de Portaria de Lavra',
-        u"de Permissão de Lavra Garimpeira"]
+        u"de Permissão de Lavra Garimpeira", u"1 Análise de Requerimento de Lavra SECOR-MG"]
 
 
 def IncluiDocumentoExternoSEI(sei, ProcessoNUP, doc=0, pdf_path=None):
@@ -27,12 +27,13 @@ def IncluiDocumentoExternoSEI(sei, ProcessoNUP, doc=0, pdf_path=None):
     Inclui pdf como documento externo no SEI
 
     doc :
-        0 - Estudo - 'de Retirada de Interferência'
-        1 - Minuta - 'Pré de Alvará'
-        2 - Minuta - 'de Licenciamento'
-        3 - Estudo - 'de Opção'
-        4 - Minuta - 'de Portaria de Lavra'
-        6 - Minuta - 'de Permissão de Lavra Garimpeira'
+        0  - Estudo     - 'de Retirada de Interferência'
+        1  - Minuta     - 'Pré de Alvará'
+        2  - Minuta     - 'de Licenciamento'
+        3  - Estudo     - 'de Opção'
+        4  - Minuta     - 'de Portaria de Lavra'
+        5  - Minuta     - 'de Permissão de Lavra Garimpeira'
+        6 - Formulario  - '1 Análise de Requerimento de Lavra'
 
     pdf_path :
         if None cria sem anexo
@@ -199,8 +200,12 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, verbose
         # tipo - requerimento de cessão parcial ou outros
         if 'lavra' in fase.lower(): # minuta portaria de Lavra
             IncluiDocumentoExternoSEI(sei, NUP, 4, pdf_adicional)
+            # Adicionado manualmente depois o PDF gerado
+            # com links p/ SEI
+            IncluiDocumentoExternoSEI(sei, NUP, 6, None)
         elif 'pesquisa' in tipo.lower(): # 1 - Minuta - 'Pré de Alvará'
             IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)
+
 
     IncluiDespacho(sei, NUP) # - Recomenda análise de plano
     # else: # Despacho diferente se não existe segundo pdf
@@ -230,5 +235,5 @@ def IncluiDocumentosSEIFolders(sei, nfirst=1, path='', verbose=True):
         if cur_path.find('-') != -1 and os.path.isdir(cur_path):
             process_folders.append(cur_path)
     process_folders = process_folders[:nfirst]
-    for folder_name in process_folders:        
+    for folder_name in process_folders:
         IncluiDocumentosSEIFolder(sei, folder_name, path, verbose=verbose)

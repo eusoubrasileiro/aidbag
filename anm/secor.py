@@ -37,8 +37,7 @@ userhome = str(Path.home()) # get userhome folder
 __secor_path__ = os.path.join(userhome, r'Documents\Controle_Areas')
 __eventos_scm__ = os.path.join(__secor_path__,
                         r'Secorpy\eventos_scm_12032020.xls')
-
-
+__secor_timeout__ = 4*60 # sometimes sigareas server/r. interferncia takes a long long time to answer 
 
 def getEventosSimples(wpage, processostr):
     """ Retorna tabela de eventos simples para processo especificado
@@ -106,7 +105,7 @@ class Estudo:
         formdata = formdataPostAspNet(self.wpage.response, formcontrols)
         # must be timout 2 minutes
         self.wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1',
-                data=formdata, timeout=(2*60))
+                data=formdata, timeout=__secor_timeout__)
         if not ( self.wpage.response.url == r'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'):
             return False             # Falhou salvar Retirada de Interferencia # provavelmente estudo aberto
         fname = 'sigareas_rinterferencia_'+self.processo.number+self.processo.year
@@ -123,7 +122,7 @@ class Estudo:
         formdata = formdataPostAspNet(self.wpage.response, formcontrols)
         # must be timout 50
         self.wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=8',
-                data=formdata, timeout=50)
+                data=formdata, timeout=__secor_timeout)
         if not ( self.wpage.response.url == r'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=8'):
             #print("Falhou salvar Retirada de Interferencia",  file=sys.stderr)
             # provavelmente estudo aberto

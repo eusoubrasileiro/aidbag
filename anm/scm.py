@@ -197,7 +197,7 @@ class Processo:
             assprocesses_name = list(set(assprocesses_name)) # Unique Process Only
             assprocesses_name = list(map(fmtPname, assprocesses_name)) # formatted process names
             assprocesses_name.remove(self.processostr)# remove SELF from list
-            ass_ignore = fmtPname(ass_ignore)
+            ass_ignore = fmtPname(ass_ignore) if ass_ignore != '' else ''
             if ass_ignore in assprocesses_name:  # ignore this process (son)
                 assprocesses_name.remove(ass_ignore) # removing circular reference
             if self.verbose:
