@@ -61,18 +61,55 @@ def IncluiDocumentoExternoSEI(sei, ProcessoNUP, doc=0, pdf_path=None):
         pass
     sei.driver.switch_to.default_content() # go back to main document
 
-def IncluiDespacho(sei, ProcessoNUP, mcodigo='1132737'):
+# 0 -  1537881	Retificação Resumida Alvará e Aprovo do RFP
+# 1 - 1947449	Parecer Técnico - Correção áreas e deslocamentos
+# 2 - 1618347	Formulário 1 - Lavra - Pré-Prenchido
+# 3 - 1132737	Chefe SECOR Requerimento: Recomendo Analise de Plano
+# 4 - 1133380	Chefe SECOR Requerimento: Recomenda publicar exigência opção
+# 5 - 1197141	Chefe SECOR Requerimento: Recomenda publicar indeferimento por Interferência Total
+# 6 - 1206693	Chefe SECOR Requerimento: Recomendo Analise de Cessão Parcial
+# 7 - 1243175	Chefe SECOR Requerimento: Recomendo Analise de Plano (híbrido)
+# 8 - 1453503	Chefe SECOR Requerimento de Lavra: Recomendo aguardar cumprimento de exigências
+# 9 - 1995116	Chefe SECOR Requerimento de Lavra: com Retificação de Alvará
+# 10 - 1995741	Chefe SECOR Requerimento de Lavra: Recomendo encaminhar para preenchimento de check-list
+# 11 - 2052065	Chefe SECOR Requerimento de Lavra: Encaminhar avaliar necessidade de reavaliar reservas - redução de área
+mcodigos = ['1537881', '1947449', '1618347', '1132737', '1133380', '1197141', '1206693', '1243175', '1453503', '1995116', '1995741', '2052065']
+
+def IncluiDespacho(sei, ProcessoNUP, idxcodigo):
     """
-    Inclui Despacho - por modelo código
+    Inclui Despacho - por index código
     """
+    mcodigo = mcodigos[idxcodigo]
     sei.Pesquisa(ProcessoNUP) # Entra neste processo
     sei.ProcessoIncluiDoc(4) # Despacho
     sei.driver.find_element_by_id('lblProtocoloDocumentoTextoBase').click() # Documento Modelo
-    sei.driver.find_element_by_id('txtProtocoloDocumentoTextoBase').send_keys(mcodigo) # Analise de PLano
+    sei.driver.find_element_by_id('txtProtocoloDocumentoTextoBase').send_keys(mcodigo)
     sei.driver.find_element_by_id('txtDestinatario').send_keys(u"Setor de Controle e Registro (SECOR-MG)")
     destinatario_set = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'divInfraAjaxtxtDestinatario')))
     destinatario_set.click() # wait a little pop-up show up to click or send ENTER
     # sei.driver.find_element_by_id('txtDestinatario').send_keys(Keys.ENTER) #ENTER
+    sei.driver.find_element_by_id('lblPublico').click() # Publico
+    save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'btnSalvar')))
+    save.click()
+    try :
+        # wait 5 seconds
+        alert = wait(sei.driver, 5).until(expected_conditions.alert_is_present()) # may sometimes show
+        alert.accept()
+    except:
+        pass
+    sei.driver.switch_to.default_content() # go back to main document
+
+def IncluiParecer(sei, ProcessoNUP, idxcodigo=0):
+    """
+    Inclui Parecer
+    idxcodigo : int index
+        default retificaçaõ de alvará = 0
+    """
+    mcodigo = mcodigos[idxcodigo]
+    sei.Pesquisa(ProcessoNUP) # Entra neste processo
+    sei.ProcessoIncluiDoc(18) # Parecer
+    sei.driver.find_element_by_id('lblProtocoloDocumentoTextoBase').click() # Documento Modelo
+    sei.driver.find_element_by_id('txtProtocoloDocumentoTextoBase').send_keys(mcodigo)
     sei.driver.find_element_by_id('lblPublico').click() # Publico
     save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'btnSalvar')))
     save.click()
@@ -185,30 +222,39 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, verbose
         pdf_adicional = None
         pdf_interferencia = None
 
-    # Inclui termo de abertura de processo eletronico - qualquer coisa só apagar
+    # inclui vários documentos, se desnecessário é só apagar
+    # Inclui termo de abertura de processo eletronico
     IncluiTermoAberturaPE(sei, NUP)
-    # Inclui Estudo pdf como Doc Externo no SEI
-    IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
-    # Inclui pdf adicional Minuta de Licenciamento ou Pré Minuta de Alvará
     if 'licen' in tipo.lower():
+        # Inclui Estudo pdf como Doc Externo no SEI
+        IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
         # 2 - Minuta - 'de Licenciamento'
         IncluiDocumentoExternoSEI(sei, NUP, 2, pdf_adicional)
+        IncluiDespacho(sei, NUP, 3) # - Recomenda análise de plano
     elif 'garimpeira' in tipo.lower():
         if 'requerimento' in fase.lower(): # Minuta de P. de Lavra Garimpeira
+            # Inclui Estudo pdf como Doc Externo no SEI
+            IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
             IncluiDocumentoExternoSEI(sei, NUP, 5, pdf_adicional)
+            IncluiDespacho(sei, NUP, 3) # - Recomenda análise de plano
     else:
         # tipo - requerimento de cessão parcial ou outros
         if 'lavra' in fase.lower(): # minuta portaria de Lavra
+            # parecer de retificação de alvará
+            IncluiParecer(sei, NUP, 0)
+            # Inclui Estudo pdf como Doc Externo no SEI
+            IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
             IncluiDocumentoExternoSEI(sei, NUP, 4, pdf_adicional)
             # Adicionado manualmente depois o PDF gerado
             # com links p/ SEI
             IncluiDocumentoExternoSEI(sei, NUP, 6, None)
+            IncluiDespacho(sei, NUP, 8) # - Recomenda aguardar cunprimento de exigências
+            IncluiDespacho(sei, NUP, 9) # - Recomenda c/ retificação de alvará
         elif 'pesquisa' in tipo.lower(): # 1 - Minuta - 'Pré de Alvará'
+            # Inclui Estudo pdf como Doc Externo no SEI
+            IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
             IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)
-
-
-    IncluiDespacho(sei, NUP) # - Recomenda análise de plano
-    # else: # Despacho diferente se não existe segundo pdf
+            IncluiDespacho(sei, NUP, 3) # - Recomenda análise de plano
     #     pass
     sei.ProcessoAtribuir(13)
     os.chdir('..\..\..') # go back and back, to not lock the folder-path

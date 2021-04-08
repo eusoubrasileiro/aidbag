@@ -110,12 +110,12 @@ class SEI:
         Precisa estar na página de um processo.
 
         code:
-            0 - Externo - default
-            1 - Analise
-            3 - Declaração
-            4 - Despacho
-        ...
-            26 - Termo de abertura de processo eletronico
+            0  - Externo - default
+            1  - Analise
+            3  - Declaração
+            4  - Despacho
+           18  - Parecer
+           26  - Termo de abertura de processo eletronico
 
         """
         self._processoBarraBotoes(0).click()  # botao[0] incluir doc
