@@ -86,23 +86,29 @@ def fformatPoligonal(latlon, filename='CCOORDS.TXT',
 
 
 
-def force_verd(vertices, tolerance=2e-6, verbose=True):
-    """force decimal coordinates lat, lon to repeat last lat, lon"""
-    vertices = np.copy(np.array(vertices))
-    lats = np.copy(vertices[:, 0])
-    lons = np.copy(vertices[:, 1])
-    # first pass use tolerance
-    for i, pair in enumerate(list(zip(np.diff(lats), np.diff(lons)))):
-        dlat, dlon = pair
-        if(abs(dlat) < tolerance and dlat != 0.0):
-            if verbose:
-                print('lat {:.8f} changed to {:.8f}'.format(vertices[i+1, 0], lats[i]))
-            vertices[i+1, 0] = lats[i]
-        elif(abs(dlon) < tolerance and dlon != 0.0):
-            if verbose:
-                print('lon {:.8f} changed to {:.8f}'.format(vertices[i+1, 1], lons[i]))
-            vertices[i+1, 1] = lons[i]
-    return vertices
+def force_verd(vertices, tolerance=1e-6, verbose=True, ignlast=True):
+    """
+    force decimal coordinates (lat,lon) to previous (lat/lon)
+    otherwise sigareas wont accept this polygon    
+    *ignlast : default True
+            ignore last point (repeated from first)
+    """
+    cvertices = np.copy(np.array(vertices))
+    vertices_new = np.copy(cvertices)
+    if ignlast:
+        cvertices = cvertices[:-1]
+    for i, (lat, lon) in enumerate(cvertices):
+        for j, (clat, clon) in enumerate(cvertices[i+1:]): # compare with next one : downward
+            dlat, dlon = clat-lat, clon-lon
+            if(abs(dlat) < tolerance and dlat != 0.0):
+                print('lat {:.8f} changed to {:.8f}'.format(clat, lat))
+                vertices_new[i+1+j, 0] = lat
+            elif(abs(dlon) < tolerance and dlon != 0.0):
+                print('lon {:.8f} changed to {:.8f}'.format(clon, lon))
+                vertices_new[i+1+j, 1] = lon
+    if ignlast: # replace instead of ignoring last
+        vertices_new[-1] = vertices_new[0]
+    return vertices_new
 
 ### Memorial descritivo através de PA e survey de estação total
 # might be useful https://github.com/totalopenstation
@@ -599,6 +605,8 @@ def test_memoPoligonPA():
 ################
 ###############
 
+#TODO implement same approach bellow two pathways
+# but no reason since round angles/distances already deals with inprecision
 def simple_memo_inverse(points, round_angle=True, round_dist=True):
     """
     memorial descritivo simples inverso a partir de coordenadas
@@ -623,19 +631,29 @@ def simple_memo_inverse(points, round_angle=True, round_dist=True):
         dist_angle.append([dist, angle])
     return dist_angle
 
-#TODO split in two paths to make more precise results (like above)
 def simple_memo_direct(smemo, repeat_end=False):
     """
     gera list de lat,lon a partir de memorial descritivo simples formato `simple_memo_inverse`
     """
-    prev_point = smemo[0]
-    points = []
-    points.append(prev_point)
-    for dist_angle in smemo[1:]:
-        prev_point = geocpp.Direct(prev_point[0], prev_point[1], dist_angle[1], dist_angle[0])
-        points.append(prev_point)
+    def direct(prevpoint, directions, revert=1):
+        """revert=-1 go backwards"""
+        points = []
+        for dist, angle in directions:
+            prevpoint = geocpp.Direct(*prevpoint, angle, dist*revert)
+            points.append(prevpoint)
+        return np.array(points)
+    startpoint = smemo[0] # start
+    directions = smemo[1:]
+    # goind both sides - accuracy increase
+    half = int(len(directions))//2
+    ohalf = len(directions) - half
+    points_fw = direct(startpoint, directions[:half]) # forward
+    points_bk = direct(startpoint, directions[::-1][:ohalf], -1) # backwards
+    # mid point is the average of foward and backward pathways more precision
+    midpoint = (points_bk[-1]+points_fw[-1])/2.
+    points = np.concatenate(([startpoint], points_fw[:-1], [midpoint], points_bk[:-1][::-1]))
     if repeat_end:
-        points.append(points[0])
+        points = np.concatenate((points,[points[0]]))
     return points
 
 def simple_memo_newstart(smemo, index, start_point):
@@ -644,15 +662,28 @@ def simple_memo_newstart(smemo, index, start_point):
     smemo = smemo.copy()
     smemo = smemo[1:] # discard original start
     # split at index since it's a walk way circular
-    smemo = smemo[index-1:]+smemo[:index-1]
+    smemo = smemo[index-1:] + smemo[:index-1]
     # add new start point
     smemo = [start_point] + smemo
     return smemo
 
 # # test to be included
-# smemo = simple_memo_inverse(points)
-# smemo_direct = simple_memo_direct(smemo)
-# np.array(smemo_direct)-np.array(points)
+def test_simple_memo():
+    memorial_points = """-20°18'32''049	-43°24'42''792
+    -20°18'46''682	-43°24'42''792
+    -20°18'46''682	-43°24'59''338
+    -20°18'36''926	-43°24'59''338
+    -20°18'36''925	-43°25'20''019
+    -20°18'43''429	-43°25'20''020
+    -20°18'43''428	-43°25'30''361
+    -20°18'49''932	-43°25'30''361
+    -20°18'49''931	-43°25'34''498
+    -20°18'32''046	-43°25'34''496
+    -20°18'32''049	-43°24'42''792"""
+    points = np.array(memorialRead(memorial_points, decimal=True))
+    smemo = simple_memo_inverse(points)
+    points_direct = simple_memo_direct(smemo)
+    print(np.array(points_direct)-np.array(points[:-1]))
 
 
 ### Calcula informatino of displacement between
