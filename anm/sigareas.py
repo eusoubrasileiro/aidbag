@@ -41,62 +41,6 @@ def memorialRead(latlonstr, decimal=False, verbose=False):
     return lines
 
 
-### Corrige deslocamento, acostando poligono à outro tomando 1 como referência
-# Calcula vetor de deslocamento e aplica ele.
-# **Solução ruim** - não acosta realmente se é necessário englobamento
-# TODO: melhor subsituir coordenadas e ajustar lat,lon para garantir rumos verdadeiros.
-def translate_coordinates(coords, ref_coords, displace_dist=1.5):
-    """
-    Translate (displace) coordinates in x,y using one point from a reference polygon
-
-    coords: list
-        coordinates to be translated in x,y degrees
-        [[lat0, lon0],[lat1, lon1]...]
-
-    ref_coords: str or list
-         memorial descritvo de referencia
-         para translate das coordenadas
-         ou
-         list de coordenadas para translate
-
-    displace_dist: default 1.5 (meters)
-        displace distance
-        maximum distance for translate coordinates (meters)
-        only first 1 point will be used as reference
-
-    """
-    ref_points = ref_coords.copy()
-    points = coords.copy()
-    if isinstance(ref_points, str):
-        ref_points = memorialRead(ref_points, decimal=True, verbose=True)
-    elif( (isinstance(ref_points, list) or isinstance(ref_points, np.ndarray)) and
-        (isinstance(points, list) or isinstance(points, np.ndarray)) ):
-        pass
-    else:
-        print("Invalid input formats")
-        return
-    dx, dy = 0., 0.
-    def dydx_by_dist():
-        for j, ref_point in enumerate(ref_points):
-            for i, point in enumerate(points):
-                distance = GeoInverseWGS84(*ref_point, *point)
-                #print(distance)
-                if(distance < displace_dist):
-                    print("Translate: distance from ref-vertex {:>3d} : Lat {:>4.8f} Lon {:>4.8f} to "
-                    "vertex {:>3d} : Lat {:>4.8f} Lon {:>4.8f} is {:>5.3f} m".format(j, *ref_point, i, *point, distance))
-                    print(r"Accept?(y/n)")
-                    inx = input()
-                    if inx.capitalize() == 'Y':
-                        dy, dx = np.array(point)-np.array(ref_point)
-                        print("DLat, Dlon vector: {:>4.8f} {:>4.8f} ".format(dy, dx))
-                        return dy, dx
-        return 0, 0
-    dx, dy = dydx_by_dist()
-    if dx != 0 or dy != 0:
-        points = np.array(points)+np.array([dy, dx])
-    return points
-
-
 def fformatPoligonal(latlon, filename='CCOORDS.TXT',
     endfirst=False, verbose=True):
     """
@@ -147,6 +91,7 @@ def force_verd(vertices, tolerance=2e-6, verbose=True):
     vertices = np.copy(np.array(vertices))
     lats = np.copy(vertices[:, 0])
     lons = np.copy(vertices[:, 1])
+    # first pass use tolerance
     for i, pair in enumerate(list(zip(np.diff(lats), np.diff(lons)))):
         dlat, dlon = pair
         if(abs(dlat) < tolerance and dlat != 0.0):
@@ -646,3 +591,119 @@ def test_memoPoligonPA():
 
     print("python  errors - area {:>+9.8f} perimeter {:>+9.8f}".format(
             thruth_area-py_area, thruth_perimeter-py_perim))
+
+
+#################
+################
+# simpler approach
+################
+###############
+
+def simple_memo_inverse(points, round_angle=True, round_dist=True):
+    """
+    memorial descritivo simples inverso a partir de coordenadas
+
+    examplo:
+        lat, lon primeiro ponto
+        dist1 angle1
+        dist2 angle2
+        ...
+    """
+    dist_angle = []
+    prev_point = points[0].tolist() # from numpy array
+    dist_angle.append(prev_point)
+    for point in points[1:]:
+        dist = geocpp.Inverse(prev_point[0], prev_point[1], point[0],point[1])
+        angle, _ = geocpp.InverseAngle(prev_point[0], prev_point[1], point[0],point[1])
+        prev_point = point
+        if round_angle:
+            angle = round(angle)
+        if round_dist:
+            dist = round(dist)
+        dist_angle.append([dist, angle])
+    return dist_angle
+
+#TODO split in two paths to make more precise results (like above)
+def simple_memo_direct(smemo, repeat_end=False):
+    """
+    gera list de lat,lon a partir de memorial descritivo simples formato `simple_memo_inverse`
+    """
+    prev_point = smemo[0]
+    points = []
+    points.append(prev_point)
+    for dist_angle in smemo[1:]:
+        prev_point = geocpp.Direct(prev_point[0], prev_point[1], dist_angle[1], dist_angle[0])
+        points.append(prev_point)
+    if repeat_end:
+        points.append(points[0])
+    return points
+
+def simple_memo_newstart(smemo, index, start_point):
+    """break walk way path simple_memo (memorial descritivo) at index-1
+    and set new start coordinate point from there"""
+    smemo = smemo.copy()
+    smemo = smemo[1:] # discard original start
+    # split at index since it's a walk way circular
+    smemo = smemo[index-1:]+smemo[:index-1]
+    # add new start point
+    smemo = [start_point] + smemo
+    return smemo
+
+# # test to be included
+# smemo = simple_memo_inverse(points)
+# smemo_direct = simple_memo_direct(smemo)
+# np.array(smemo_direct)-np.array(points)
+
+
+### Calcula informatino of displacement between
+def translate_info(coords, ref_coords, displace_dist=1.5):
+    """
+    Get translate information using closest vertices from a reference polygon
+    based on displace_dist
+
+    coords: list
+        coordinates to be translated
+        [[lat0, lon0],[lat1, lon1]...]
+
+    ref_coords: str or list
+         memorial descritvo de referencia
+         para translate das coordenadas
+         ou
+         list de coordenadas para translate
+
+    displace_dist: default 1.5 (meters)
+        displace distance
+        maximum distance for translate coordinates (meters)
+        only first 1 point will be used as reference
+
+    returns: tuple
+        - coordinates of vertex to be used as new start reference
+        - index at coords path to be replaced by this
+    """
+    ref_points = ref_coords.copy()
+    points = coords.copy()
+    if isinstance(ref_points, str):
+        ref_points = memorialRead(ref_points, decimal=True, verbose=True)
+    elif( (isinstance(ref_points, list) or isinstance(ref_points, np.ndarray)) and
+        (isinstance(points, list) or isinstance(points, np.ndarray)) ):
+        pass
+    else:
+        print("Invalid input formats")
+        return
+    refs = []
+    k=0
+    for j, ref_point in enumerate(ref_points):
+        for i, point in enumerate(points):
+            distance = GeoInverseWGS84(*ref_point, *point)
+            #print(distance)
+            if(distance < displace_dist):
+                angle, _ = geocpp.InverseAngle(*ref_point, *point)
+                print("{:>3d} - distance is {:>+5.3f} m az. angle (degs) is {:>+4.3f} " "from ref-vertex {:>3d} : Lat {:>4.9f} Lon {:>4.9f} to "
+                "vertex {:>3d} : Lat {:>4.9f} Lon {:>4.9f} ".format(k+1, distance, angle,
+                     j+1, *ref_point, i+1, *point))
+                k += 1 # another vertex possible to be used as reference for translation
+                refs.append([ref_point, i+1])
+    print("Choose which to use as a reference vertex")
+    index = -1
+    index = int(input())-1
+    return refs[index][0], refs[index][1]
