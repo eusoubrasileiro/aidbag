@@ -63,6 +63,7 @@ def fformatPoligonal(latlon, filename='CCOORDS.TXT',
     elif isinstance(latlon, np.ndarray):
         fformatPoligonal(latlon.tolist(), filename,
             endfirst, verbose)
+        return
     elif isinstance(latlon, list):
         latlons = latlon.copy()
         for ll in latlons:
@@ -82,14 +83,13 @@ def fformatPoligonal(latlon, filename='CCOORDS.TXT',
             f.write(line)
             if verbose:
                 print(line[:-1])
-        print("Output filename is: ", filename.upper())
-
-
+    print("Output filename is: ", filename.upper())
 
 def force_verd(vertices, tolerance=1e-6, verbose=True, ignlast=True):
     """
+    Força rumos verdadeiros
     force decimal coordinates (lat,lon) to previous (lat/lon)
-    otherwise sigareas wont accept this polygon    
+    otherwise sigareas wont accept this polygon
     *ignlast : default True
             ignore last point (repeated from first)
     """
@@ -738,3 +738,21 @@ def translate_info(coords, ref_coords, displace_dist=1.5):
     index = -1
     index = int(input())-1
     return refs[index][0], refs[index][1]
+
+# draft version
+# TODO make it better with new uses
+def memorial_acostar(memorial_ref, memorial_points, reference_dist=50):
+    """acosta memorial_points à memorial_ref (copiados aba poligonal)
+    memorial_ref e memorial_points"""
+    ref_points = np.array(memorialRead(memorial_ref, decimal=True))
+    points = np.array(memorialRead(memorial_points, decimal=True))
+    ref_point, rep_index = translate_info(points, ref_points, displace_dist=reference_dist)
+    smemo = simple_memo_inverse(points)
+    smemo_restarted = simple_memo_newstart(smemo, rep_index, ref_point.tolist())
+    smemo_restarted_points = simple_memo_direct(smemo_restarted, repeat_end=True)
+    print("ajustando para rumos verdadeiros")
+    smemo_restarted_points_verd = force_verd(smemo_restarted_points, tolerance=3e-6) # make 'rumos verdadeiros' acceptable by sigareas
+    print(PolygonArea(smemo_restarted_points_verd.tolist()))
+    print("pronto só falta carregar no SIGAREAS corrigir poligonal")
+    fformatPoligonal(smemo_restarted_points_verd)
+    return smemo_restarted_points_verd
