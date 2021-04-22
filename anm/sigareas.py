@@ -85,29 +85,57 @@ def fformatPoligonal(latlon, filename='CCOORDS.TXT',
                 print(line[:-1])
     print("Output filename is: ", filename.upper())
 
-def force_verd(vertices, tolerance=1e-6, verbose=True, ignlast=True):
+def force_verd(vertices, tolerancem=1, verbose=True, ignlast=True):
     """
     Força rumos verdadeiros
     force decimal coordinates (lat,lon) to previous (lat/lon)
     otherwise sigareas wont accept this polygon
+
     *ignlast : default True
             ignore last point (repeated from first)
+    *tolerancem: default 1 meter
+            distance to accept as same lat or lon as previous
     """
     cvertices = np.copy(np.array(vertices))
     vertices_new = np.copy(cvertices)
     if ignlast:
         cvertices = cvertices[:-1]
-    for i, (lat, lon) in enumerate(cvertices):
-        for j, (clat, clon) in enumerate(cvertices[i+1:]): # compare with next one : downward
-            dlat, dlon = clat-lat, clon-lon
-            if(abs(dlat) < tolerance and dlat != 0.0):
-                print('lat {:.8f} changed to {:.8f}'.format(clat, lat))
-                vertices_new[i+1+j, 0] = lat
-            elif(abs(dlon) < tolerance and dlon != 0.0):
-                print('lon {:.8f} changed to {:.8f}'.format(clon, lon))
-                vertices_new[i+1+j, 1] = lon
+    dists = []
+    for i, (plat, plon) in enumerate(cvertices):
+        for j, (lat, lon) in enumerate(cvertices[i+1:]): # compare with next one : downward
+            dlat, dlon = lat-plat, lon-plon
+            dist = GeoInverseWGS84(lat, lon, plat, lon)
+            if(dlat != 0.0 and abs(dist) < tolerancem ):
+                print('lat {:.8f} changed to {:.8f} distance {:2.2f} (m)'.format(
+                    lat, plat, dist))
+                vertices_new[i+1+j, 0] = plat
+                dists.append(dist)
+            dist = GeoInverseWGS84(lat, lon, lat, plon)
+            if(dlon != 0.0 and abs(dist) < tolerancem):
+                print('lon {:.8f} changed to {:.8f} distance {:2.2f} (m)'.format(
+                    lon, plon, dist))
+                dists.append(dist)
+                vertices_new[i+1+j, 1] = plon
     if ignlast: # replace instead of ignoring last
         vertices_new[-1] = vertices_new[0]
+    dists = np.array(dists)
+    print("changes statistics min (m) : {:2.2f}  p50: {:2.2f} max: {:2.2f}".format(
+        *(np.percentile(dists, [0, 50, 100]))))
+
+    def test_verd(vertices):
+        """test weather vertices are lat/lon 'rumos verdadeiros' """
+        dlat, dlon = np.diff(vertices[:,0]), np.diff(vertices[:,1])
+        for dif in (dlat, dlon): # for lat and lon check
+            if np.alltrue(dif[::2] != 0):
+                if np.alltrue(dif[1::2] == 0):
+                    continue
+            if np.alltrue(dif[::2] == 0):
+                if np.alltrue(dif[1::2] != 0):
+                    continue
+            return False
+        return True
+    check_verd = test_verd(vertices_new)
+    print("rumos verdadeiros check: ", "passed" if check_verd else "failed")
     return vertices_new
 
 ### Memorial descritivo através de PA e survey de estação total
@@ -741,7 +769,7 @@ def translate_info(coords, ref_coords, displace_dist=1.5):
 
 # draft version
 # TODO make it better with new uses
-def memorial_acostar(memorial, memorial_ref, reference_dist=50, fvtolerance=3e-6):
+def memorial_acostar(memorial, memorial_ref, reference_dist=50, mtolerance=1):
     """
     Acosta `memorial` à algum ponto escolhido da `memorial_ref`
 
@@ -752,14 +780,14 @@ def memorial_acostar(memorial, memorial_ref, reference_dist=50, fvtolerance=3e-6
 
     """
     if isinstance(memorial_ref, str):
-        ref_points = memorialRead(memorial_ref, decimal=True, verbose=True)
+        ref_points = memorialRead(memorial_ref, decimal=True, verbose=False)
     else:
         print('memorial_ref : deve ser copiado da aba-poligonal (string)')
         return
     if isinstance(memorial, list):
         points = np.array(points)
     elif isinstance(memorial, str):
-        points = np.array(memorialRead(memorial, decimal=True, verbose=True))
+        points = np.array(memorialRead(memorial, decimal=True, verbose=False))
     elif isinstance(memorial, np.ndarray):
         points = memorial
     else:
@@ -767,11 +795,15 @@ def memorial_acostar(memorial, memorial_ref, reference_dist=50, fvtolerance=3e-6
 
     ref_point, rep_index = translate_info(points, ref_points, displace_dist=reference_dist)
     smemo = simple_memo_inverse(points)
+    print("simple inverse memorial")
+    for line in smemo:
+        print(line)
     smemo_restarted = simple_memo_newstart(smemo, rep_index, ref_point)
     smemo_restarted_points = simple_memo_direct(smemo_restarted, repeat_end=True)
-    print("Ajustando para rumos verdadeiros")
-    smemo_restarted_points_verd = force_verd(smemo_restarted_points, tolerance=fvtolerance) # make 'rumos verdadeiros' acceptable by sigareas
-    print(PolygonArea(smemo_restarted_points_verd.tolist()))
+    print(u"Ajustando para rumos verdadeiros, tolerância :", mtolerance, " metro")
+    # make 'rumos verdadeiros' acceptable by sigareas
+    smemo_restarted_points_verd = force_verd(smemo_restarted_points, tolerancem=mtolerance)
+    print("Area is ", PolygonArea(smemo_restarted_points_verd.tolist())[-1], " ha")
     fformatPoligonal(smemo_restarted_points_verd)
     print("Pronto para carregar no SIGAREAS -> corrigir poligonal")
     return smemo_restarted_points_verd
