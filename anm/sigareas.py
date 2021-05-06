@@ -85,7 +85,7 @@ def fformatPoligonal(latlon, filename='CCOORDS.TXT',
                 print(line[:-1])
     print("Output filename is: ", filename.upper())
 
-def force_verd(vertices, tolerancem=1, verbose=True, ignlast=True):
+def force_verd(vertices, tolerancem=0.5, verbose=True, ignlast=True):
     """
     Força rumos verdadeiros
     force decimal coordinates (lat,lon) to previous (lat/lon)
@@ -93,7 +93,7 @@ def force_verd(vertices, tolerancem=1, verbose=True, ignlast=True):
 
     *ignlast : default True
             ignore last point (repeated from first)
-    *tolerancem: default 1 meter
+    *tolerancem: default 0.5 meter
             distance to accept as same lat or lon as previous
     """
     cvertices = np.copy(np.array(vertices))
@@ -106,13 +106,13 @@ def force_verd(vertices, tolerancem=1, verbose=True, ignlast=True):
             dlat, dlon = lat-plat, lon-plon
             dist = GeoInverseWGS84(lat, lon, plat, lon)
             if(dlat != 0.0 and abs(dist) < tolerancem ):
-                print('lat {:.8f} changed to {:.8f} distance {:2.2f} (m)'.format(
+                print('line: {:>3d} - lat {:.8f} changed to {:.8f} distance {:2.2f} (m)'.format(i+1+j+1,
                     lat, plat, dist))
                 vertices_new[i+1+j, 0] = plat
                 dists.append(dist)
             dist = GeoInverseWGS84(lat, lon, lat, plon)
             if(dlon != 0.0 and abs(dist) < tolerancem):
-                print('lon {:.8f} changed to {:.8f} distance {:2.2f} (m)'.format(
+                print('line: {:>3d} - lon {:.8f} changed to {:.8f} distance {:2.2f} (m)'.format(i+1+j+1,
                     lon, plon, dist))
                 dists.append(dist)
                 vertices_new[i+1+j, 1] = plon
@@ -769,7 +769,7 @@ def translate_info(coords, ref_coords, displace_dist=1.5):
 
 # draft version
 # TODO make it better with new uses
-def memorial_acostar(memorial, memorial_ref, reference_dist=50, mtolerance=1):
+def memorial_acostar(memorial, memorial_ref, reference_dist=50, mtolerance=0.5):
     """
     Acosta `memorial` à algum ponto escolhido da `memorial_ref`
 

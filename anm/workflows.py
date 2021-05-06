@@ -169,7 +169,7 @@ def EstudoBatchRun(wpage, processos, option=3, verbose=False):
 
 def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, verbose=True):
     """
-    Inclui process on specified folder:
+    Inclui process documents from specified folder:
     `__secor_path__\\path\\process_folder`
     Follow order of glob(*) using `chdir(tipo) + chdir(path)`
 
@@ -179,10 +179,13 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, verbose
         cria documentos sem anexos
 
     """
-    print(secor.__secor_path__, path)
-    os.chdir(os.path.join(secor.__secor_path__, path))
-    process_path = os.path.join(os.getcwd(), process_folder)
-    os.chdir(process_folder) # enter on process folder
+    main_path = os.path.join(secor.__secor_path__, path)
+    if verbose:
+        print("Main path: ", main_path)
+    process_path = os.path.join(main_path, process_folder)
+    if verbose:
+        print("Process path: ", process_path)
+    os.chdir(process_path) # enter on process folder
     #  GET NUP and tipo from html
     # GetProcesso(fathername, self.wpage))
     scm_html = glob.glob('*.html')[0] # first html file on folder
@@ -261,7 +264,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, verbose
     if verbose:
         print(NUP)
 
-def IncluiDocumentosSEIFolders(sei, nfirst=1, path='', verbose=True):
+def IncluiDocumentosSEIFolders(sei, nfirst=1, path='', verbose=False):
     """
     Inclui first process folders `nfirst` (list of folders) docs on SEI.
     Follow order of glob(*) using `chdir(tipo) + chdir(path)`
@@ -282,4 +285,8 @@ def IncluiDocumentosSEIFolders(sei, nfirst=1, path='', verbose=True):
             process_folders.append(cur_path)
     process_folders = process_folders[:nfirst]
     for folder_name in process_folders:
-        IncluiDocumentosSEIFolder(sei, folder_name, path, verbose=verbose)
+        try:
+            IncluiDocumentosSEIFolder(sei, folder_name, path, verbose=verbose)
+        except Exception as e:
+            print("Exception: ", e, " - Process: ", folder_name, file=sys.stderr)
+            continue

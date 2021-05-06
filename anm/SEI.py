@@ -45,6 +45,7 @@ class SEI:
         processo = wait(self.driver, 10).until( # migth be unnecessary
             expected_conditions.visibility_of_element_located((By.ID, 'txtPesquisaRapida')))
         processo.send_keys(Keys.ENTER)
+        self.ProcessoNUP = ProcessoNUP
 
     def _processoMainMenu(self):
         """back to main menu processo"""
@@ -101,8 +102,10 @@ class SEI:
             expected_conditions.element_to_be_clickable(
             (By.CSS_SELECTOR,'div#divArvoreAcoes.infraBarraComandos')))
         botoes = wait(self.driver, 10).until(
-           expected_conditions.presence_of_all_elements_located(
-           (By.CSS_SELECTOR, ".botaoSEI")))
+            expected_conditions.presence_of_all_elements_located(
+            (By.CSS_SELECTOR, ".botaoSEI")))
+        if len(self.driver.find_elements(By.CSS_SELECTOR, '.botaoSEI')) <= 9:
+            raise Exception(u"Processo não aberto na sua unidade: "+self.ProcessoNUP)
         return botoes[index]
 
     def ProcessoIncluiDoc(self, code=0):
