@@ -21,6 +21,8 @@ docs_externos_sei_txt = [ u"de Retirada de Interferência", # Nome na Arvore
         u"Pré de Alvará", 'de Licenciamento', u"de Opção", 'de Portaria de Lavra',
         u"de Permissão de Lavra Garimpeira", u"1 Análise de Requerimento de Lavra SECOR-MG"]
 
+__debug__ = False
+
 
 def IncluiDocumentoExternoSEI(sei, ProcessoNUP, doc=0, pdf_path=None):
     """
@@ -180,10 +182,10 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, verbose
 
     """
     main_path = os.path.join(secor.__secor_path__, path)
-    if verbose:
+    if verbose and __debug__:
         print("Main path: ", main_path)
     process_path = os.path.join(main_path, process_folder)
-    if verbose:
+    if verbose and __debug__:
         print("Process path: ", process_path)
     os.chdir(process_path) # enter on process folder
     #  GET NUP and tipo from html
@@ -264,7 +266,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, verbose
     if verbose:
         print(NUP)
 
-def IncluiDocumentosSEIFolders(sei, nfirst=1, path='', verbose=False):
+def IncluiDocumentosSEIFolders(sei, nfirst=1, path='', verbose=True):
     """
     Inclui first process folders `nfirst` (list of folders) docs on SEI.
     Follow order of glob(*) using `chdir(tipo) + chdir(path)`
