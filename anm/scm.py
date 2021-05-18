@@ -34,6 +34,36 @@ def numberyearPname(pross_str):
     pross_str = ''.join(re.findall(regxdp, pross_str))
     return pross_str[:6], pross_str[6:]
 
+def dadosBasicosRetrieve(processostr, wpage, process=None):
+    """   Get & Post na página dados do Processo do Cadastro  Mineiro (SCM)
+    """
+    class fakeproc : pass
+    self = fakeproc # mock Process class
+    if process is not None:
+        self = process
+    else: # mock Process class
+        self.wpage = wpage
+        self.processostr = fmtPname(processostr)
+    if hasattr(self, 'scm_dadosbasicosmain_response'): # already downloaded
+        self.wpage.response = self.scm_dadosbasicosmain_response
+        return True
+    self.wpage.get('https://sistemas.anm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx')
+    formcontrols = {
+        'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnConsultarProcesso',
+        'ctl00$conteudo$txtNumeroProcesso': self.processostr,
+        'ctl00$conteudo$btnConsultarProcesso': 'Consultar',
+        '__VIEWSTATEENCRYPTED': ''}
+    formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
+    self.wpage.post('https://sistemas.anm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx',
+                  data=formdata, timeout=scm_timeout)
+    # check for failure if cannot find Campo Ativo
+    if self.wpage.response.text.find('ctl00_conteudo_lblAtivo') == -1:
+        raise Exception("Processo._dadosBasicosRetrieve - did not receive page")
+    # may give False
+    self.scm_dadosbasicosmain_response = self.wpage.response
+    self.scm_dadosbasicosmain_html = self.wpage.response.text
+    return self
+
 # static field
 scm_data_tags = { # "data name" ; soup.find fields( "tag", "attributes")
     'prioridade'            : ['span',  { 'id' : "ctl00_conteudo_lblDataPrioridade"} ], # pode estar errada
@@ -113,27 +143,13 @@ class Processo:
         """return scm_data_tags from specified data labels"""
         return dict(zip(data, [ scm_data_tags[key] for key in data ]))
 
+    def getNUP(processostr, wpagentlm):
+        dadosBasicosRetrieve(processostr, wpagentlm)
+        soup = BeautifulSoup(wpagentlm.response.text, features="lxml")
+        return soup.select_one('[id=ctl00_conteudo_lblNup]').text
+
     def _dadosBasicosRetrieve(self):
-        """   Get & Post na página dados do Processo do Cadastro  Mineiro (SCM)
-        """
-        if hasattr(self, 'scm_dadosbasicosmain_response'): # already downloaded
-            self.wpage.response = self.scm_dadosbasicosmain_response
-            return True
-        self.wpage.get('https://sistemas.anm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx')
-        formcontrols = {
-            'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnConsultarProcesso',
-            'ctl00$conteudo$txtNumeroProcesso': self.processostr,
-            'ctl00$conteudo$btnConsultarProcesso': 'Consultar',
-            '__VIEWSTATEENCRYPTED': ''}
-        formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
-        self.wpage.post('https://sistemas.anm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx',
-                      data=formdata, timeout=scm_timeout)
-        # check for failure if cannot find Campo Ativo
-        if self.wpage.response.text.find('ctl00_conteudo_lblAtivo') == -1:
-            raise Exception("Processo._dadosBasicosRetrieve - did not receive page")
-        # may give False
-        self.scm_dadosbasicosmain_response = self.wpage.response
-        self.scm_dadosbasicosmain_html = self.wpage.response.text
+        dadosBasicosRetrieve(None, None, process=self)
         return True
 
     def salvaDadosBasicosHtml(self, html_path):

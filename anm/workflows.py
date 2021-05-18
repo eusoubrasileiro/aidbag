@@ -169,7 +169,7 @@ def EstudoBatchRun(wpage, processos, option=3, verbose=False):
 
 
 
-def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, verbose=True):
+def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=None, verbose=True):
     """
     Inclui process documents from specified folder:
     `__secor_path__\\path\\process_folder`
@@ -188,11 +188,6 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, verbose
     if verbose and __debugging__:
         print("Process path: ", process_path)
     os.chdir(process_path) # enter on process folder
-    #  GET NUP and tipo from html
-    # GetProcesso(fathername, self.wpage))
-    scm_html = glob.glob('*.html')[0] # first html file on folder
-    with open(scm_html, 'r') as f: # get NUP by html scm
-        html = f.read()
 
     if not empty: # busca pdfs e adiciona só os existentes
         # Estudo de Interferência deve chamar 'R.pdf' ou qualquer coisa
@@ -216,7 +211,19 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, verbose
             print('Nao encontrou pdf Imprimir*.pdf', file=sys.stderr)
         os.chdir('..') # go back from process folder
 
-    # get NUP
+    #  GET NUP and tipo from html
+    # GetProcesso(fathername, self.wpage))
+
+    html = None
+    try:
+        html_file = glob.glob('*.html')[0] # first html file on folder
+        with open(html_file, 'r') as f: # get NUP by html scm
+            html = f.read()
+    except:    # IndexError: list index out of range
+        processostr = scm.fmtPname(process_folder) # from folder name
+        secor.dadosBasicosRetrieve(processostr, wpage)
+        html = wpage.response.text
+    # get everything needed
     soup = BeautifulSoup(html, features="lxml")
     data = htmlscrap.dictDataText(soup, scm.scm_data_tags)
     NUP = data['NUP'].strip()
@@ -266,7 +273,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, verbose
     if verbose:
         print(NUP)
 
-def IncluiDocumentosSEIFolders(sei, nfirst=1, path='', verbose=True):
+def IncluiDocumentosSEIFolders(sei, nfirst=1, path='', wpage=None, verbose=True):
     """
     Inclui first process folders `nfirst` (list of folders) docs on SEI.
     Follow order of glob(*) using `chdir(tipo) + chdir(path)`
