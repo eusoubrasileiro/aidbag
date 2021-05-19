@@ -181,13 +181,15 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=N
         cria documentos sem anexos
 
     """
+    cur_path = os.getcwd() # for restoring after
     main_path = os.path.join(secor.__secor_path__, path)
     if verbose and __debugging__:
         print("Main path: ", main_path)
     process_path = os.path.join(main_path, process_folder)
+    os.chdir(process_path) # enter on process folder
     if verbose and __debugging__:
         print("Process path: ", process_path)
-    os.chdir(process_path) # enter on process folder
+        print("Current dir: ", os.getcwd())
 
     if not empty: # busca pdfs e adiciona só os existentes
         # Estudo de Interferência deve chamar 'R.pdf' ou qualquer coisa
@@ -209,7 +211,6 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=N
             pdf_adicional = os.path.join(process_path, pdf_adicional)
         elif verbose:
             print('Nao encontrou pdf Imprimir*.pdf', file=sys.stderr)
-        os.chdir('..') # go back from process folder
 
     #  GET NUP and tipo from html
     # GetProcesso(fathername, self.wpage))
@@ -219,7 +220,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=N
         html_file = glob.glob('*.html')[0] # first html file on folder
         with open(html_file, 'r') as f: # get NUP by html scm
             html = f.read()
-    except:    # IndexError: list index out of range
+    except IndexError: # list index out of range
         processostr = scm.fmtPname(process_folder) # from folder name
         secor.dadosBasicosRetrieve(processostr, wpage)
         html = wpage.response.text
@@ -269,7 +270,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=N
             IncluiDespacho(sei, NUP, 3) # - Recomenda análise de plano
     #     pass
     sei.ProcessoAtribuir(13)
-    os.chdir('..\..\..') # go back and back, to not lock the folder-path
+    os.chdir(cur_path) # restore original path , to not lock the folder-path
     if verbose:
         print(NUP)
 
