@@ -17,6 +17,10 @@ mutex = Lock()
 
 scm_timeout=(2*60)
 
+# URL LIST
+#'https://sistemas.anm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx' # might change again
+scm_dados_processo_main='https://sistemas.anm.gov.br/scm/intra/site/admin/dadosprocesso.aspx'
+
 # "scm consulta dados (post) nao aceita formato diferente de 'xxx.xxx/xxxx'"
 regxdp = re.compile("\d+")
 def fmtPname(pross_str):
@@ -47,14 +51,14 @@ def dadosBasicosRetrieve(processostr, wpage, process=None):
     if hasattr(self, 'scm_dadosbasicosmain_response'): # already downloaded
         self.wpage.response = self.scm_dadosbasicosmain_response
         return True
-    self.wpage.get('https://sistemas.anm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx')
+    self.wpage.get(scm_dados_processo_main)
     formcontrols = {
         'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnConsultarProcesso',
         'ctl00$conteudo$txtNumeroProcesso': self.processostr,
         'ctl00$conteudo$btnConsultarProcesso': 'Consultar',
         '__VIEWSTATEENCRYPTED': ''}
     formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
-    self.wpage.post('https://sistemas.anm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx',
+    self.wpage.post(scm_dados_processo_main,
                   data=formdata, timeout=scm_timeout)
     # check for failure if cannot find Campo Ativo
     if self.wpage.response.text.find('ctl00_conteudo_lblAtivo') == -1:
@@ -166,7 +170,7 @@ class Processo:
             'ctl00$conteudo$btnPoligonal': 'Poligonal',
             'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnPoligonal'}
         formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
-        self.wpage.post('https://sistemas.anm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx',
+        self.wpage.post(scm_dados_processo_main,
                       data=formdata)
         self.scm_dadosbasicospoli_response = self.wpage.response
         self.scm_dadosbasicospoli_html = self.wpage.response.text
