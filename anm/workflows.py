@@ -83,7 +83,7 @@ def IncluiDespacho(sei, ProcessoNUP, idxcodigo):
     """
     mcodigo = mcodigos[idxcodigo]
     sei.Pesquisa(ProcessoNUP) # Entra neste processo
-    sei.ProcessoIncluiDoc(4) # Despacho
+    sei.ProcessoIncluiDoc(1) # Despacho
     sei.driver.find_element_by_id('lblProtocoloDocumentoTextoBase').click() # Documento Modelo
     sei.driver.find_element_by_id('txtProtocoloDocumentoTextoBase').send_keys(mcodigo)
     sei.driver.find_element_by_id('txtDestinatario').send_keys(u"Setor de Controle e Registro (SECOR-MG)")
@@ -109,7 +109,7 @@ def IncluiParecer(sei, ProcessoNUP, idxcodigo=0):
     """
     mcodigo = mcodigos[idxcodigo]
     sei.Pesquisa(ProcessoNUP) # Entra neste processo
-    sei.ProcessoIncluiDoc(18) # Parecer
+    sei.ProcessoIncluiDoc(2) # Parecer
     sei.driver.find_element_by_id('lblProtocoloDocumentoTextoBase').click() # Documento Modelo
     sei.driver.find_element_by_id('txtProtocoloDocumentoTextoBase').send_keys(mcodigo)
     sei.driver.find_element_by_id('lblPublico').click() # Publico
@@ -128,7 +128,7 @@ def IncluiTermoAberturaPE(sei, ProcessoNUP):
     Inclui Termo de Abertura de Processo Eletronico
     """
     sei.Pesquisa(ProcessoNUP) # Entra neste processo
-    sei.ProcessoIncluiDoc(26) # Despacho
+    sei.ProcessoIncluiDoc(3) # Termo de Abertura
     sei.driver.find_element_by_id('lblPublico').click() # Publico
     save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'btnSalvar')))
     save.click()
@@ -269,7 +269,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=N
             IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)
             IncluiDespacho(sei, NUP, 3) # - Recomenda análise de plano
     #     pass
-    sei.ProcessoAtribuir(13)
+    sei.ProcessoAtribuir() # default chefe
     os.chdir(cur_path) # restore original path , to not lock the folder-path
     if verbose:
         print(NUP)

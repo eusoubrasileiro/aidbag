@@ -108,24 +108,27 @@ class SEI:
             raise Exception(u"Processo não aberto na sua unidade: "+self.ProcessoNUP)
         return botoes[index]
 
+
     def ProcessoIncluiDoc(self, code=0):
         """
-        Precisa estar na página de um processo.
+        Precisa estar na página de um processo. E com frame de commands selected.
 
         code:
-            0  - Externo - default
-            1  - Analise
-            3  - Declaração
-            4  - Despacho
-           18  - Parecer
-           26  - Termo de abertura de processo eletronico
-
+            0  - ' Externo' - default
+            1  - 'Despacho'
+            2  - 'Parecer'
+            3  - 'Termo de Abertura de Processo Eletrônico'
         """
+        texts = [ ' Externo', 'Despacho', 'Parecer', 'Termo de Abertura de Processo Eletrônico']
         self._processoBarraBotoes(0).click()  # botao[0] incluir doc
         items = wait(self.driver, 10).until(
             expected_conditions.visibility_of_all_elements_located(
             (By.CLASS_NAME, "ancoraOpcao")))
-        items[code].click() # Externo / Analise / Declaracao etc....
+        # a ordem dos elementos está mudando
+        # melhor usar xpath by value
+        # items[code].click() # Externo / Analise / Declaracao etc....
+        element = self.driver.find_element_by_xpath("//a[.='"+texts[code]+"']")
+        element.click()
 
     def ProcessoIncluiAEspecial(self, option=1, obs=None):
         """ 1 == analises andre """
@@ -139,13 +142,13 @@ class SEI:
             (By.CLASS_NAME, "infraButton")))
         botoes[0].click() # Salvar
 
-    def ProcessoAtribuir(self, option=13):
-        """ 13 == chefe"""
+    def ProcessoAtribuir(self, pessoa='leandro.carvalho - Leandro César Ferreira de Carvalho'):
         self._processoBarraBotoes(7).click() # botao[7] atribuir
         drop_down = wait(self.driver, 10).until(
             expected_conditions.element_to_be_clickable((By.ID, 'selAtribuicao')))
         select = Select(drop_down)
-        select.options[option].click()
+        select.select_by_visible_text(pessoa)
+        select.first_selected_option.click()
         botoes = wait(self.driver, 10).until(
             expected_conditions.presence_of_all_elements_located(
             (By.CLASS_NAME, "infraButton")))
