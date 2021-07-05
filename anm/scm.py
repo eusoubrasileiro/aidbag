@@ -38,6 +38,12 @@ def numberyearPname(pross_str):
     pross_str = ''.join(re.findall(regxdp, pross_str))
     return pross_str[:6], pross_str[6:]
 
+def findPname(pross_str):
+    # pross_str = '48403.832.537/2016-09'
+    # first remove dots to make regex bellow simppler
+    res = re.search('\d{3,6}.[1-2][09]\d{2}', pross_str.replace('.',''))[0] # [1-2][09]\d{2} year from 1900-2099
+    return res
+
 def dadosBasicosRetrieve(processostr, wpage, process=None):
     """   Get & Post na página dados do Processo do Cadastro  Mineiro (SCM)
     """

@@ -63,19 +63,20 @@ def IncluiDocumentoExternoSEI(sei, ProcessoNUP, doc=0, pdf_path=None):
         pass
     sei.driver.switch_to.default_content() # go back to main document
 
+# Deve ser atualizado o código se o modelo favarito for modificado
 # 0 -  1537881	Retificação Resumida Alvará e Aprovo do RFP
 # 1 - 1947449	Parecer Técnico - Correção áreas e deslocamentos
 # 2 - 1618347	Formulário 1 - Lavra - Pré-Prenchido
-# 3 - 1132737	Chefe SECOR Requerimento: Recomendo Analise de Plano
+# 3 - 2725631	Chefe SECOR Requerimento: Recomendo Analise de Plano
 # 4 - 1133380	Chefe SECOR Requerimento: Recomenda publicar exigência opção
-# 5 - 1197141	Chefe SECOR Requerimento: Recomenda publicar indeferimento por Interferência Total
+# 5 - 2725639	Chefe SECOR Requerimento: Recomenda publicar indeferimento por Interferência Total
 # 6 - 1206693	Chefe SECOR Requerimento: Recomendo Analise de Cessão Parcial
 # 7 - 1243175	Chefe SECOR Requerimento: Recomendo Analise de Plano (híbrido)
 # 8 - 1453503	Chefe SECOR Requerimento de Lavra: Recomendo aguardar cumprimento de exigências
 # 9 - 1995116	Chefe SECOR Requerimento de Lavra: com Retificação de Alvará
 # 10 - 1995741	Chefe SECOR Requerimento de Lavra: Recomendo encaminhar para preenchimento de check-list
 # 11 - 2052065	Chefe SECOR Requerimento de Lavra: Encaminhar avaliar necessidade de reavaliar reservas - redução de área
-mcodigos = ['1537881', '1947449', '1618347', '1132737', '1133380', '1197141', '1206693', '1243175', '1453503', '1995116', '1995741', '2052065']
+mcodigos = ['1537881', '1947449', '1618347', '2725631', '1133380', '2725639', '1206693', '1243175', '1453503', '1995116', '1995741', '2052065']
 
 def IncluiDespacho(sei, ProcessoNUP, idxcodigo):
     """
@@ -175,11 +176,22 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=N
     `__secor_path__\\path\\process_folder`
     Follow order of glob(*) using `chdir(tipo) + chdir(path)`
 
+    * sei : class
+        selenium chrome webdriver instance
+    * process_folder: string
+        name of process folder where documentos are placed
+        eg. 832125-2005 (MUST use name xxxxxx-xxx format)
+    * path : string
+        parent folder inside secor.__secor_path__ to search
+        for `process_folder`
+        __secor_path__ defaults to '~\Documents\Controle_Areas'
+        e.g
+        path='Processos' final parent folder is
+        '~\Documents\Controle_Areas\Processos'
     * verbose: True
         avisa ausência de pdfs, quando cria documentos sem anexos
     * empty : True
         cria documentos sem anexos
-
     """
     cur_path = os.getcwd() # for restoring after
     main_path = os.path.join(secor.__secor_path__, path)
@@ -267,14 +279,36 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=N
             # Inclui Estudo pdf como Doc Externo no SEI
             IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
             IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)
-            IncluiDespacho(sei, NUP, 3) # - Recomenda análise de plano
+            if pdf_adicional is None:
+                IncluiDespacho(sei, NUP, 4) # - 4 - Recomenda opção
+                IncluiDespacho(sei, NUP, 5) # - 5 - Recomenda interferencia total
+            else:
+                IncluiDespacho(sei, NUP, 3) # - Recomenda análise de plano
     #     pass
     sei.ProcessoAtribuir() # default chefe
     os.chdir(cur_path) # restore original path , to not lock the folder-path
     if verbose:
         print(NUP)
 
-def IncluiDocumentosSEIFolders(sei, nfirst=1, path='', wpage=None, verbose=True):
+
+def IncluiDocumentosSEIFolders(sei, process_folders, path='Processos', wpage=None, verbose=True):
+    """
+    Inclui docs. from process folders [list of process-folder-names] on SEI.
+
+    - Estudo
+    - Minuta
+    - Marca Acompanhamento Especial
+    - Despacho
+
+    """
+    for folder_name in process_folders:
+        try:
+            IncluiDocumentosSEIFolder(sei, folder_name, path, verbose=verbose)
+        except Exception as e:
+            print("Exception: ", e, " - Process: ", folder_name, file=sys.stderr)
+            continue
+
+def IncluiDocumentosSEIFoldersFirstN(sei, nfirst=1, path='Processos', wpage=None, verbose=True):
     """
     Inclui first process folders `nfirst` (list of folders) docs on SEI.
     Follow order of glob(*) using `chdir(tipo) + chdir(path)`
@@ -282,21 +316,17 @@ def IncluiDocumentosSEIFolders(sei, nfirst=1, path='', wpage=None, verbose=True)
     - Estudo
     - Minuta
     - Marca Acompanhamento Especial
+    - Despacho
 
-    TODO:
-        - Despacho
     """
     os.chdir(os.path.join(secor.__secor_path__, path))
     files_folders = glob.glob('*')
+    # very dirty approach
     # get only process folders with '-' on its name like 830324-1997
+    # TODO: use Regex
     process_folders = []
     for cur_path in files_folders: # remove what is NOT a process folder
         if cur_path.find('-') != -1 and os.path.isdir(cur_path):
             process_folders.append(cur_path)
     process_folders = process_folders[:nfirst]
-    for folder_name in process_folders:
-        try:
-            IncluiDocumentosSEIFolder(sei, folder_name, path, verbose=verbose)
-        except Exception as e:
-            print("Exception: ", e, " - Process: ", folder_name, file=sys.stderr)
-            continue
+    IncluiDocumentosSEIFolders(sei, process_folders, path, wpage, verbose)
