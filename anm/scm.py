@@ -38,10 +38,20 @@ def numberyearPname(pross_str):
     pross_str = ''.join(re.findall(regxdp, pross_str))
     return pross_str[:6], pross_str[6:]
 
+
+find_process_regex = '\d{3,6}\D[1-2][09]\d{2}' # remove '.' first
+# re.findall(find_process_regex, processes.replace('.', ''))
+
+def findPnames(text):
+    """
+    Find all process names on `text`
+    """
+    return re.findall(find_process_regex, text.replace('.', ''))
+
 def findPname(pross_str):
     # pross_str = '48403.832.537/2016-09'
     # first remove dots to make regex bellow simppler
-    res = re.search('\d{3,6}.[1-2][09]\d{2}', pross_str.replace('.',''))[0] # [1-2][09]\d{2} year from 1900-2099
+    res = re.search(find_process_regex, pross_str.replace('.',''))[0] # [1-2][09]\d{2} year from 1900-2099
     return res
 
 def dadosBasicosRetrieve(processostr, wpage, process=None):
