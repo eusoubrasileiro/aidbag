@@ -76,6 +76,7 @@ def dadosBasicosRetrieve(processostr, wpage, process=None):
     formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
     self.wpage.post(scm_dados_processo_main,
                   data=formdata, timeout=scm_timeout)
+    
     # check for failure if cannot find Campo Ativo
     if self.wpage.response.text.find('ctl00_conteudo_lblAtivo') == -1:
         raise Exception("Processo._dadosBasicosRetrieve - did not receive page")

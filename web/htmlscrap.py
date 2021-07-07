@@ -6,7 +6,8 @@ import re
 
 import os, sys
 import requests
-from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+from requests import adapters
 
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
@@ -16,9 +17,27 @@ from datetime import datetime
 import re
 
 
+# A backoff factor to apply between attempts after the second try
+# (most errors are resolved immediately by a second try without a
+# delay). urllib3 will sleep for::
+
+#     {backoff factor} * (2 ** ({number of total retries} - 1))
+# 10 retries and  backoff factor = 0.1
+# = 0.1 * 2 **(2-1)
+# = 0.1 * 2 = 0.2
+# = 0.1 * 2 * 2 = 0.4 
+# = 0.1 * 2 * 3 = 0.6
+# = 0.1 * 2 * 9 = 1.8 seconds
+
 class wPage: # html  webpage scraping with soup and requests
-    def __init__(self): # requests session
+    def __init__(self, nretries=10): # requests session
         self.session = requests.Session()
+        retries = Retry(total=nretries,
+                        backoff_factor=0.1, # will sleep for [0.1s, 0.2s, 0.4s, ...] between retries
+                        status_forcelist=[ 500, 502, 503, 504 ])
+        # https://stackoverflow.com/a/35504626/1207193
+        self.session.mount('http://', adapters.HTTPAdapter(max_retries=retries))
+        self.session.mount('https://', adapters.HTTPAdapter(max_retries=retries))        
 
     def findAllnSave(self, pagefolder, tag2find='img', inner='src', verbose=False):
         if not os.path.exists(pagefolder): # create only once
@@ -72,12 +91,17 @@ class wPage: # html  webpage scraping with soup and requests
         return resp
 
 class wPageNtlm(wPage): # overwrites original class for ntlm authentication
-    def __init__(self, user, passwd):
-        """ntlm auth user and pass"""
-        super().__init__()
+    def __init__(self, user, passwd, nretries=10):
+        """
+        ntlm auth user and pass
+        * nretries : 
+            number of retries to try default 10 - 
+            0.1 + 0.2
+        """
+        super().__init__(nretries)
         self.user = user
         self.passwd = passwd
-        self.session.auth = HttpNtlmAuth(user, passwd)
+        self.session.auth = HttpNtlmAuth(user, passwd)         
 
 
 def formdataPostAspNet(response, formcontrols):
