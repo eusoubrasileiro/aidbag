@@ -150,23 +150,29 @@ def EstudoBatchRun(wpage, processos, option=3, verbose=False):
     """
     NUPs = []
     for processo in tqdm.tqdm(processos):
-        estudo = secor.Estudo(processo, wpage, 0, verbose=verbose)
-        estudo.salvaDadosBasicosSCM()
-        estudo.salvaDadosPoligonalSCM()
-        if estudo.salvaRetiradaInterferencia():
-            if not estudo.cancelaUltimoEstudo():
-                raise Exception("Couldn't cancel ultimo estudo")
-            if estudo.getTabelaInterferencia() is not None:
-                estudo.getTabelaInterferenciaTodos()
-                estudo.excelInterferencia()
-                estudo.excelInterferenciaAssociados()
-        else:
-            print("Couldn't download retirada de interferencia")
-        NUPs.append(estudo.processo.NUP)
+        try:
+            estudo = secor.Estudo(processo, wpage, 0, verbose=verbose)
+            estudo.salvaDadosBasicosSCM()
+            estudo.salvaDadosPoligonalSCM()
+            if estudo.salvaRetiradaInterferencia():
+                if not estudo.cancelaUltimoEstudo():
+                    raise Exception("Couldn't cancel ultimo estudo")
+                if estudo.getTabelaInterferencia() is not None:
+                    estudo.getTabelaInterferenciaTodos()
+                    estudo.excelInterferencia()
+                    estudo.excelInterferenciaAssociados()
+            else:
+                raise Exception("Couldn't download retirada de interferencia")
+        except Exception as e:
+            print("Exception: ", e, " - Process: ", processo, file=sys.stderr)
+        finally:
+            NUPs.append(estudo.processo.NUP)
     # print all NUPS
-    print('SEI NUP:')
-    for nup in NUPs:
-        print(nup)
+    if verbose:
+        print('SEI NUPs:')
+        for nup in NUPs:
+            print(nup)
+    return NUPs
 
 
 
