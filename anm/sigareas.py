@@ -45,7 +45,11 @@ def fformatPoligonal(latlon, filename='CCOORDS.TXT',
     endfirst=False, verbose=True):
     """
     Create formated file de poligonal para uso no SIGAREAS
-        SIGAREAS->Administrador->Inserir Poligonal
+        SIGAREAS->Administrador->Inserir Poligonal|Corrigir Poligonal
+
+    Input can be:
+        From memorial text copied from SCM or 
+        From list of lat, lon vertices
 
     latlon: str/list
         memorial descritivo string
