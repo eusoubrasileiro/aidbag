@@ -118,12 +118,15 @@ def force_verd(vertices, tolerancem=0.5, verbose=True, ignlast=True):
                 vertices_new[i+1+j, 1] = plon
     if ignlast: # replace instead of ignoring last
         vertices_new[-1] = vertices_new[0]
-    dists = np.array(dists)
-    print("changes statistics min (m) : {:2.2f}  p50: {:2.2f} max: {:2.2f}".format(
-        *(np.percentile(dists, [0, 50, 100]))))
+    
+    if not dists: # no distances means all zero - already rumos verdadeiros
+        print("Already rumos verdadeiros - no change!")
+    else:
+        print("Changes statistics min (m) : {:2.2f}  p50: {:2.2f} max: {:2.2f}".format(
+            *(np.percentile(dists, [0, 50, 100]))))
 
     def test_verd(vertices):
-        """test weather vertices are lat/lon 'rumos verdadeiros' """
+        """test wether vertices are lat/lon 'rumos verdadeiros' """
         dlat, dlon = np.diff(vertices[:,0]), np.diff(vertices[:,1])
         for dif in (dlat, dlon): # for lat and lon check
             if np.alltrue(dif[::2] != 0):
