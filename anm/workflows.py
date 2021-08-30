@@ -149,6 +149,7 @@ def EstudoBatchRun(wpage, processos, option=3, verbose=False):
     - Batch Requerimento de Pesquisa - opcao 3
     """
     NUPs = []
+    estudo = None
     for processo in tqdm.tqdm(processos):
         try:
             estudo = secor.Estudo(processo, wpage, 0, verbose=verbose)
@@ -194,6 +195,11 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=N
         e.g
         path='Processos' final parent folder is
         '~\Documents\Controle_Areas\Processos'
+
+    * wpage: wPageNtlm 
+        defaul None
+        na ausência de página html salva, baixa NUP diretamente
+
     * verbose: True
         avisa ausência de pdfs, quando cria documentos sem anexos
     * empty : True
@@ -239,6 +245,8 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=N
         with open(html_file, 'r') as f: # get NUP by html scm
             html = f.read()
     except IndexError: # list index out of range
+        if wpage is None:
+            raise Exception("Não há página html, please set wpage parameter")
         processostr = scm.fmtPname(process_folder) # from folder name
         secor.dadosBasicosRetrieve(processostr, wpage)
         html = wpage.response.text
@@ -254,8 +262,16 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=N
         pdf_interferencia = None
 
     # inclui vários documentos, se desnecessário é só apagar
-    # Inclui termo de abertura de processo eletronico
-    IncluiTermoAberturaPE(sei, NUP)
+    # Inclui termo de abertura de processo eletronico se data < 2020 (protocolo digital nov/2019)
+
+    try : # to avoid placing IncluiTermoAberturaPE on processos puro digitais 
+        data_protocolo = datetime.strptime(data['data_protocolo'].strip(), 
+            "%d/%m/%Y %H:%M:%S")
+        if data_protocolo.year < 2020:  
+            IncluiTermoAberturaPE(sei, NUP)
+    except Exception as e:
+        IncluiTermoAberturaPE(sei, NUP)
+
     if 'licen' in tipo.lower():
         # Inclui Estudo pdf como Doc Externo no SEI
         IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
