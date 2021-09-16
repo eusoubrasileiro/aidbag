@@ -37,6 +37,18 @@ class SEI:
         driver.find_element_by_name("sbmLogin").click()
         self.driver = driver
 
+    # context manager support so bellow works.
+    # with SEI(user, pass) as sei:
+    #   do something.
+    # https://book.pythontips.com/en/latest/context_managers.html
+    # sei.driver.quit() works out of the box
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.driver.quit()
+        #return True # excetions were handled if True is returned 
+
     def Pesquisa(self, ProcessoNUP):
         self.driver.switch_to.default_content() # go back main document
         processo = wait(self.driver, 10).until(
