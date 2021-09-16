@@ -113,10 +113,9 @@ class Processo:
                 1 - scm dados basicos page
                 2 - anterior + processos associados (father and direct sons)
                 3 - anterior + correção prioridade ancestor list
-        """
-        processostr = fmtPname(processostr)
-        self.processostr = processostr
-        self.number, self.year = numberyearPname(processostr)
+        """        
+        self.processostr = fmtPname(processostr) # `fmtPname` unique string process number/year
+        self.number, self.year = numberyearPname(self.processostr)
         self.wpage = htmlscrap.wPageNtlm(wpagentlm.user, wpagentlm.passwd)
         self.verbose = verbose
         # control to avoid running again
@@ -245,25 +244,20 @@ class Processo:
             # ignoring empty lists
             # only one son or father that is ignored
             if assprocesses_name:
-                #with ThreadPool(len(assprocesses_name)) as pool:
-                #    # Open the URLs in their own threads and return the results
-                #    self.assprocesses = pool.starmap(Processo.Get, zip(assprocesses_name,
-                #                                    itertools.repeat(self.wpage),
-                #                                    itertools.repeat(1),
-                #                                    itertools.repeat(self.verbose)))
-                # use a with statement to ensure threads are cleaned up promptly
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    # Start the load operations and mark each future with its process_name
-                    # deadlock if run with 3?
-                    future_processes = {executor.submit(Processo.Get, process_name, self.wpage, 1, self.verbose) :
-                        process_name for process_name in assprocesses_name}
-                    for future in concurrent.futures.as_completed(future_processes):
-                        process_name = future_processes[future]
+                with concurrent.futures.ThreadPoolExecutor() as executor: # thread number optmial       
+                    # use a dict to map { process name : future_wrapped_Processo }             
+                    # due possibility of exception on Thread and to know which process was responsible for that
+                    future_processes = {process_name : executor.submit(Processo.Get, process_name, self.wpage, 1, self.verbose) 
+                        for process_name in assprocesses_name}
+                    concurrent.futures.wait(future_processes.values())
+                    #for future in concurrent.futures.as_completed(future_processes):         
+                    for process_name, future_process in future_processes.items():               
                         try:
-                            process = future.result()
-                            # create dict of key process name , value process objects
-                            self.assprocesses.update({process_name : process})
+                            # create dict of key process name, value process objects
+                            self.assprocesses.update({process_name : future_process.result()})
                         except Exception as exc:
+                            print("Exception raised while running fathernSons thread for process {:0}".format(
+                                process_name), file=sys.stderr)
                             raise(exc)
                 if self.verbose:
                     with mutex:
