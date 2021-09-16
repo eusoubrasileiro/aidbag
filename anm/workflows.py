@@ -148,7 +148,8 @@ def EstudoBatchRun(wpage, processos, option=3, verbose=False):
     - Analise de Opcao de Area - opcao 2
     - Batch Requerimento de Pesquisa - opcao 3
     """
-    NUPs = []
+    suceed_NUPs = [] # suceed 
+    failed_NUPS = [] # failed
     estudo = None
     for processo in tqdm.tqdm(processos):
         try:
@@ -164,16 +165,19 @@ def EstudoBatchRun(wpage, processos, option=3, verbose=False):
                     estudo.excelInterferenciaAssociados()
             else:
                 raise Exception("Couldn't download retirada de interferencia")
+            suceed_NUPs.append(estudo.processo.NUP)
         except Exception as e:
             print("Exception: ", e, " - Process: ", processo, file=sys.stderr)
-        finally:
-            NUPs.append(estudo.processo.NUP)
+            failed_NUPS.append(estudo.processo.NUP)            
     # print all NUPS
     if verbose:
-        print('SEI NUPs:')
-        for nup in NUPs:
+        print('SEI NUPs sucess:')
+        for nup in suceed_NUPs:
             print(nup)
-    return NUPs
+        print('SEI NUPs failed:')
+        for nup in failed_NUPS:
+            print(nup)
+    return suceed_NUPs, failed_NUPS
 
 
 
