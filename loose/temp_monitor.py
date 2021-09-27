@@ -26,9 +26,9 @@ if __name__ == "__main__":
         sensors = subprocess.check_output(['sensors']).decode()
         sensors = re.findall('\+\d{1,3}\.\d+.C', sensors)
         c0temp, c1temp = sensors[0], sensors[3]
-        print(time.strftime("%Y-%m-%d %H:%M:%S")," ".join(map(str,[c0temp, c1temp])))
+        print(time.strftime("%Y-%m-%d %H:%M:%S")+" "+" ".join(map(str,[c0temp, c1temp])))
         with open('core_temps.txt', 'a') as file:
-            file.write(time.strftime("%Y-%m-%d %H:%M:%S")+" ".join(map(str,[c0temp, c1temp])))
+            file.write(time.strftime("%Y-%m-%d %H:%M:%S")+" "+" ".join(map(str,[c0temp, c1temp]))+"\n")
         time.sleep(10*60)
       except:
           pass 
