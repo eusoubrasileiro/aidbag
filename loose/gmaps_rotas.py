@@ -3,9 +3,8 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait as wait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions
-import platform
+import platform, re, time, os, datetime
 from bs4 import BeautifulSoup 
-import re, time, os
 
 
 def set_route(driver, origin, destination):
@@ -74,17 +73,18 @@ if __name__ == "__main__":
       options.add_argument("--headless") # to hide window in 'background'
       cwebdriver = webdriver.Chrome
             
-    # better use chromium on linux faster and easier to install.. like
+    # better use firefox geckodriver on linux faster and easier to install.. like
     with cwebdriver(options=options) as driver: 
         while(True):
-            for route_name, origin_destination in destinations.items():
-                try: 
-                    origin, destination = origin_destination
-                    going, back = get_times_round_trip(driver, origin, destination)
-                    print(' '.join([time.strftime("%X %x"), route_name, str(going), str(back)]))
-                    with open('lote_rotas.txt', 'a') as file:
-                        file.write(' '.join([time.strftime("%X %x"), route_name, str(going), str(back), '\n']))
-                except Exception as exc:
-                    print(route_name, exc)
-                    #raise(exc)
+            if datetime.datetime.now().time() > datetime.time(hour=20) or datetime.datetime.now().time() < datetime.time(hour=6):
+                for route_name, origin_destination in destinations.items():
+                    try: 
+                        origin, destination = origin_destination
+                        going, back = get_times_round_trip(driver, origin, destination)
+                        print(' '.join([time.strftime("%X %x"), route_name, str(going), str(back)]))
+                        with open('lote_rotas.txt', 'a') as file:
+                            file.write(' '.join([time.strftime("%X %x"), route_name, str(going), str(back), '\n']))
+                    except Exception as exc:
+                        print(route_name, exc)
+                        #raise(exc)
             time.sleep(30*60) # wait 30 mins
