@@ -25,7 +25,7 @@ if __name__ == "__main__":
       try:      
         sensors = subprocess.check_output(['sensors']).decode()
         sensors = re.findall('([\+]*\d{1,3}\.\d+).+C', sensors)
-        c0temp, c1temp = sensors, sensors
+        c0temp, c1temp = sensors
         # cpu use to correlate info
         mpstat = subprocess.check_output(['mpstat', '1', '5']).decode() # average 5 measures
         cpuuse = float(mpstat.split('\n')[-2].split(' ')[8].replace(',','.'))
