@@ -36,6 +36,11 @@ class SEI:
         orgao.send_keys("ANM")
         driver.find_element_by_name("sbmLogin").click()
         self.driver = driver
+        # to avoid problems start saving main window
+        self.mainwindow = self.driver.window_handles[0]
+        # close disturbing and problematic popups
+        wait(self.driver, 10).until(expected_conditions.number_of_windows_to_be(2))
+        self.closePopups()
 
     # context manager support so bellow works.
     # with SEI(user, pass) as sei:
@@ -59,6 +64,16 @@ class SEI:
         processo.send_keys(Keys.ENTER)
         self.ProcessoNUP = ProcessoNUP
 
+    def closePopups(self):
+        """close popups"""        
+        # close all other windows STUPID POP-UPS        
+        for windowh in self.driver.window_handles[1:]:
+            self.driver.switch_to.window(windowh)
+            self.driver.switch_to.default_content() 
+            self.driver.close()    
+        self.driver.switch_to.window(self.mainwindow)
+        self.driver.switch_to.default_content()        
+
     def _processoMainMenu(self):
         """back to main menu processo"""
 
@@ -78,6 +93,7 @@ class SEI:
         wait(self.driver, 10).until( # then go to frame panel left
             expected_conditions.frame_to_be_available_and_switch_to_it(
             (By.CSS_SELECTOR,'iframe#ifrArvore')))
+            
         anchors = wait(self.driver, 10).until(
             expected_conditions.presence_of_all_elements_located(
             (By.CSS_SELECTOR,'#topmenu a')))
@@ -98,13 +114,23 @@ class SEI:
         time.sleep(3)
         self.driver.switch_to.default_content()
 
+    def processBarCmdsReopen(self):
+        """Return reopen button from `processBarCmds`
+        if process can be reopened 
+        return reopen button or
+        None if such button doesn't exist"""
+        bts = self.processBarCmdsGet()
+        try : 
+            if bts[4].find_element_by_tag_name('img').get_property('title') == 'Reabrir Processo':
+                return bts[4]
+        except:
+            return None    
+        
+    def processOpen(self):
+        """return True if `processBarCmds` len is 22"""
+        return len(self.processBarCmdsGet()) == 22
 
-    def _processoBarraBotoes(self, index):
-        """
-        get barra botoes (list) and botao by index
-            0 - incluir documento
-            3 - acompanhamento especial
-        """
+    def processBarCmdsGet(self):
         self._processoMainMenu()
         wait(self.driver, 10).until(
             expected_conditions.frame_to_be_available_and_switch_to_it(
@@ -116,9 +142,20 @@ class SEI:
         botoes = wait(self.driver, 10).until(
             expected_conditions.presence_of_all_elements_located(
             (By.CSS_SELECTOR, ".botaoSEI")))
-        if len(self.driver.find_elements(By.CSS_SELECTOR, '.botaoSEI')) <= 9:
+        return botoes
+
+        # 4 reabrir processo if len <=9     
+
+    def processBarCmdsClick(self, index):
+        """
+        get barra botoes (list) and botao by index
+            0 - incluir documento
+            3 - acompanhamento especial
+        """
+        botoes = self.processBarCmdsGet()
+        if len(botoes) <= 9:
             raise Exception(u"Processo não aberto na sua unidade: "+self.ProcessoNUP)
-        return botoes[index]
+        botoes[index].click()
 
 
     def ProcessoIncluiDoc(self, code=0):
@@ -132,7 +169,7 @@ class SEI:
             3  - 'Termo de Abertura de Processo Eletrônico'
         """
         texts = [ ' Externo', 'Despacho', 'Parecer', 'Termo de Abertura de Processo Eletrônico']
-        self._processoBarraBotoes(0).click()  # botao[0] incluir doc
+        self.processBarCmdsClick(0)  # botao[0] incluir doc
         items = wait(self.driver, 10).until(
             expected_conditions.visibility_of_all_elements_located(
             (By.CLASS_NAME, "ancoraOpcao")))
@@ -144,7 +181,7 @@ class SEI:
 
     def ProcessoIncluiAEspecial(self, option=1, obs=None):
         """ 1 == analises andre """
-        self._processoBarraBotoes(3).click() # botao[3] acompanhamento especial
+        self.processBarCmdsClick(3) # botao[3] acompanhamento especial
         drop_down = wait(self.driver, 10).until(
             expected_conditions.element_to_be_clickable((By.ID, 'selGrupoAcompanhamento')))
         select = Select(drop_down)
@@ -155,7 +192,7 @@ class SEI:
         botoes[0].click() # Salvar
 
     def ProcessoAtribuir(self, pessoa='leandro.carvalho - Leandro César Ferreira de Carvalho'):
-        self._processoBarraBotoes(7).click() # botao[7] atribuir
+        self.processBarCmdsClick(7) # botao[7] atribuir
         drop_down = wait(self.driver, 10).until(
             expected_conditions.element_to_be_clickable((By.ID, 'selAtribuicao')))
         select = Select(drop_down)
