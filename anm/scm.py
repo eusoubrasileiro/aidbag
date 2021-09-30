@@ -54,7 +54,7 @@ def findPname(pross_str):
     res = re.search(find_process_regex, pross_str.replace('.',''))[0] # [1-2][09]\d{2} year from 1900-2099
     return res
 
-def dadosBasicosRetrieve(processostr, wpage, process=None):
+def dadosBasicosPageRetrieve(processostr, wpage, process=None):
     """   Get & Post na página dados do Processo do Cadastro  Mineiro (SCM)
     """
     class fakeproc : pass
@@ -64,9 +64,9 @@ def dadosBasicosRetrieve(processostr, wpage, process=None):
     else: # mock Process class
         self.wpage = wpage
         self.processostr = fmtPname(processostr)
-    if hasattr(self, 'scm_dadosbasicosmain_response'): # already downloaded
-        self.wpage.response = self.scm_dadosbasicosmain_response
-        return True
+    if hasattr(self, 'scm_dbasicospage_response'): # already downloaded
+        self.wpage.response = self.scm_dbasicospage_response
+        return self.wpage.response
     self.wpage.get(scm_dados_processo_main)
     formcontrols = {
         'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnConsultarProcesso',
@@ -76,14 +76,32 @@ def dadosBasicosRetrieve(processostr, wpage, process=None):
     formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
     self.wpage.post(scm_dados_processo_main,
                   data=formdata, timeout=scm_timeout)
+    self.scm_dbasicospage_response = self.wpage.response
+    self.scm_dbasicospage_html = self.wpage.response.content
+    return self.wpage.response
     
-    # check for failure if cannot find Campo Ativo
-    if self.wpage.response.text.find('ctl00_conteudo_lblAtivo') == -1:
-        raise Exception("Processo._dadosBasicosRetrieve - did not receive page")
-    # may give False
-    self.scm_dadosbasicosmain_response = self.wpage.response
-    self.scm_dadosbasicosmain_html = self.wpage.response.text
-    return self
+def dadosPoligonalPageRetrieve(processostr, wpage, process=None):
+    """   Get & Post na página dados poligonal do Processo do Cadastro  Mineiro (SCM)
+    """
+    class fakeproc : pass
+    self = fakeproc # mock Process class
+    if process is not None:
+        self = process
+    else: # mock Process class
+        self.wpage = wpage
+        self.processostr = fmtPname(processostr)   
+    if hasattr(self, 'scm_poligonpage_response'): # already downloaded
+        self.wpage.response = self.scm_poligonpage_response
+        return True
+    formcontrols = {
+        'ctl00$conteudo$btnPoligonal': 'Poligonal',
+        'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnPoligonal'}
+    formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
+    self.wpage.post(scm_dados_processo_main,
+                    data=formdata)
+    self.scm_poligonpage_response = self.wpage.response
+    self.scm_poligonpage_html = self.wpage.response.content
+    return self.wpage.response
 
 # static field
 scm_data_tags = { # "data name" ; soup.find fields( "tag", "attributes")
@@ -100,6 +118,7 @@ scm_data_tags = { # "data name" ; soup.find fields( "tag", "attributes")
     'municipios'            : ['table', { 'id' : 'ctl00_conteudo_gridMunicipios'} ],
     'ativo'                 : ['span',  { 'id' : 'ctl00_conteudo_lblAtivo'} ]
 }
+
 
 """
 Use `Processo.Get` to avoid creating duplicate Processo's
@@ -128,7 +147,7 @@ class Processo:
     def runtask(self, task=None, cdados=0):
         """
         codedados :
-                1 - scm dados basicos page
+                1 - scm dados basicos page + poligonal memorial
                 2 - anterior + processos associados (father and direct sons)
                 3 - anterior + correção prioridade (ancestors list)
         """
@@ -137,7 +156,7 @@ class Processo:
         if not self.isfree.wait(60.*2):
             raise Exception("runtask - wait time-out for process: ", self.processostr)
         self.isfree.clear() # make it busy
-        if cdados: # passed argument to perform a default calls without args
+        if cdados: # passed argument to perform a default call without args
             if (cdados == 1) and not self.dadosbasicos_run:
                 task = (self.dadosBasicosGet, {})
             elif (cdados == 2) and not self.fathernsons_run:
@@ -163,37 +182,28 @@ class Processo:
         """return scm_data_tags from specified data labels"""
         return dict(zip(data, [ scm_data_tags[key] for key in data ]))
 
+    @staticmethod
     def getNUP(processostr, wpagentlm):
-        dadosBasicosRetrieve(processostr, wpagentlm)
+        dadosBasicosPageRetrieve(processostr, wpagentlm)
         soup = BeautifulSoup(wpagentlm.response.text, features="lxml")
         return soup.select_one('[id=ctl00_conteudo_lblNup]').text
 
-    def _dadosBasicosRetrieve(self):
-        dadosBasicosRetrieve(None, None, process=self)
+    def _dadosBasicosPageRetrieve(self):
+        dadosBasicosPageRetrieve(None, None, process=self)
         return True
 
     def salvaDadosBasicosHtml(self, html_path):
-        self._dadosBasicosRetrieve() # self.wpage.response will be filled
+        self._dadosBasicosPageRetrieve() # self.wpage.response will be filled
         dadosbasicosfname = 'scm_basicos_'+self.number+self.year
         # sobrescreve
         self.wpage.save(os.path.join(html_path, dadosbasicosfname))
 
-    def _dadosPoligonalRetrieve(self):
-        if hasattr(self, 'scm_dadosbasicospoli_response'): # already downloaded
-            self.wpage.response = self.scm_dadosbasicospoli_response
-            return True
-        formcontrols = {
-            'ctl00$conteudo$btnPoligonal': 'Poligonal',
-            'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnPoligonal'}
-        formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
-        self.wpage.post(scm_dados_processo_main,
-                      data=formdata)
-        self.scm_dadosbasicospoli_response = self.wpage.response
-        self.scm_dadosbasicospoli_html = self.wpage.response.text
+    def _dadosPoligonalPageRetrieve(self):
+        dadosPoligonalPageRetrieve(None, None, process=self)
         return True
 
     def salvaDadosPoligonalHtml(self, html_path):
-        self._dadosPoligonalRetrieve() # self.wpage.response will be filled
+        self._dadosPoligonalPageRetrieve() # self.wpage.response will be filled
         # sobrescreve
         dadospolyfname = 'scm_poligonal_'+self.number+self.year
         self.wpage.save(os.path.join(html_path, dadospolyfname))
@@ -335,19 +345,22 @@ class Processo:
         return self.prioridade
 
     def dadosBasicosGet(self, data_tags=None, redo=False, parse_only=False):
-        """check your nltm authenticated session
-        if getting empty dict dados"""
+        """dowload the dados basicos scm main html page or 
+        use the existing one stored at `self.scm_dbasicospage_html` 
+        than parse all data_tags passed storing the resulting in `self.dados`
+        return True if succeed on parsing every tag False ortherwise
+        """
         if data_tags is None: # data tags to fill in 'dados' with
             data_tags = scm_data_tags.copy()
         if not parse_only:
             if not hasattr(self, 'dados') or redo == True:
-                self._dadosBasicosRetrieve()
+                self._dadosBasicosPageRetrieve()
                 self.dados = {}
             else:
                 return len(self.dados) == len(data_tags)
         else: # dont need to retrieve anything
             self.dados = {}
-        soup = BeautifulSoup(self.scm_dadosbasicosmain_html, features="lxml")
+        soup = BeautifulSoup(self.scm_dbasicospage_html, features="lxml")
         if self.verbose:
             with mutex:
                 print("dadosBasicosGet - parsing: ", self.processostr, file=sys.stderr)
@@ -363,7 +376,44 @@ class Processo:
         self._toDates()
         self.NUP = self.dados['NUP'] # numero unico processo SEI
         self.dadosbasicos_run = True
+
         return len(self.dados) == len(data_tags) # return if got w. asked for
+
+    def dadosPoligonalGet(self, redo=False, parse_only=False):
+        """dowload the dados scm poligonal html page or 
+        use the existing one stored at `self.scm_poligonpage_html` 
+        than parse all data_tags passed storing the resulting in `self.polydata`
+        return True 
+        """
+        if not parse_only:
+            if not hasattr(self, 'dados') or redo == True:
+                self._dadosPoligonalPageRetrieve()
+                self.polydata = {}
+            else:
+                return True
+        else: # dont need to retrieve anything
+            self.polydata = {}
+        soup = BeautifulSoup(self.scm_poligonpage_html, features="lxml")
+        if self.verbose:
+            with mutex:
+                print("dadosPoligonalGet - parsing: ", self.processostr, file=sys.stderr)
+        
+        htmltables = soup.findAll('table', { 'class' : 'BordaTabela' }) #table[class="BordaTabela"]
+        memorial = htmlscrap.tableDataText(htmltables[-1])
+        data = htmlscrap.tableDataText(htmltables[1])
+        data = data[0:5] # informações memo descritivo
+        self.polydata = {'area'     : float(data[0][1].replace(',', '.')), 
+                    'datum'     : data[0][3],
+                    'cmin'      : float(data[1][1]), 
+                    'cmax'      : float(data[1][3]),
+                    'amarr_lat' : data[2][1],
+                    'amarr_lon' : data[2][3],
+                    'amarr_cum' : data[3][3],
+                    'amarr_ang' : data[4][1],
+                    'amarr_rum' : data[4][3],
+                    'memo'      : memorial
+                    }
+        return True
 
     def _dadosBasicosGetMissing(self):
         """obtém dados faltantes (se houver) pelo processo associado (pai):
@@ -398,17 +448,35 @@ class Processo:
 
     @staticmethod
     def fromHtml(path='.', processostr=None, verbose=True):
+        """Try create a `Processo` from a html's of basicos and poligonal        
+        """
         curdir = os.getcwd()
         os.chdir(path)
         path_main_html = glob.glob('*basicos*.html')[0] # html file on folder
+        path_poligon_html = glob.glob('*poligonal*.html')[0] # html file on folder
+
+        main_html = None        
+        poligon_html = None
+
         if not processostr: # get process str name by file name
             processostr= fmtPname(glob.glob('*basicos*.html')[0])
         processo = Processo.Get(processostr, htmlscrap.wPageNtlm('', ''), None, verbose, run=False)
-        main_html = None
+
         with open(path_main_html, 'r') as f: # read html scm
             main_html = f.read()
-        processo.scm_dadosbasicosmain_html = main_html
-        processo.dadosBasicosGet(parse_only=True)
+        processo.scm_dbasicospage_html = main_html
+        processo.dadosBasicosGet(parse_only=True)   
+
+        if path_poligon_html:
+            with open(path_poligon_html, 'r') as f: # read html scm
+                poligon_html = f.read()
+            processo.scm_poligonpage_html = poligon_html
+            processo.dadosPoligonalGet(parse_only=True)
+        else:
+            print('Didnt find a poligonal page html saved', file=sys.stderr)
+
+        ProcessStorage[processostr] = processo   # store this new guy
+        
         os.chdir(curdir) # go back
         return processo
 
