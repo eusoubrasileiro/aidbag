@@ -76,7 +76,7 @@ if __name__ == "__main__":
     # better use firefox geckodriver on linux faster and easier to install.. like
     with cwebdriver(options=options) as driver: 
         while(True):
-            if datetime.datetime.now().time() > datetime.time(hour=20) or datetime.datetime.now().time() < datetime.time(hour=6):
+            if datetime.datetime.now().time() < datetime.time(hour=21) or datetime.datetime.now().time() > datetime.time(hour=5):
                 for route_name, origin_destination in destinations.items():
                     try: 
                         origin, destination = origin_destination
