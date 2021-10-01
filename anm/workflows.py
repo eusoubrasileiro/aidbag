@@ -131,7 +131,8 @@ def EscreveDespacho(sei, ProcessoNUP, texto):
     sei.driver.switch_to.window(textwindow) # go to text pop up window
     sei.driver.switch_to.default_content() # go to parent main document
     
-    wait(sei.driver, 10).until( # then go to frame of input text 
+    # this is the one that can take the longest time of ALL
+    wait(sei.driver, 20).until( # then go to frame of input text 
         expected_conditions.frame_to_be_available_and_switch_to_it(
         (By.CSS_SELECTOR,"iframe[aria-describedby='cke_244']")))
 
@@ -145,7 +146,15 @@ def EscreveDespacho(sei, ProcessoNUP, texto):
 
     sei.driver.switch_to.default_content() # go to parent main iframe document    
     save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'cke_202')))
-    save.click()
+    save.click() 
+    # to make sure it has finnished saving we have to wait until 
+    # 1. save button becames visible inactive and 
+    wait(sei.driver, 10).until(expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, 
+        "#cke_202[class='cke_button cke_button__save cke_button_disabled']")))    
+    # 2. any other button becomes clickable again (like button assinar)
+    wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.CSS_SELECTOR, 
+        "#cke_204[class='cke_button cke_button__assinatura cke_button_off']")))    
+    # than we can close
     sei.driver.close() # close text window
 
     wait(sei.driver, 10).until(expected_conditions.number_of_windows_to_be(1))
