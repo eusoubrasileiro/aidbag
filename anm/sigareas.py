@@ -10,89 +10,87 @@ from shapely.geometry import Polygon, Point
 import geopandas as gp
 import numpy as np
 
-# Ignorando sinal -S e -O latitude longitado considerando somente negativos
-# o sinal é inserido somente no arquivo antes do ';'
-reg = re.compile('\D*(\d{2})\D*(\d{2})\D*(\d{2})\D*(\d{3,})')
 
-# não lê sinal ASSUME SUL E OESTE, NEGATIVO em LAT e LON
-def memorialRead(latlonstr, decimal=False, verbose=False):
+def memorialRead(llstr, decimal=False, verbose=False):
     """
-    Read lat, lon string from memorial descritivo
-    convert to list of coordenates.
+    Parse lat, lon string (`llstr`) #Aba Poligonal Scm#
+    generating numpy array of coordinates. 
+    
+    input: str 
+        -19°44'18''174 -44°17'45''410 ...  
+        or 
+        -;019;44;18;173;-;044;17;41;702 ...
 
-    item on list is a line : lat , lon
-    [dg, mn, sc, msc, dg, mn, sc, msc]
+    ouput: numpy array - shape (-1, 2, 5) 
+        [[-1, 19, 44, 18, 174], [-1, 44, 17, 41, 703] ...]
+        [[lat0, lon0], [lat1, lon1]...]
+
+    lat or lon coordinate has 5 fields:
+        [ signal +/- 1, degree, minutes, seconds, miliseconds ]
     """
-    fields = reg.findall(latlonstr)
-    if len(fields)%2 != 0:
-        raise Exception('Algo errado faltando campo em coordenada (lat. ou lon.)')
-    else:
-        lines = []
-        for i in range(0, len(fields)-1, 2):
-            # line = lat , lon
-            # [ dg, mn, sc, dsc , dg, mn, sc, dsc ]
-            line = list(map(int,fields[i])) + list(map(int,fields[i+1]))
-            if decimal:
-                line = [-(line[0]+line[1]/60.+line[2]/3600.+(10**-3)*line[3]/3600.),
-                        -(line[4]+line[5]/60.+line[6]/3600.+(10**-3)*line[7]/3600.)]
-            if verbose:
-                print(line)
-            lines.append(line)
-    return lines
+    # south america region lat, lon regex -> sg, dg, mn, sc, msc 
+    # sample -19°44'18''174
+    rc = re.compile('(-)*(\d{1,2})\D*(\d{1,2})\D*(\d{1,2})\D*(\d{3,})')
+    if llstr.find('-;') != -1 or llstr.find('+;') != -1: # crazy SIGAREAS format
+        rc = re.compile('([-+]);(\d{1,3});(\d{1,2});(\d{1,2});(\d{3,})')    
+    csparsed = re.findall(rc, llstr)
+    if len(csparsed)%2 != 0: # must be even lat, lon pairs
+        raise Exception('Faltando campo em par coordenada: lat. ou lon.')        
+    coords = [ [int(sg+'1'), *map(int, [dg, mn, sc, msc])] 
+                for sg, dg, mn, sc, msc in csparsed ]
+    #lat, lon = coords[::2],  coords[1::2]  
+    llcs = np.array(coords).reshape(-1, 2, 5)          
+    if decimal:
+        npl = llcs.reshape(-1, 5)
+        # convert to decimal ignore signal than finally multiply by signal back
+        npl = np.sum(npl*[0, 1., 1/60., 1/3600., 0.001*1/3600.], axis=-1)*npl[:,0]
+        llcs = npl.reshape(-1, 2)
+    return llcs
 
 
-def fformatPoligonal(latlon, filename='CCOORDS.TXT',
-    endfirst=False, verbose=True):
+def formatMemorial(latlon, endfirst=False, 
+                    save=True, filename='MEMOCOORDS.TXT', verbose=True):
     """
-    Create formated file de poligonal para uso no SIGAREAS
+    Create formated file poligonal ('Memorial Descritivo') to use on SIGAREAS
         SIGAREAS->Administrador->Inserir Poligonal|Corrigir Poligonal
 
-    Input can be:
-        From memorial text copied from SCM or 
-        From list of lat, lon vertices
-
-    latlon: str/list
-        memorial descritivo string
-        or
-        [[lat,lon]...] list
+    latlon: numpy array from `memorialRead`
+        [[lat,lon]...] 
 
     endfirst: default True
         copy first point in the end
+    
+    file: default
+        save a file with this poligonal
+    
+    filename: str
+        name of filename to save this poligonal
     """
-    tomsecs = np.array([3600*10**3, 60*10**3, 10**3, 1])
-
     lines = []
-    if isinstance(latlon, str):
-        lines = memorialRead(latlon, verbose=True)
-    elif isinstance(latlon, np.ndarray):
-        fformatPoligonal(latlon.tolist(), filename,
-            endfirst, verbose)
-        return
-    elif isinstance(latlon, list):
-        latlons = latlon.copy()
-        for ll in latlons:
-            # gambiarra - sign to print without care for sign
-            # allways considering W, S lon, lat
-            line = [*decdeg2dmsd(-ll[0]), *decdeg2dmsd(-ll[1])]
-            lines.append(line)
+    if isinstance(latlon, np.ndarray):
+        lines = latlon.reshape(-1, 10).tolist()
     else:
         return
-
     if endfirst:  # copy first point in the end
         lines.append(lines[0])
+    if save:
+        f = open(filename.upper(), 'w') # must be CAPS otherwise can't upload
+    for line in lines:
+        s0, s1 = map(str, [line[0], line[5]]) # to not print -1,+1 only - or +
+        fline = "{0:};{3:03};{4:02};{5:02};{6:03};{1:};{8:03};{9:02};{10:02};{11:03}".format(
+        s0[0], s1[0], *line) # for the rest * use positional arguments ignoring the old signals args [2, 7]   
+        if save:
+            f.write(fline+'\n')
+        if verbose:
+            print(fline)
+    if save:
+        print("Output filename is: ", filename.upper())
+        f.close()
 
-    with open(filename.upper(), 'w') as f: # must be CAPS otherwise system doesnt load
-        for line in lines:
-            line = "-;{:03};{:02};{:02};{:03};-;{:03};{:02};{:02};{:03}\n".format(*line)
-            f.write(line)
-            if verbose:
-                print(line[:-1])
-    print("Output filename is: ", filename.upper())
-
-def force_verd(vertices, tolerancem=0.5, verbose=True, ignlast=True):
+def forceverdPoligonal(vertices, tolerancem=0.5, verbose=True, ignlast=True):
     """
-    Força rumos verdadeiros
-    force decimal coordinates (lat,lon) to previous (lat/lon)
+    #Força rumos verdadeiros#
+    Force decimal coordinates (lat,lon) to previous (lat/lon)
     otherwise sigareas wont accept this polygon
 
     *ignlast : default True
@@ -342,10 +340,10 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
                 vertex[0], vertex[1], lat, lon))
 
     if verdadeiro: # force verdadeiro
-        vertices_dg = force_verd(vertices_dg, tolerance).tolist()
+        vertices_dg = forceverdPoligonal(vertices_dg, tolerance).tolist()
 
     if cfile:
-        fformatPoligonal(vertices_dg, verbose=verbose, endfirst=True)
+        formatMemorial(vertices_dg, verbose=verbose, endfirst=True)
 
     # Create polygon shape file
     if saveshape:
@@ -809,8 +807,8 @@ def memorial_acostar(memorial, memorial_ref, reference_dist=50, mtolerance=0.5):
     smemo_restarted_points = simple_memo_direct(smemo_restarted, repeat_end=True)
     print(u"Ajustando para rumos verdadeiros, tolerância :", mtolerance, " metro")
     # make 'rumos verdadeiros' acceptable by sigareas
-    smemo_restarted_points_verd = force_verd(smemo_restarted_points, tolerancem=mtolerance)
+    smemo_restarted_points_verd = forceverdPoligonal(smemo_restarted_points, tolerancem=mtolerance)
     print("Area is ", PolygonArea(smemo_restarted_points_verd.tolist())[-1], " ha")
-    fformatPoligonal(smemo_restarted_points_verd)
+    formatMemorial(smemo_restarted_points_verd)
     print("Pronto para carregar no SIGAREAS -> corrigir poligonal")
     return smemo_restarted_points_verd
