@@ -16,6 +16,9 @@ import pandas as pd
 from datetime import datetime
 import re
 
+# to disable warnings when ssl is False
+from urllib3.exceptions import InsecureRequestWarning
+
 
 # A backoff factor to apply between attempts after the second try
 # (most errors are resolved immediately by a second try without a
@@ -30,8 +33,15 @@ import re
 # = 0.1 * 2 * 9 = 1.8 seconds
 
 class wPage: # html  webpage scraping with soup and requests
-    def __init__(self, nretries=10): # requests session
+    def __init__(self, nretries=10, ssl=True): # requests session
         self.session = requests.Session()
+        if not ssl: # disable ssl verification certificates
+            self.session.verify = False 
+            self.session.trust_env = False
+            os.environ['CURL_CA_BUNDLE']="" # or whaever other is interfering with requests
+            # not allowing it to verify=False
+            # Suppress only the single warning from urllib3 needed.
+            requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)        
         retries = Retry(total=nretries,
                         backoff_factor=0.1, # will sleep for [0.1s, 0.2s, 0.4s, ...] between retries
                         status_forcelist=[ 500, 502, 503, 504 ])
@@ -91,14 +101,14 @@ class wPage: # html  webpage scraping with soup and requests
         return resp
 
 class wPageNtlm(wPage): # overwrites original class for ntlm authentication
-    def __init__(self, user, passwd, nretries=10):
+    def __init__(self, user, passwd, nretries=10, ssl=True):
         """
         ntlm auth user and pass
         * nretries : 
             number of retries to try default 10 - 
             0.1 + 0.2
         """
-        super().__init__(nretries)
+        super().__init__(nretries, ssl)
         self.user = user
         self.passwd = passwd
         self.session.auth = HttpNtlmAuth(user, passwd)         

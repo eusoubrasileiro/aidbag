@@ -76,7 +76,10 @@ def IncluiDocumentoExternoSEI(sei, ProcessoNUP, doc=0, pdf_path=None):
 # 9 - 1995116	Chefe SECOR Requerimento de Lavra: com Retificação de Alvará
 # 10 - 1995741	Chefe SECOR Requerimento de Lavra: Recomendo encaminhar para preenchimento de check-list
 # 11 - 2052065	Chefe SECOR Requerimento de Lavra: Encaminhar avaliar necessidade de reavaliar reservas - redução de área
-mcodigos = ['1537881', '1947449', '1618347', '2725631', '1133380', '2725639', '1206693', '1243175', '1453503', '1995116', '1995741', '2052065']
+# 12 - 3044089  Chefe SECOR Requerimento: Recomendo Só Análise de Plano 100%
+
+mcodigos = ['1537881', '1947449', '1618347', '2725631', '1133380', '2725639', 
+'1206693', '1243175', '1453503', '1995116', '1995741', '2052065', '3044089']
 
 def IncluiDespacho(sei, ProcessoNUP, idxcodigo):
     """
@@ -101,6 +104,64 @@ def IncluiDespacho(sei, ProcessoNUP, idxcodigo):
     except:
         pass
     sei.driver.switch_to.default_content() # go back to main document
+
+def EscreveDespacho(sei, ProcessoNUP, texto):
+    """
+    Escreve Despacho no `ProcessoNUP` usando string `texto`
+    """
+    sei.Pesquisa(ProcessoNUP) # Entra neste processo
+    sei.ProcessoIncluiDoc(1) # Despacho
+    sei.driver.find_element_by_id('txtDestinatario').send_keys(u"Setor de Controle e Registro (SECOR-MG)")
+    destinatario_set = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'divInfraAjaxtxtDestinatario')))
+    destinatario_set.click() # wait a little pop-up show up to click or send ENTER
+    # sei.driver.find_element_by_id('txtDestinatario').send_keys(Keys.ENTER) #ENTER
+    sei.driver.find_element_by_id('lblPublico').click() # Publico
+    save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'btnSalvar')))
+    save.click()
+    try : # may take a long time to lood the pop up
+        # wait 10 seconds
+        alert = wait(sei.driver, 10).until(expected_conditions.alert_is_present()) # may sometimes show
+        alert.accept()
+    except:
+        pass
+
+    wait(sei.driver, 10).until(expected_conditions.number_of_windows_to_be(2))
+    # text window now open, but list of handles is not ordered
+    textwindow = [hnd for hnd in sei.driver.window_handles if hnd != sei.mainwindow ][0]
+    sei.driver.switch_to.window(textwindow) # go to text pop up window
+    sei.driver.switch_to.default_content() # go to parent main document
+    
+    # this is the one that can take the longest time of ALL
+    wait(sei.driver, 20).until( # then go to frame of input text 
+        expected_conditions.frame_to_be_available_and_switch_to_it(
+        (By.CSS_SELECTOR,"iframe[aria-describedby='cke_244']")))
+
+    inputtext = sei.driver.find_element_by_css_selector('body[contenteditable="true"]')
+
+    inputtext.clear()
+    for line in texto.split('\n'):  # split by lines
+        inputtext.send_keys(line) # type in each line - must use keys like bellow
+        inputtext.send_keys(Keys.ENTER) # create a new line
+        #inputtext.send_keys(Keys.BACKSPACE) # go back to its beginning
+
+    sei.driver.switch_to.default_content() # go to parent main iframe document    
+    save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'cke_202')))
+    save.click() 
+    # to make sure it has finnished saving we have to wait until 
+    # 1. save button becames visible inactive and 
+    wait(sei.driver, 10).until(expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, 
+        "#cke_202[class='cke_button cke_button__save cke_button_disabled']")))    
+    # 2. any other button becomes clickable again (like button assinar)
+    wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.CSS_SELECTOR, 
+        "#cke_204[class='cke_button cke_button__assinatura cke_button_off']")))    
+    # than we can close
+    sei.driver.close() # close text window
+
+    wait(sei.driver, 10).until(expected_conditions.number_of_windows_to_be(1))
+    sei.driver.switch_to.window(sei.mainwindow) # go back to main window
+    sei.driver.switch_to.default_content() # go to parent main document
+    # to not stale the window have to go to it again to the following task
+    sei.Pesquisa(ProcessoNUP) 
 
 def IncluiParecer(sei, ProcessoNUP, idxcodigo=0):
     """
@@ -309,7 +370,8 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=N
                 IncluiDespacho(sei, NUP, 4) # - 4 - Recomenda opção
                 IncluiDespacho(sei, NUP, 5) # - 5 - Recomenda interferencia total
             else:
-                IncluiDespacho(sei, NUP, 3) # - Recomenda análise de plano
+                # IncluiDespacho(sei, NUP, 3) # - Recomenda análise de plano c/ notificação titular
+                IncluiDespacho(sei, NUP, 12) # - Recomenda Só análise de plano s/ notificação titular
     #     pass
     sei.ProcessoAtribuir() # default chefe
     os.chdir(cur_path) # restore original path , to not lock the folder-path
