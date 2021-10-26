@@ -46,8 +46,8 @@ class CancelaUltimoEstudoError(Exception):
     """could not cancel ultimo estudo sigareas"""
     pass
 
-
-class Estudo:
+class Interferencia:
+    """Estudo de Retirada de Interferência SIGAREAS"""
     def __init__(self, wpage, processostr, dados=3, verbose=True):
         """        
         wpage : wPage html webpage scraping class com login e passwd preenchidos
@@ -63,40 +63,33 @@ class Estudo:
         if not os.path.exists(self.processo_path): # cria a pasta  se nao existir
             os.mkdir(self.processo_path)
 
-
     @staticmethod
-    def make(wpage, processostr, option=0, verbose=False):
+    def make(wpage, processostr, verbose=False):
         """
         make folders and spreadsheets for specified process
+        to aid on priority analysis
 
         * processostr : str
             numero processo format xxx.xxx/ano
         * wpage : wPage html 
             webpage scraping class com login e passwd preenchidos
-        * option: int 
-            - 0 : Analise de Requerimento de Pesquisa 
-            - 1 : Analise de Formulario 1 - TODO?
-            - 2 : Analise de Opcao de Area - TODO?
 
         * returns: tupple
-            (sucess status, instance `Estudo`)
+            (sucess status, instance `Interferencia`)
         """
-        if option==0:
-            estudo = Estudo(wpage, processostr, dados=3, verbose=verbose)
-            estudo.processo.salvaDadosBasicosHtml(estudo.processo_path)
-            estudo.processo.salvaDadosPoligonalHtml(estudo.processo_path)            
-            suceed = True
-            if estudo.salvaRetiradaInterferenciaHtml(estudo.processo_path):
-                # only if retirada interferencia html is saved we can create spreadsheets
-                # sometimes we just don't need it                 
-                if estudo.getTabelaInterferencia() is not None:
-                    estudo.getTabelaInterferenciaTodos()
-                    estudo.excelInterferencia()
-                    estudo.excelInterferenciaAssociados()                
-                suceed = estudo.cancelaUltimoEstudo()
-            return suceed, estudo
-        else:
-            raise NotImplementedError()
+        estudo = Interferencia(wpage, processostr, dados=3, verbose=verbose)
+        estudo.processo.salvaDadosBasicosHtml(estudo.processo_path)
+        estudo.processo.salvaDadosPoligonalHtml(estudo.processo_path)            
+        suceed = True
+        if estudo.salvaRetiradaInterferenciaHtml(estudo.processo_path):
+            # only if retirada interferencia html is saved we can create spreadsheets
+            # sometimes we just don't need it                 
+            if estudo.getTabelaInterferencia() is not None:
+                estudo.getTabelaInterferenciaTodos()
+                estudo.excelInterferencia()
+                estudo.excelInterferenciaAssociados()                
+            suceed = estudo.cancelaUltimoEstudo()
+        return suceed, estudo
 
     # THIS stays here
     def salvaRetiradaInterferenciaHtml(self, html_path):
@@ -113,26 +106,6 @@ class Estudo:
         if not ( self.wpage.response.url == r'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'):
             return False             # Falhou salvar Retirada de Interferencia # provavelmente estudo aberto
         fname = 'sigareas_rinterferencia_'+self.processo.number+'_'+self.processo.year
-        self.wpage.save(os.path.join(html_path, fname))
-        return True
-
-    def salvaEstudoOpcaoDeAreaHtml(self, html_path):
-        self.wpage.get('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=8')
-        formcontrols = {
-            'ctl00$cphConteudo$txtNumProc': self.processo.number,
-            'ctl00$cphConteudo$txtAnoProc': self.processo.year,
-            'ctl00$cphConteudo$btnEnviarUmProcesso': 'Processar'
-        }
-        formdata = formdataPostAspNet(self.wpage.response, formcontrols)
-        # must be timout 50
-        self.wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=8',
-                data=formdata, timeout=__secor_timeout)
-        if not ( self.wpage.response.url == r'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=8'):
-            #print("Falhou salvar Retirada de Interferencia",  file=sys.stderr)
-            # provavelmente estudo aberto
-            return False
-        #wpage.response.url # response url deve ser 'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'
-        fname = 'sigareas_opcao_'+self.processo.number+'_'+self.processo.year
         self.wpage.save(os.path.join(html_path, fname))
         return True
 
@@ -447,3 +420,23 @@ class Estudo:
             return True
 
 
+# something else not sure will be usefull someday
+# def salvaEstudoOpcaoDeAreaHtml(self, html_path):
+#     self.wpage.get('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=8')
+#     formcontrols = {
+#         'ctl00$cphConteudo$txtNumProc': self.processo.number,
+#         'ctl00$cphConteudo$txtAnoProc': self.processo.year,
+#         'ctl00$cphConteudo$btnEnviarUmProcesso': 'Processar'
+#     }
+#     formdata = formdataPostAspNet(self.wpage.response, formcontrols)
+#     # must be timout 50
+#     self.wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=8',
+#             data=formdata, timeout=__secor_timeout)
+#     if not ( self.wpage.response.url == r'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=8'):
+#         #print("Falhou salvar Retirada de Interferencia",  file=sys.stderr)
+#         # provavelmente estudo aberto
+#         return False
+#     #wpage.response.url # response url deve ser 'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'
+#     fname = 'sigareas_opcao_'+self.processo.number+'_'+self.processo.year
+#     self.wpage.save(os.path.join(html_path, fname))
+#     return True

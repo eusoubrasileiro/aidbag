@@ -1,14 +1,10 @@
-### Inclui todos os pdfs nas pastas specificadas no SEI
-# Seguindo nome se é licença ou minuta
 import tqdm
-import importlib
 import glob
 import os
-import re
 import sys
 from datetime import datetime
 from bs4 import BeautifulSoup
-from anm import secor
+from anm import estudos
 from anm import scm
 from web import htmlscrap
 from .SEI import *
@@ -214,9 +210,9 @@ def EstudoBatchRun(wpage, processos, option=0, verbose=False):
     estudo = None
     for processo in tqdm.tqdm(processos):
         try:            
-            okay, estudo = secor.Estudo.make(wpage, processo, option, verbose=verbose)                 
+            okay, estudo = estudos.Interferencia.make(wpage, processo, verbose=verbose)                 
             if not okay:
-                raise secor.CancelaUltimoEstudoError("Failed Cancel for Process {}".format(estudo.processo.processostr))                
+                raise estudos.CancelaUltimoEstudoError("Failed Cancel for Process {}".format(estudo.processo.processostr))                
         except Exception as e:  # too generic is masking errors that I care for??             
             print("Exception: ", e, " - Process: ", processo, file=sys.stderr)            
             failed_NUPS.append(estudo.processo.NUP)            
@@ -247,7 +243,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=N
         name of process folder where documentos are placed
         eg. 832125-2005 (MUST use name xxxxxx-xxx format)
     * path : string
-        parent folder inside secor.__secor_path__ to search
+        parent folder inside estudos.__secor_path__ to search
         for `process_folder`
         __secor_path__ defaults to '~\Documents\Controle_Areas'
         e.g
@@ -264,7 +260,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=N
         cria documentos sem anexos
     """
     cur_path = os.getcwd() # for restoring after
-    main_path = os.path.join(secor.__secor_path__, path)
+    main_path = os.path.join(estudos.__secor_path__, path)
     if verbose and __debugging__:
         print("Main path: ", main_path)
     process_path = os.path.join(main_path, process_folder)
@@ -306,7 +302,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=N
         if wpage is None:
             raise Exception("Não há página html, please set wpage parameter")
         processostr = scm.fmtPname(process_folder) # from folder name
-        secor.dadosBasicosRetrieve(processostr, wpage)
+        scm.dadosBasicosPageRetrieve(processostr, wpage)
         html = wpage.response.text
     # get everything needed
     soup = BeautifulSoup(html, features="lxml")
@@ -400,7 +396,7 @@ def IncluiDocumentosSEIFoldersFirstN(sei, nfirst=1, path='Processos', wpage=None
     - Despacho
 
     """
-    os.chdir(os.path.join(secor.__secor_path__, path))
+    os.chdir(os.path.join(estudos.__secor_path__, path))
     files_folders = glob.glob('*')
     # very dirty approach
     # get only process folders with '-' on its name like 830324-1997
