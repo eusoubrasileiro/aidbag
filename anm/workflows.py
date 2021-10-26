@@ -364,6 +364,8 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=N
     #     pass
     sei.ProcessoAtribuir() # default chefe
     os.chdir(cur_path) # restore original path , to not lock the folder-path
+    # should also close the openned text window - going to previous state
+    sei.closeOtherWindows()
     if verbose:
         print(NUP)
 

@@ -36,11 +36,11 @@ class SEI:
         orgao.send_keys("ANM")
         driver.find_element_by_name("sbmLogin").click()
         self.driver = driver
-        # to avoid problems start saving main window
-        self.mainwindow = self.driver.window_handles[0]
+        # to avoid problems start saving main window handle
+        self.mainwindow = self.driver.current_window_handle
         # close disturbing and problematic popups
         wait(self.driver, 10).until(expected_conditions.number_of_windows_to_be(2))
-        self.closePopups()
+        self.closeOtherWindows()
 
     # context manager support so bellow works.
     # with SEI(user, pass) as sei:
@@ -64,13 +64,14 @@ class SEI:
         processo.send_keys(Keys.ENTER)
         self.ProcessoNUP = ProcessoNUP
 
-    def closePopups(self):
-        """close popups"""        
-        # close all other windows STUPID POP-UPS        
-        for windowh in self.driver.window_handles[1:]:
-            self.driver.switch_to.window(windowh)
-            self.driver.switch_to.default_content() 
-            self.driver.close()    
+    def closeOtherWindows(self):
+        """close all other windows different from initial main window (e.g. popups)"""
+        for windowh in self.driver.window_handles:
+            # window list of handles is not ordered            
+            if windowh != self.mainwindow:
+                self.driver.switch_to.window(windowh)
+                self.driver.switch_to.default_content() 
+                self.driver.close()    
         self.driver.switch_to.window(self.mainwindow)
         self.driver.switch_to.default_content()        
 
