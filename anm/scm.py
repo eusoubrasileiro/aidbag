@@ -6,53 +6,54 @@ sys.path.append("..") # Adds higher directory to python modules path.
 from web import htmlscrap
 from datetime import datetime
 import re
-
 import concurrent.futures
-import urllib.request
-
 import threading
 from threading import Lock
 
 mutex = Lock()
-
 scm_timeout=(2*60)
 
 # URL LIST
 #'https://sistemas.anm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx' # might change again
 scm_dados_processo_main='https://sistemas.anm.gov.br/scm/intra/site/admin/dadosprocesso.aspx'
 
-# "scm consulta dados (post) nao aceita formato diferente de 'xxx.xxx/xxxx'"
-regxdp = re.compile("\d+")
+# to write a test!
+# re.findall('(\d{1,3})\D*(\d{3})\D([1-2]\d{3})', "2.537/2016,832537-2016,48403.832.537/2016-09,832.537/2016-09") #'\D[1-2][09]\d{2}'
+# groups 
+regex_processg = re.compile('(\d{1,3})\D*(\d{3})\D([1-2]\d{3})') # use regex_processg return tupple groups
+# without groups
+regex_process = re.compile('\d{1,3}\D*\d{3}\D[1-2]\d{3}') # use regex_process.search(...) if None didn't find 
+# explanation: [1-2]\d{3} years from 1900-2999
+
+
+# scm consulta dados (post) nao aceita formato diferente de 'xxx.xxx/xxxx'
 def fmtPname(pross_str):
     """format process name to xxx.xxx/yyyy
     - input process might be also like this 2735/1935
     prepend zeros in this case to form 002.735/1935"""
-    pross_str = ''.join(re.findall(regxdp, pross_str))
-    ncharsmissing = 10-len(pross_str)
+    pross_str = ''.join(regex_processg.findall(pross_str)[0]) # use the first ocurrence    
+    ncharsmissing = 10-len(pross_str) # size must be 10 chars
     pross_str = '0'*ncharsmissing+pross_str # prepend with zeros
     return pross_str[:3]+'.'+pross_str[3:6]+r'/'+pross_str[6:]
 
 def numberyearPname(pross_str):
     "return process (number, year)"
     pross_str = fmtPname(pross_str) # to make sure
-    pross_str = ''.join(re.findall(regxdp, pross_str))
+    pross_str = ''.join(re.findall('\d', pross_str))
     return pross_str[:6], pross_str[6:]
 
-
-find_process_regex = '\d{3,6}\D[1-2][09]\d{2}' # remove '.' first
-# re.findall(find_process_regex, processes.replace('.', ''))
-
-def findPnames(text):
+def findfmtPnames(text):
     """
-    Find all process names on `text`
+    Find all process names on `text` return list with strings format xxx.xxx/yyyy like `fmtPname`
     """
-    return re.findall(find_process_regex, text.replace('.', ''))
+    ps = regex_process.findall(text)    
+    return [ p[0]+'.'+p[1]+'/'+p[2] for p in ps ]
 
-def findPname(pross_str):
-    # pross_str = '48403.832.537/2016-09'
-    # first remove dots to make regex bellow simppler
-    res = re.search(find_process_regex, pross_str.replace('.',''))[0] # [1-2][09]\d{2} year from 1900-2099
-    return res
+def findPnames(pross_str):    
+    """
+    Find all process names on `text` return list with strings as found
+    """
+    return regex_process.findall(pross_str)
 
 def dadosBasicosPageRetrieve(processostr, wpage, process=None):
     """   Get & Post na página dados do Processo do Cadastro  Mineiro (SCM)
@@ -194,7 +195,7 @@ class Processo:
 
     def salvaDadosBasicosHtml(self, html_path):
         self._dadosBasicosPageRetrieve() # self.wpage.response will be filled
-        dadosbasicosfname = 'scm_basicos_'+self.number+self.year
+        dadosbasicosfname = 'scm_basicos_'+self.number+'_'+self.year
         # sobrescreve
         self.wpage.save(os.path.join(html_path, dadosbasicosfname))
 
@@ -205,7 +206,7 @@ class Processo:
     def salvaDadosPoligonalHtml(self, html_path):
         self._dadosPoligonalPageRetrieve() # self.wpage.response will be filled
         # sobrescreve
-        dadospolyfname = 'scm_poligonal_'+self.number+self.year
+        dadospolyfname = 'scm_poligonal_'+self.number+'_'+self.year
         self.wpage.save(os.path.join(html_path, dadospolyfname))
 
     def fathernSons(self, ass_ignore=''):
