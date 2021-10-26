@@ -202,43 +202,36 @@ def IncluiTermoAberturaPE(sei, ProcessoNUP):
         pass
     sei.driver.switch_to.default_content() # go back to main document
 
-def EstudoBatchRun(wpage, processos, option=3, verbose=False):
+def EstudoBatchRun(wpage, processos, option=0, verbose=False):
     """
     - Analise de Requerimento de Pesquisa - opcao 0
+    TODO implement:
     - Analise de Formulario 1 - opcao 1
-    - Analise de Opcao de Area - opcao 2
-    - Batch Requerimento de Pesquisa - opcao 3
+    - Analise de Opcao de Area - opcao 2    
     """
-    suceed_NUPs = [] # suceed 
+    succeed_NUPs = [] # suceed 
     failed_NUPS = [] # failed
     estudo = None
     for processo in tqdm.tqdm(processos):
-        try:
-            estudo = secor.Estudo(processo, wpage, 0, verbose=verbose)
-            estudo.salvaDadosBasicosSCM()
-            estudo.salvaDadosPoligonalSCM()
-            if estudo.salvaRetiradaInterferencia():
-                if not estudo.cancelaUltimoEstudo():
-                    raise Exception("Couldn't cancel ultimo estudo")
-                if estudo.getTabelaInterferencia() is not None:
-                    estudo.getTabelaInterferenciaTodos()
-                    estudo.excelInterferencia()
-                    estudo.excelInterferenciaAssociados()
-            else:
-                raise Exception("Couldn't download retirada de interferencia")
-            suceed_NUPs.append(estudo.processo.NUP)
-        except Exception as e:
-            print("Exception: ", e, " - Process: ", processo, file=sys.stderr)
+        try:            
+            okay, estudo = secor.Estudo.make(wpage, processo, option, verbose=verbose)                 
+            if not okay:
+                raise secor.CancelaUltimoEstudoError("Failed Cancel for Process {}".format(estudo.processo.processostr))                
+        except Exception as e:  # too generic is masking errors that I care for??             
+            print("Exception: ", e, " - Process: ", processo, file=sys.stderr)            
             failed_NUPS.append(estudo.processo.NUP)            
+        else:
+            succeed_NUPs.append(estudo.processo.NUP)  
+        
     # print all NUPS
     if verbose:
         print('SEI NUPs sucess:')
-        for nup in suceed_NUPs:
+        for nup in succeed_NUPs:
             print(nup)
         print('SEI NUPs failed:')
         for nup in failed_NUPS:
             print(nup)
-    return suceed_NUPs, failed_NUPS
+    return succeed_NUPs, failed_NUPS
 
 
 
@@ -414,7 +407,7 @@ def IncluiDocumentosSEIFoldersFirstN(sei, nfirst=1, path='Processos', wpage=None
     # TODO: use Regex
     process_folders = []
     for cur_path in files_folders: # remove what is NOT a process folder
-        if cur_path.find('-') != -1 and os.path.isdir(cur_path):
+        if scm.regex_process.search(cur_path) and os.path.isdir(cur_path):
             process_folders.append(cur_path)
     process_folders = process_folders[:nfirst]
     IncluiDocumentosSEIFolders(sei, process_folders, path, wpage, verbose)

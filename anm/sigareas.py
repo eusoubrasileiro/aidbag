@@ -1,29 +1,16 @@
-import time
-from requests_ntlm import HttpNtlmAuth
-import re
-
 import os, sys
 from pathlib import Path
-import requests
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin
-
-# threading
-import copy
-from multiprocessing.dummy import Pool as ThreadPool
-import itertools
 
 import numpy as np
 import pandas as pd
 from datetime import datetime
-#from .scm import *
 
 from .scm import *
 sys.path.append("..") # Adds higher directory to python modules path.
 from web.htmlscrap import *
 from .SEI import *
 
-from enum import Enum
 
 # def copy_format(book, fmt):
 #     """xlsxwriter cell-format 'clone' function"""
@@ -55,47 +42,64 @@ def getEventosSimples(wpage, processostr):
     df.Processo = df.Processo.apply(lambda x: fmtPname(x)) # standard names
     return df
 
+class CancelaUltimoEstudoError(Exception):
+    """could not cancel ultimo estudo sigareas"""
+    pass
 
 
 class Estudo:
-    """
-    - Analise de Requerimento de Pesquisa - opcao 0
-    - Analise de Formulario 1 - opcao 1
-    - Analise de Opcao de Area - opcao 2
-    - Batch Requerimento de Pesquisa - opcao 3
-    """
-    def __init__(self, processostr, wpage, option=3, dados=3, verbose=True):
-        """
-        processostr : numero processo format xxx.xxx/ano
+    def __init__(self, wpage, processostr, dados=3, verbose=True):
+        """        
         wpage : wPage html webpage scraping class com login e passwd preenchidos
+        processostr : numero processo format xxx.xxx/ano
         """
         self.processo = Processo.Get(processostr, wpage, dados, verbose)
         self.wpage = wpage
         self.verbose = verbose
         # pasta padrao salvar processos todos, mais simples
         self.secorpath = os.path.join(__secor_path__, 'Processos')
-        # if option == 0:
-        #     self.secorpath = os.path.join(__secor_path__, 'Requerimento')
-        # elif option ==  1:
-        #     self.secorpath = os.path.join(__secor_path__, 'Formulario1')
-        # elif option == 2:
-        #     self.secorpath = os.path.join(__secor_path__, 'Opcao')
-        # elif option == 3:
-        #     self.secorpath = os.path.join(__secor_path__, r'Requerimento\Batch')
-        # pasta deste processo
         self.processo_path = os.path.join(self.secorpath,
                     self.processo.number+'-'+self.processo.year )
         if not os.path.exists(self.processo_path): # cria a pasta  se nao existir
             os.mkdir(self.processo_path)
 
-    def salvaDadosBasicosSCM(self):
-        self.processo.salvaDadosBasicosHtml(self.processo_path)
 
-    def salvaDadosPoligonalSCM(self):
-        self.processo.salvaDadosPoligonalHtml(self.processo_path)
+    @staticmethod
+    def make(wpage, processostr, option=0, verbose=False):
+        """
+        make folders and spreadsheets for specified process
+
+        * processostr : str
+            numero processo format xxx.xxx/ano
+        * wpage : wPage html 
+            webpage scraping class com login e passwd preenchidos
+        * option: int 
+            - 0 : Analise de Requerimento de Pesquisa 
+            - 1 : Analise de Formulario 1 - TODO?
+            - 2 : Analise de Opcao de Area - TODO?
+
+        * returns: tupple
+            (sucess status, instance `Estudo`)
+        """
+        if option==0:
+            estudo = Estudo(wpage, processostr, dados=3, verbose=verbose)
+            estudo.processo.salvaDadosBasicosHtml(estudo.processo_path)
+            estudo.processo.salvaDadosPoligonalHtml(estudo.processo_path)            
+            suceed = True
+            if estudo.salvaRetiradaInterferenciaHtml(estudo.processo_path):
+                # only if retirada interferencia html is saved we can create spreadsheets
+                # sometimes we just don't need it                 
+                if estudo.getTabelaInterferencia() is not None:
+                    estudo.getTabelaInterferenciaTodos()
+                    estudo.excelInterferencia()
+                    estudo.excelInterferenciaAssociados()                
+                suceed = estudo.cancelaUltimoEstudo()
+            return suceed, estudo
+        else:
+            raise NotImplementedError()
 
     # THIS stays here
-    def salvaRetiradaInterferencia(self):
+    def salvaRetiradaInterferenciaHtml(self, html_path):
         self.wpage.get('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1')
         formcontrols = {
             'ctl00$cphConteudo$txtNumProc': self.processo.number,
@@ -108,11 +112,11 @@ class Estudo:
                 data=formdata, timeout=__secor_timeout__)
         if not ( self.wpage.response.url == r'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'):
             return False             # Falhou salvar Retirada de Interferencia # provavelmente estudo aberto
-        fname = 'sigareas_rinterferencia_'+self.processo.number+self.processo.year
-        self.wpage.save(os.path.join(self.processo_path, fname))
+        fname = 'sigareas_rinterferencia_'+self.processo.number+'_'+self.processo.year
+        self.wpage.save(os.path.join(html_path, fname))
         return True
 
-    def salvaEstudoOpcaoDeArea(self):
+    def salvaEstudoOpcaoDeAreaHtml(self, html_path):
         self.wpage.get('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=8')
         formcontrols = {
             'ctl00$cphConteudo$txtNumProc': self.processo.number,
@@ -128,14 +132,14 @@ class Estudo:
             # provavelmente estudo aberto
             return False
         #wpage.response.url # response url deve ser 'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'
-        fname = 'sigareas_opcao_'+self.processo.number+self.processo.year
-        self.wpage.save(os.path.join(self.processo_path, fname))
+        fname = 'sigareas_opcao_'+self.processo.number+'_'+self.processo.year
+        self.wpage.save(os.path.join(html_path, fname))
         return True
 
     def cancelaUltimoEstudo(self):
         """Danger Zone - cancela ultimo estudo em aberto sem perguntar mais nada:
         - estudo de retirada de Interferencia
-        - estudo de opcao de area
+        - estudo de opcao de area        
         """
         self.wpage.get('http://sigareas.dnpm.gov.br/Paginas/Usuario/CancelarEstudo.aspx')
         #self.wpage.save('cancelar_estudo')
@@ -158,12 +162,12 @@ class Estudo:
         formdata = formdataPostAspNet(self.wpage.response, formcontrols)
         self.wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/CancelarEstudo.aspx', data=formdata)
         if self.wpage.response.text.find(r'Estudo excluído com sucesso.') == -1:
-            return False
+            return False 
         return True
 
     def getTabelaInterferencia(self):
         self.tabela_interf = None
-        interf_html = 'sigareas_rinterferencia_'+self.processo.number+self.processo.year+'.html'
+        interf_html = 'sigareas_rinterferencia_'+self.processo.number+'_'+self.processo.year+'.html'
         interf_html = os.path.join(self.processo_path, interf_html)
         with open(interf_html, 'r') as f:
             htmltxt = f.read()
@@ -327,7 +331,7 @@ class Estudo:
         dataformat = (lambda x: x.strftime("%d/%m/%Y %H:%M:%S"))
         interf_eventos.Data = interf_eventos.Data.apply(dataformat)
         interf_eventos.DataPrior = interf_eventos.DataPrior.apply(dataformat)
-        excelname = ('eventos_prioridade_' + self.processo.number
+        excelname = ('eventos_prioridade_' + self.processo.number + '_' 
                             + self.processo.year+'.xlsx')
         excelname = os.path.join(self.processo_path, excelname)
         # Get max string size each collum for setting excel width column
@@ -406,8 +410,8 @@ class Estudo:
         """Processos interferentes com processos associados"""
         if not hasattr(self, 'tabela_assoc'):
             return
-        excelname = ('eventos_prioridade_assoc_' + self.processo.number
-                            + self.processo.year+'.xlsx')
+        excelname = ('eventos_prioridade_assoc_' + self.processo.number + '_'
+                          + self.processo.year+'.xlsx')
         excelname = os.path.join(self.processo_path, excelname)
         self.tabela_assoc.to_excel(excelname, index=False)
 
@@ -442,23 +446,4 @@ class Estudo:
         else:
             return True
 
-    def incluiDocumentoExternoSEI(self, doc=0, pdf_path=None):
-        """
-        Loga no SEI (se já não estiver logado) e
-        inclui pdf como documento externo
 
-        doc :
-            0 - Estudo - 'de Retirada de Interferência'
-            1 - Minuta - 'Pré de Alvará'
-            2 - Minuta - 'de Licenciamento'
-            3 - Estudo - 'de Opção'
-
-        pdf_path :
-            if None cria sem anexo
-        """
-        if not hasattr(self, 'sei'):
-            user = self.wpage.user
-            passwd = self.wpage.passwd
-            self.sei = SEI.SEI(user, passwd)
-
-        IncluiDocumentoExternoSEI(self.sei, self.Processo.NUP, doc, pdf_path)
