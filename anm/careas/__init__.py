@@ -1,5 +1,16 @@
 from . import poligonal
 from . import estudos 
+from . import SEI
+from . import scm
+
+from .scm import (
+    Processo, 
+    ProcessStorage, 
+    findfmtPnames,
+    findPnames,
+    fmtPname,
+    numberyearPname,    
+)
 
 from .constants import (
     __secor_path__,
@@ -10,7 +21,6 @@ from .constants import (
     scm_timeout, 
 )
 
-from .SEI import SEI
 from .util import ContaPrazo
 
 from .workflows import (
@@ -18,4 +28,11 @@ from .workflows import (
     EscreveDespacho,
     EstudoBatchRun,
     IncluiDocumentosSEIFoldersFirstN
+)
+
+# needed for connection so better be here
+# widely visible from careas
+from ...web import (
+    wPageNtlm,
+    wPage
 )

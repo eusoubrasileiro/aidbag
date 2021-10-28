@@ -12,8 +12,10 @@ from .SEI import *
 from .constants import (
     mcodigos,
     docs_externos_sei_tipo,
-    docs_externos_sei_txt
+    docs_externos_sei_txt,
+    __secor_path__
     )
+
 
 __debugging__ = False
 
@@ -240,7 +242,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=N
         cria documentos sem anexos
     """
     cur_path = os.getcwd() # for restoring after
-    main_path = os.path.join(estudos.__secor_path__, path)
+    main_path = os.path.join(__secor_path__, path)
     if verbose and __debugging__:
         print("Main path: ", main_path)
     process_path = os.path.join(main_path, process_folder)
@@ -378,7 +380,7 @@ def IncluiDocumentosSEIFoldersFirstN(sei, nfirst=1, path='Processos', wpage=None
     - Despacho
 
     """
-    os.chdir(os.path.join(estudos.__secor_path__, path))
+    os.chdir(os.path.join(__secor_path__, path))
     files_folders = glob.glob('*')
     # very dirty approach
     # get only process folders with '-' on its name like 830324-1997
