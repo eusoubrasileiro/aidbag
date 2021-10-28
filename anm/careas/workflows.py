@@ -4,21 +4,18 @@ import os
 import sys
 from datetime import datetime
 from bs4 import BeautifulSoup
-from anm import estudos
-from anm import scm
-from web import htmlscrap
+from . import estudos
+from . import scm
+from ...web import htmlscrap
 from .SEI import *
 
-docs_externos_sei_tipo = [ 'Estudo',
-        'Minuta', 'Minuta', 'Estudo', 'Minuta', 'Minuta', u'Formulário']
-
-# needs u"" unicode string because of latim characters
-docs_externos_sei_txt = [ u"de Retirada de Interferência", # Nome na Arvore
-        u"Pré de Alvará", 'de Licenciamento', u"de Opção", 'de Portaria de Lavra',
-        u"de Permissão de Lavra Garimpeira", u"1 Análise de Requerimento de Lavra SECOR-MG"]
+from .constants import (
+    mcodigos,
+    docs_externos_sei_tipo,
+    docs_externos_sei_txt
+    )
 
 __debugging__ = False
-
 
 def IncluiDocumentoExternoSEI(sei, ProcessoNUP, doc=0, pdf_path=None):
     """
@@ -59,23 +56,6 @@ def IncluiDocumentoExternoSEI(sei, ProcessoNUP, doc=0, pdf_path=None):
         pass
     sei.driver.switch_to.default_content() # go back to main document
 
-# Deve ser atualizado o código se o modelo favarito for modificado
-# 0 -  1537881	Retificação Resumida Alvará e Aprovo do RFP
-# 1 - 1947449	Parecer Técnico - Correção áreas e deslocamentos
-# 2 - 1618347	Formulário 1 - Lavra - Pré-Prenchido
-# 3 - 2725631	Chefe SECOR Requerimento: Recomendo Analise de Plano
-# 4 - 1133380	Chefe SECOR Requerimento: Recomenda publicar exigência opção
-# 5 - 2725639	Chefe SECOR Requerimento: Recomenda publicar indeferimento por Interferência Total
-# 6 - 1206693	Chefe SECOR Requerimento: Recomendo Analise de Cessão Parcial
-# 7 - 1243175	Chefe SECOR Requerimento: Recomendo Analise de Plano (híbrido)
-# 8 - 1453503	Chefe SECOR Requerimento de Lavra: Recomendo aguardar cumprimento de exigências
-# 9 - 1995116	Chefe SECOR Requerimento de Lavra: com Retificação de Alvará
-# 10 - 1995741	Chefe SECOR Requerimento de Lavra: Recomendo encaminhar para preenchimento de check-list
-# 11 - 2052065	Chefe SECOR Requerimento de Lavra: Encaminhar avaliar necessidade de reavaliar reservas - redução de área
-# 12 - 3044089  Chefe SECOR Requerimento: Recomendo Só Análise de Plano 100%
-
-mcodigos = ['1537881', '1947449', '1618347', '2725631', '1133380', '2725639', 
-'1206693', '1243175', '1453503', '1995116', '1995741', '2052065', '3044089']
 
 def IncluiDespacho(sei, ProcessoNUP, idxcodigo):
     """

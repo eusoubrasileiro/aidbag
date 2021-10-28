@@ -3,6 +3,11 @@ from geographiclib import geodesic as gd #  PyP package Geographiclib
 from . import geolib as geocpp # Geographiclib wrapped in pybind11 by me py38
 import numpy as np
 from geographiclib import polygonarea as pa # PyP package Geographiclib
+import geopandas as gp
+from shapely.geometry import Polygon, Point
+import pyproj
+from pyproj import CRS
+from pyproj import Transformer
 
 
 def memorialRead(llstr, decimal=False, verbose=False):
@@ -174,3 +179,19 @@ def PolygonArea(cords):
     area = area*10**(-4) # to hectares
     return n, perim, area
 
+def savePolygonWGS84(vertices, shpname):
+    vertices = np.array(vertices)
+    temp = np.copy(vertices[:, 0])
+    vertices[:, 0] = vertices[:, 1]
+    vertices[:, 1] = temp
+    gdfvs = gp.GeoSeries(Polygon(vertices))
+    gdfvs.set_crs(pyproj.CRS("""+proj=longlat +ellps=GRS80 +towgs84=0,0,0 +no_defs""")) # SIRGAS 2000
+    gdfvs.to_file(shpname+'.shp')
+
+
+def readPolygonWGS84(shpname):
+    gdf = gp.read_file(shpname)
+    lon = gdf.geometry.exterior.xs(0).coords.xy[0]
+    lat = gdf.geometry.exterior.xs(0).coords.xy[1]
+    points = np.array(list(zip(lat, lon)))
+    return points

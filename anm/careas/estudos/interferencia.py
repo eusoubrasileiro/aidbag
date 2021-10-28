@@ -1,30 +1,14 @@
-import os, sys
-from pathlib import Path
+import os
 from bs4 import BeautifulSoup
-
 import numpy as np
 import pandas as pd
 from datetime import datetime
 
-from .scm import *
-sys.path.append("..") # Adds higher directory to python modules path.
-from web.htmlscrap import *
-from .SEI import *
+from ..constants import __secor_path__, __secor_timeout__, __eventos_scm__
+from ..scm import *
+from ....web import htmlscrap 
+from ..SEI import *
 
-
-# def copy_format(book, fmt):
-#     """xlsxwriter cell-format 'clone' function"""
-#     properties = [f[4:] for f in dir(fmt) if f[0:4] == 'set_']
-#     dft_fmt = book.add_format()
-#     return book.add_format({k : v for k, v in fmt.__dict__.items() if k in properties and dft_fmt.__dict__[k] != v})
-
-
-userhome = str(Path.home()) # get userhome folder
-# eventos que inativam or ativam processo
-__secor_path__ = os.path.join(userhome, r'Documents\Controle_Areas')
-__eventos_scm__ = os.path.join(__secor_path__,
-                        r'Secorpy\eventos_scm_12032020.xls')
-__secor_timeout__ = 4*60 # sometimes sigareas server/r. interferncia takes a long long time to answer 
 
 def getEventosSimples(wpage, processostr):
     """ Retorna tabela de eventos simples para processo especificado
@@ -37,7 +21,7 @@ def getEventosSimples(wpage, processostr):
     htmltxt = wpage.response.content
     soup = BeautifulSoup(htmltxt, features="lxml")
     eventstable = soup.find("table", {'class': "BordaTabela"})
-    rows = tableDataText(eventstable)
+    rows = htmlscrap.tableDataText(eventstable)
     df = pd.DataFrame(rows[1:], columns=rows[0])
     df.Processo = df.Processo.apply(lambda x: fmtPname(x)) # standard names
     return df
@@ -99,7 +83,7 @@ class Interferencia:
             'ctl00$cphConteudo$txtAnoProc': self.processo.year,
             'ctl00$cphConteudo$btnEnviarUmProcesso': 'Processar'
         }
-        formdata = formdataPostAspNet(self.wpage.response, formcontrols)
+        formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
         # must be timout 2 minutes
         self.wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1',
                 data=formdata, timeout=__secor_timeout__)
@@ -121,7 +105,7 @@ class Interferencia:
             'ctl00$cphConteudo$txtAno': self.processo.year,
             'ctl00$cphConteudo$btnConsultar': 'Consultar'
         }
-        formdata = formdataPostAspNet(self.wpage.response, formcontrols)
+        formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
         # Consulta
         self.wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/CancelarEstudo.aspx', data=formdata)
         # wpage.save('cancelar_estudo')
@@ -132,7 +116,7 @@ class Interferencia:
             'ctl00$cphConteudo$rptEstudo$ctl00$btnCancelar.x': '12',
             'ctl00$cphConteudo$rptEstudo$ctl00$btnCancelar.y': '12'
         }
-        formdata = formdataPostAspNet(self.wpage.response, formcontrols)
+        formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
         self.wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/CancelarEstudo.aspx', data=formdata)
         if self.wpage.response.text.find(r'Estudo excluído com sucesso.') == -1:
             return False 
@@ -151,7 +135,7 @@ class Interferencia:
         interf_table = soup.find("table", {"id" : "ctl00_cphConteudo_gvLowerRight"})
         if interf_table is None: # possible! no interferencia at all
             return self.tabela_interf # nenhuma interferencia SHOW!!
-        rows = tableDataText(interf_table)
+        rows = htmlscrap.tableDataText(interf_table)
         self.tabela_interf = pd.DataFrame(rows[1:], columns=rows[0])
         # instert list of processos associados for each processo interferente
         self.tabela_interf['Dads'] = 0

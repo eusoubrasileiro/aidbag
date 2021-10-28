@@ -1,30 +1,22 @@
 import sys, os
 import glob
 from bs4 import BeautifulSoup
-
-sys.path.append("..") # Adds higher directory to python modules path.
-from web import htmlscrap
 from datetime import datetime
 import re
 import concurrent.futures
 import threading
 from threading import Lock
+from ...web import htmlscrap
+
+from .constants import (
+    regex_processg, 
+    regex_process, 
+    scm_timeout, 
+    scm_dados_processo_main_url,
+    scm_data_tags
+)
 
 mutex = Lock()
-scm_timeout=(2*60)
-
-# URL LIST
-#'https://sistemas.anm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx' # might change again
-scm_dados_processo_main='https://sistemas.anm.gov.br/scm/intra/site/admin/dadosprocesso.aspx'
-
-# to write a test!
-# re.findall('(\d{1,3})\D*(\d{3})\D([1-2]\d{3})', "2.537/2016,832537-2016,48403.832.537/2016-09,832.537/2016-09") #'\D[1-2][09]\d{2}'
-# groups 
-regex_processg = re.compile('(\d{1,3})\D*(\d{3})\D([1-2]\d{3})') # use regex_processg return tupple groups
-# without groups
-regex_process = re.compile('\d{1,3}\D*\d{3}\D[1-2]\d{3}') # use regex_process.search(...) if None didn't find 
-# explanation: [1-2]\d{3} years from 1900-2999
-
 
 # scm consulta dados (post) nao aceita formato diferente de 'xxx.xxx/xxxx'
 def fmtPname(pross_str):
@@ -68,14 +60,14 @@ def dadosBasicosPageRetrieve(processostr, wpage, process=None):
     if hasattr(self, 'scm_dbasicospage_response'): # already downloaded
         self.wpage.response = self.scm_dbasicospage_response
         return self.wpage.response
-    self.wpage.get(scm_dados_processo_main)
+    self.wpage.get(scm_dados_processo_main_url)
     formcontrols = {
         'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnConsultarProcesso',
         'ctl00$conteudo$txtNumeroProcesso': self.processostr,
         'ctl00$conteudo$btnConsultarProcesso': 'Consultar',
         '__VIEWSTATEENCRYPTED': ''}
     formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
-    self.wpage.post(scm_dados_processo_main,
+    self.wpage.post(scm_dados_processo_main_url,
                   data=formdata, timeout=scm_timeout)
     self.scm_dbasicospage_response = self.wpage.response
     self.scm_dbasicospage_html = self.wpage.response.content
@@ -98,27 +90,12 @@ def dadosPoligonalPageRetrieve(processostr, wpage, process=None):
         'ctl00$conteudo$btnPoligonal': 'Poligonal',
         'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnPoligonal'}
     formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
-    self.wpage.post(scm_dados_processo_main,
+    self.wpage.post(scm_dados_processo_main_url,
                     data=formdata)
     self.scm_poligonpage_response = self.wpage.response
     self.scm_poligonpage_html = self.wpage.response.content
     return self.wpage.response
 
-# static field
-scm_data_tags = { # "data name" ; soup.find fields( "tag", "attributes")
-    'prioridade'            : ['span',  { 'id' : "ctl00_conteudo_lblDataPrioridade"} ], # pode estar errada
-    'area'                  : ['span',  { 'id' : 'ctl00_conteudo_lblArea'} ],
-    'UF'                    : ['span',  { 'id' : 'ctl00_conteudo_lblUF'} ],
-    'NUP'                   : ['span',  { 'id' : 'ctl00_conteudo_lblNup'} ],
-    'tipo'                  : ['span',  { 'id' : 'ctl00_conteudo_lblTipoRequerimento'} ],
-    'fase'                  : ['span',  { 'id' : 'ctl00_conteudo_lblTipoFase'} ],
-    'data_protocolo'        : ['span',  { 'id' : 'ctl00_conteudo_lblDataProtocolo'} ], # pode estar vazia
-    'associados'            : ['table', { 'id' : 'ctl00_conteudo_gridProcessosAssociados'} ],
-    'substancias'           : ['table', { 'id' : 'ctl00_conteudo_gridSubstancias'} ],
-    'eventos'               : ['table', { 'id' : 'ctl00_conteudo_gridEventos'} ],
-    'municipios'            : ['table', { 'id' : 'ctl00_conteudo_gridMunicipios'} ],
-    'ativo'                 : ['span',  { 'id' : 'ctl00_conteudo_lblAtivo'} ]
-}
 
 
 """

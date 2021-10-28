@@ -1,12 +1,11 @@
-import sys
-
-sys.path.append("..") # Adds higher directory to python modules path.
-from web import htmlscrap as hscrap
-from anm import scm
+from ...web import htmlscrap as hscrap
+from .scm import numberyearPname
 
 from bs4 import BeautifulSoup
 import pandas as pd
 import re
+
+#TODO: total refactoring
 
 def sicopNUP(NUPstr):
     """from a SICOP NUP string like
@@ -54,7 +53,7 @@ def fisicoSicopNUPs(wpage, processostr):
         must be authenticated with a aspnet Session Id
         be aware that Fiddler causes problems with SSL authenthication making 1 impossible
     """
-    number, year = scm.numberyearPname(processostr)
+    number, year = numberyearPname(processostr)
     # must be here to get Asp Cookie for SICOP
     wpage.get('https://sistemas.anm.gov.br/sicopii/SICOP.asp')
     wpage.get('https://sistemas.anm.gov.br/sicopii/P/Procurar/ProcuraProcesso.asp')

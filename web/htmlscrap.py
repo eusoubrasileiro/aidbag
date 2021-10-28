@@ -1,20 +1,11 @@
 #html web-scraping
-
-import time
 from requests_ntlm import HttpNtlmAuth
 import re
-
 import os, sys
 import requests
 from urllib3.util.retry import Retry
 from requests import adapters
-
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin
-
-import pandas as pd
-from datetime import datetime
-import re
 
 # to disable warnings when ssl is False
 from urllib3.exceptions import InsecureRequestWarning

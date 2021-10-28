@@ -1,9 +1,4 @@
 from .util import *
-import pyproj
-from pyproj import CRS
-from pyproj import Transformer
-from shapely.geometry import Polygon, Point
-import geopandas as gp
 
 
 ### Memorial descritivo através de PA e survey de estação total
@@ -227,24 +222,6 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
                 py_num, py_area, py_perim))
 
     return vertices_dg, vertices_utm
-
-
-def savePolygonWGS84(vertices, shpname):
-    vertices = np.array(vertices)
-    temp = np.copy(vertices[:, 0])
-    vertices[:, 0] = vertices[:, 1]
-    vertices[:, 1] = temp
-    gdfvs = gp.GeoSeries(Polygon(vertices))
-    gdfvs.set_crs(pyproj.CRS("""+proj=longlat +ellps=GRS80 +towgs84=0,0,0 +no_defs""")) # SIRGAS 2000
-    gdfvs.to_file(shpname+'.shp')
-
-
-def readPolygonWGS84(shpname):
-    gdf = gp.read_file(shpname)
-    lon = gdf.geometry.exterior.xs(0).coords.xy[0]
-    lat = gdf.geometry.exterior.xs(0).coords.xy[1]
-    points = np.array(list(zip(lat, lon)))
-    return points
 
 
 def memoLineRead(line):
