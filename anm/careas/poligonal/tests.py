@@ -1,12 +1,29 @@
-from .util import *
-from .memowork import *
-from .deprecated import *
+import numpy as np
+
+from .util import (
+        memorialRead,
+        )
+
+from .memowork import (
+        simple_memo_direct,
+        simple_memo_inverse
+        )
+
+from .geographic import (
+        wgs84PolygonAtributes
+        )
+
+from .deprecated import (
+        memoPoligonPA
+        )
+
 
 def test_memoPoligonPA():
     """Testa código
     Compara resultados Python Geographiclib vs CONVNAV.
     Exemplo de 1 quadrado abaixo
     """
+
     # sample square
     filestr="""-21 19 20 0
     -44 57 38 6
@@ -25,8 +42,8 @@ def test_memoPoligonPA():
        [-21.34662444, -44.96258861],
        [-21.34129583, -44.96258861]]
 
-    convnav_num, convnav_perim, convnav_area = PolygonArea(convnav_vertices)
-    py_num, py_perim, py_area = PolygonArea(vertices)
+    convnav_num, convnav_perim, convnav_area = wgs84PolygonAtributes(convnav_vertices)
+    py_num, py_perim, py_area = wgs84PolygonAtributes(vertices)
 
     print("convnav errors - area {:>+9.8f} perimeter {:>+9.8f}".format(
             thruth_area-convnav_area, thruth_perimeter-convnav_perim))

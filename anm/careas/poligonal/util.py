@@ -1,42 +1,67 @@
 import re
-from geographiclib import geodesic as gd #  PyP package Geographiclib
-from . import geolib as geocpp # Geographiclib wrapped in pybind11 by me py38
-import numpy as np
-from geographiclib import polygonarea as pa # PyP package Geographiclib
-import geopandas as gp
-from shapely.geometry import Polygon, Point
-import pyproj
-from pyproj import CRS
-from pyproj import Transformer
+import numpy as np 
+
+from .geographic import ( 
+    wgs84Inverse    
+)
+
+def decdeg2dmsms(dd): 
+    """decimal degree to (degrees, minutes, seconds, miliseconds)
+        * dd : float
+
+    return tuple(degrees, minutes, seconds, miliseconds)
+    """       
+    minutes,seconds = divmod(abs(dd)*3600,60)
+    degrees,minutes = divmod(minutes,60)    
+    mseconds = 1000*(seconds - int(seconds))
+    signal = -1 if dd < 0 else 1
+    return (signal*int(degrees), int(minutes), int(seconds), int(mseconds))
 
 
-def memorialRead(llstr, decimal=False, verbose=False):
-    """
-    Parse lat, lon string (`llstr`) #Aba Poligonal Scm#
-    generating numpy array of coordinates. 
-    
-    input: str 
-        -19°44'18''174 -44°17'45''410 ...  
+class NotPairofCoordinatesError(Exception):
+    """It must be a pairs of coordinates (lat., lon) even number. Odd number found!"""
+    pass
+
+# coordinates regex for degree minutes seconds and miliseconds 
+regex_dmsms = re.compile('(-)*(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{1,3})')
+regex_dmsms_ = re.compile('([-+]);(\d{1,3});(\d{1,2});(\d{1,2});(\d{1,3})')     # crazy SIGAREAS format
+# I could use a regex that supports both cases but I am not sure that's ideal 
+#regex_dmsmsg = re.compile('([-+])*;*(\d{1,3})\D+(\d{1,2})\D+(\d{1,3})\D+(\d{1,3})')
+
+def parse_coordinates(text, decimal=False):
+    """parse coordinate pairs `text` string using regex 
+
+    * text: str          
+        -19°44'18''174 -44°17'45''410 -24°17'15''410 ...  
         or 
         -;019;44;18;173;-;044;17;41;702 ...
-
+        or 
+        -19 44 18 174 -44 17 45 410 -24 17 15 410 ...          
+        # degree, minute, second and mili seconds   
+    
     ouput: numpy array - shape (-1, 2, 5) 
         [[-1, 19, 44, 18, 174], [-1, 44, 17, 41, 703] ...]
         [[lat0, lon0], [lat1, lon1]...]
 
-    lat or lon coordinate has 5 fields:
+    returns list of coordinates parsed
+        [[-1, 19, 44, 18, 174], [-1, 44, 17, 41, 703] ...]
+
+    coordinate have 5 fields:
         [ signal +/- 1, degree, minutes, seconds, miliseconds ]
+    
+    * decimal: bool (default=False)
+        convert coordinates to decimal degrees 
+        output shape becomes (-1, 2) 
+
     """
-    # south america region lat, lon regex -> sg, dg, mn, sc, msc 
-    # sample -19°44'18''174
-    rc = re.compile('(-)*(\d{1,2})\D*(\d{1,2})\D*(\d{1,2})\D*(\d{3,})')
-    if llstr.find('-;') != -1 or llstr.find('+;') != -1: # crazy SIGAREAS format
-        rc = re.compile('([-+]);(\d{1,3});(\d{1,2});(\d{1,2});(\d{3,})')    
-    csparsed = re.findall(rc, llstr)
-    if len(csparsed)%2 != 0: # must be even lat, lon pairs
-        raise Exception('Faltando campo em par coordenada: lat. ou lon.')        
+    regex = regex_dmsms
+    if text.find('-;') != -1 or text.find('+;') != -1: # crazy SIGAREAS format
+        regex = regex_dmsms_
+    csparsed = re.findall(regex, text)
     coords = [ [int(sg+'1'), *map(int, [dg, mn, sc, msc])] 
                 for sg, dg, mn, sc, msc in csparsed ]
+    if len(csparsed)%2 != 0: # must be even lat, lon pairs        
+        raise NotPairofCoordinatesError() 
     #lat, lon = coords[::2],  coords[1::2]  
     llcs = np.array(coords).reshape(-1, 2, 5)          
     if decimal:
@@ -44,7 +69,16 @@ def memorialRead(llstr, decimal=False, verbose=False):
         # convert to decimal ignore signal than finally multiply by signal back
         npl = np.sum(npl*[0, 1., 1/60., 1/3600., 0.001*1/3600.], axis=-1)*npl[:,0]
         llcs = npl.reshape(-1, 2)
-    return llcs
+    return llcs 
+
+
+def memorialRead(llstr, decimal=False):
+    """
+    Parse lat, lon string (`llstr`) #Aba Poligonal Scm#
+    uses `parse_coordinates` that uses regex 
+    generating numpy array of coordinates.     
+    """
+    return parse_coordinates(llstr, decimal)
 
 
 def formatMemorial(latlon, endfirst=False, 
@@ -86,6 +120,7 @@ def formatMemorial(latlon, endfirst=False,
         print("Output filename is: ", filename.upper())
         f.close()
 
+
 def forceverdPoligonal(vertices, tolerancem=0.5, verbose=True, ignlast=True):
     """
     #Força rumos verdadeiros#
@@ -105,13 +140,13 @@ def forceverdPoligonal(vertices, tolerancem=0.5, verbose=True, ignlast=True):
     for i, (plat, plon) in enumerate(cvertices):
         for j, (lat, lon) in enumerate(cvertices[i+1:]): # compare with next one : downward
             dlat, dlon = lat-plat, lon-plon
-            dist = GeoInverseWGS84(lat, lon, plat, lon)
+            dist = wgs84Inverse(lat, lon, plat, lon)
             if(dlat != 0.0 and abs(dist) < tolerancem ):
                 print('line: {:>3d} - lat {:.8f} changed to {:.8f} distance {:2.2f} (m)'.format(i+1+j+1,
                     lat, plat, dist))
                 vertices_new[i+1+j, 0] = plat
                 dists.append(dist)
-            dist = GeoInverseWGS84(lat, lon, lat, plon)
+            dist = wgs84Inverse(lat, lon, lat, plon)
             if(dlon != 0.0 and abs(dist) < tolerancem):
                 print('line: {:>3d} - lon {:.8f} changed to {:.8f} distance {:2.2f} (m)'.format(i+1+j+1,
                     lon, plon, dist))
@@ -142,56 +177,7 @@ def forceverdPoligonal(vertices, tolerancem=0.5, verbose=True, ignlast=True):
     print("rumos verdadeiros check: ", "passed" if check_verd else "failed")
     return vertices_new
 
-def GeoDirectWGS84(lat1, lon1, az1, s12, wincpp=True):
-    """Use geographiclib python package or
-    pybind11 wrapping geographiclib by Andre"""
-    if wincpp: # use cpp compiled vstudio windows 8th order
-        geocpp.WGS84()
-        return geocpp.Direct(lat1, lon1, az1, s12)
-    else:
-        geod = gd.Geodesic.WGS84 # define the WGS84 ellipsoid - SIRGAS 2000 same
-        res = geod.Direct(lat1, lon1, az1, s12)
-        return res['lat2'], res['lon2']
-
-def GeoInverseWGS84(lat1, lon1, lat2, lon2, wincpp=True):
-    """Use geographiclib python package or
-    pybind11 wrapping geographiclib by Andre"""
-    if wincpp: # use cpp compiled vstudio windows 8th order
-        geocpp.WGS84()
-        return geocpp.Inverse(lat1, lon1, lat2, lon2)
-    else:
-        geod = gd.Geodesic.WGS84 # define the WGS84 ellipsoid - SIRGAS 2000 same
-        res = geod.Inverse(lat1, lon1, lat2, lon2)
-        return res
-
-def PolygonArea(cords):
-    """
-    cords = [[lat,lon]...] list
-    Use geodesics on WGS84  for calculations.
-    return nvertices, perimeter, area (hectares)
-    """
-    geoobj = gd.Geodesic(gd.Constants.WGS84_a, gd.Constants.WGS84_f)
-    poly = pa.PolygonArea(geoobj)
-
-    for p in cords:
-        poly.AddPoint(*p)
-    n, perim, area = poly.Compute(True)
-    area = area*10**(-4) # to hectares
-    return n, perim, area
-
-def savePolygonWGS84(vertices, shpname):
-    vertices = np.array(vertices)
-    temp = np.copy(vertices[:, 0])
-    vertices[:, 0] = vertices[:, 1]
-    vertices[:, 1] = temp
-    gdfvs = gp.GeoSeries(Polygon(vertices))
-    gdfvs.set_crs(pyproj.CRS("""+proj=longlat +ellps=GRS80 +towgs84=0,0,0 +no_defs""")) # SIRGAS 2000
-    gdfvs.to_file(shpname+'.shp')
 
 
-def readPolygonWGS84(shpname):
-    gdf = gp.read_file(shpname)
-    lon = gdf.geometry.exterior.xs(0).coords.xy[0]
-    lat = gdf.geometry.exterior.xs(0).coords.xy[1]
-    points = np.array(list(zip(lat, lon)))
-    return points
+
+

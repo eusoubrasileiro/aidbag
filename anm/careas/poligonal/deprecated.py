@@ -1,9 +1,27 @@
-from .util import *
+from pyproj import CRS, Transformer
+import numpy as np
+import re 
+
+from .geographic import (
+    wgs84Inverse, 
+    wgs84Direct,
+    wgs84PolygonAtributes
+    )
+
+from .util import (
+    forceverdPoligonal,
+    formatMemorial    
+    )
+
+from .shapes import (
+    savePolygonWGS84,
+    savePointsWGS84
+)
 
 
 ### Memorial descritivo através de PA e survey de estação total
 # might be useful https://github.com/totalopenstation
-wincpp=True
+
 CRS_SAD69_96 = "+proj=longlat +ellps=aust_SA +towgs84=-67.35,3.88,-38.22,0,0,0,0 +no_defs" # sad69(96) lat lon
 CRS_SIRGAS2000 = "+proj=longlat +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs"
 
@@ -164,7 +182,7 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
         if snap_points:
             for spoint in snap_points: # list of lat, lon points
                 for i in range(len(vertices_dg)):
-                    distance = GeoInverseWGS84(*spoint, *vertices_dg[i])
+                    distance = wgs84Inverse(*spoint, *vertices_dg[i])
                     #print(distance)
                     if(distance < snap_dist):
                         print("Snaping: distance from snap-vertex : Lat {:>4.8f} Lon {:>4.8f} to "
@@ -206,20 +224,12 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
     # Create polygon shape file
     if saveshape:
         savePolygonWGS84(vertices_dg, shpname)
-        gdfvs = gp.GeoSeries(list(map(Point, vertices_dg)), index=np.arange(len(vertices_dg)))
-        gdfvs.set_crs(pyproj.CRS(CRS_SIRGAS2000)) # SIRGAS 2000
-        gdfvs.to_file(shpname+'points.shp')
+        savePointsWGS84(vertices_dg, shpname+'p')
 
     if verbose:
-        elipsoide = gd.Geodesic(gd.Constants.WGS84_a, gd.Constants.WGS84_f) # same as SIRGAS
-        poly = pa.PolygonArea(elipsoide)
-        for p in vertices_dg:
-            poly.AddPoint(*p)
-        poly.Compute(True)
-        py_num, py_perim, py_area = poly.Compute(True)
-        py_area = py_area*10**(-4) # to hectares
+        nvertices, perimeter, area = wgs84PolygonAtributes(vertices_dg)
         print("nvertices {:} area {:>9.8f} perimeter {:>9.8f}".format(
-                py_num, py_area, py_perim))
+                nvertices, area, perimeter))
 
     return vertices_dg, vertices_utm
 
@@ -363,7 +373,7 @@ def geodesic_walk(rpoint, directions, inverse=False, force_verd=True):
         inverse = -1 if inverse else 1
         for segment in directions:
             dist, azimuth = segment
-            clat, clon = GeoDirectWGS84(clat, clon, azimuth, dist*inverse, wincpp)
+            clat, clon = wgs84Direct(clat, clon, azimuth, dist*inverse)
             if force_verd:
                 if azimuth == 0. or azimuth == 180.: # walking N/S
                     _, clon = vertices[-1] # ignore computed lon

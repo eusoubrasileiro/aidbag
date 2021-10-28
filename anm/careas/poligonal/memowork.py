@@ -1,6 +1,17 @@
-from .util import *
+import numpy as np
 
-# simpler approach
+from .util import (
+    forceverdPoligonal,
+    memorialRead, 
+    formatMemorial,    
+    )
+
+from .geographic import (
+    wgs84PolygonAtributes,
+    wgs84Inverse, 
+    wgs84Direct,
+    wgs84InverseAngle
+    )
 
 #TODO implement same approach bellow two pathways
 # but no reason since round angles/distances already deals with inprecision
@@ -18,8 +29,8 @@ def simple_memo_inverse(points, round_angle=True, round_dist=True):
     prev_point = points[0].tolist() # from numpy array
     dist_angle.append(prev_point)
     for point in points[1:]:
-        dist = geocpp.Inverse(prev_point[0], prev_point[1], point[0],point[1])
-        angle, _ = geocpp.InverseAngle(prev_point[0], prev_point[1], point[0],point[1])
+        dist = wgs84Inverse(prev_point[0], prev_point[1], point[0],point[1])
+        angle, _ = wgs84InverseAngle(prev_point[0], prev_point[1], point[0],point[1])
         prev_point = point
         if round_angle:
             angle = round(angle)
@@ -37,7 +48,7 @@ def simple_memo_direct(smemo, repeat_end=False):
         """revert=-1 go backwards"""
         points = []
         for dist, angle in directions:
-            prevpoint = geocpp.Direct(*prevpoint, angle, dist*revert)
+            prevpoint = wgs84Direct(*prevpoint, angle, dist*revert)
             points.append(prevpoint)
         return np.array(points)
     startpoint = smemo[0] # start
@@ -65,8 +76,6 @@ def simple_memo_newstart(smemo, index, start_point):
     # add new start point
     smemo = [start_point] + smemo
     return smemo
-
-
 
 
 ### Calcula informatino of displacement between
@@ -108,10 +117,10 @@ def translate_info(coords, ref_coords, displace_dist=1.5):
     k=0
     for j, ref_point in enumerate(ref_points):
         for i, point in enumerate(points):
-            distance = GeoInverseWGS84(*ref_point, *point)
+            distance = wgs84Inverse(*ref_point, *point)
             #print(distance)
             if(distance < displace_dist):
-                angle, _ = geocpp.InverseAngle(*ref_point, *point)
+                angle, _ = wgs84InverseAngle(*ref_point, *point)
                 print("{:>3d} - distance is {:>+5.3f} m az. angle (degs) is {:>+4.3f} " "from ref-vertex {:>3d} : Lat {:>4.9f} Lon {:>4.9f} to "
                 "vertex {:>3d} : Lat {:>4.9f} Lon {:>4.9f} ".format(k+1, distance, angle,
                      j+1, *ref_point, i+1, *point))
@@ -121,6 +130,7 @@ def translate_info(coords, ref_coords, displace_dist=1.5):
     index = -1
     index = int(input())-1
     return refs[index][0], refs[index][1]
+
 
 # draft version
 # TODO make it better with new uses
@@ -158,7 +168,7 @@ def memorial_acostar(memorial, memorial_ref, reference_dist=50, mtolerance=0.5):
     print(u"Ajustando para rumos verdadeiros, tolerância :", mtolerance, " metro")
     # make 'rumos verdadeiros' acceptable by sigareas
     smemo_restarted_points_verd = forceverdPoligonal(smemo_restarted_points, tolerancem=mtolerance)
-    print("Area is ", PolygonArea(smemo_restarted_points_verd.tolist())[-1], " ha")
+    print("Area is ", wgs84PolygonAtributes(smemo_restarted_points_verd.tolist())[-1], " ha")
     formatMemorial(smemo_restarted_points_verd)
     print("Pronto para carregar no SIGAREAS -> corrigir poligonal")
     return smemo_restarted_points_verd
