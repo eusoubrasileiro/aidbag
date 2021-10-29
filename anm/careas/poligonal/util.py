@@ -81,23 +81,28 @@ def memorialRead(llstr, decimal=False):
     return parse_coordinates(llstr, decimal)
 
 
-def formatMemorial(latlon, endfirst=False, 
-                    save=True, filename='MEMOCOORDS.TXT', verbose=True):
+def formatMemorial(latlon, endfirst=False, view=False,
+                    save=False, filename='MEMOCOORDS.TXT'):
     """
     Create formated file poligonal ('Memorial Descritivo') to use on SIGAREAS
         SIGAREAS->Administrador->Inserir Poligonal|Corrigir Poligonal
 
-    latlon: numpy array from `memorialRead`
-        [[lat,lon]...] 
+    * latlon: numpy array from `memorialRead`
+        [[lat,lon]...]
 
-    endfirst: default True
+    coordinate have 5 fields:  [ signal +/- 1, degree, minutes, seconds, miliseconds ]
+
+    * endfirst: default True
         copy first point in the end
     
-    file: default
+    * save: default=False
         save a file with this poligonal
     
-    filename: str
+    * filename: str
         name of filename to save this poligonal
+
+    * returns: str 
+        formatted string unless `view=True`
     """
     lines = []
     if isinstance(latlon, np.ndarray):
@@ -106,19 +111,19 @@ def formatMemorial(latlon, endfirst=False,
         return
     if endfirst:  # copy first point in the end
         lines.append(lines[0])
-    if save:
-        f = open(filename.upper(), 'w') # must be CAPS otherwise can't upload
+    fmtlines = ""
     for line in lines:
         s0, s1 = map(str, [line[0], line[5]]) # to not print -1,+1 only - or +
-        fline = "{0:};{3:03};{4:02};{5:02};{6:03};{1:};{8:03};{9:02};{10:02};{11:03}".format(
-        s0[0], s1[0], *line) # for the rest * use positional arguments ignoring the old signals args [2, 7]   
-        if save:
-            f.write(fline+'\n')
-        if verbose:
-            print(fline)
+        fmtlines += "{0:};{3:03};{4:02};{5:02};{6:03};{1:};{8:03};{9:02};{10:02};{11:03}\n".format(
+        s0[0], s1[0], *line) # for the rest * use positional arguments ignoring the old signals args [2, 7]           
     if save:
-        print("Output filename is: ", filename.upper())
-        f.close()
+        with open(filename.upper(), 'w') as f: # must be CAPS otherwise can't upload
+            f.write(fmtlines)
+        print("Output filename is: ", filename.upper())    
+    if view: # only to see         
+        return print(fmtlines)    
+    else:
+        return fmtlines
 
 
 def forceverdPoligonal(vertices, tolerancem=0.5, verbose=True, ignlast=True):
