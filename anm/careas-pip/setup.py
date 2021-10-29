@@ -11,7 +11,7 @@ with open("requeriments.txt") as f:
 with open("requeriments-extra.txt") as f:
     extra = f.readlines()
 
-PACKAGE_DIR = os.path.joi('..', 'careas') # to deal with Linux/Windows different convention
+PACKAGE_DIR = os.path.join('..', 'careas') # to deal with Linux/Windows different convention
 
 setup(
     name='careas_poligons',
