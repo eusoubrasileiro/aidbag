@@ -1,8 +1,3 @@
-from . import poligonal
-from . import estudos 
-from . import SEI
-from . import scm
-
 from .scm import (
     Processo, 
     ProcessStorage, 

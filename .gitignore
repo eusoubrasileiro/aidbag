@@ -1,6 +1,7 @@
 #.*  # ignore all hidden files and folders
 **/.ipynb_checkpoints/*.ipynb
 **/__pycache___/*
+*__pycache___*
 *.pyc
 *.ipynb
 *.pickle
@@ -38,3 +39,6 @@
 *.shx
 *.cpg
 *.dbf
+*.egg*
+dist
+build
