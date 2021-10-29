@@ -14,7 +14,7 @@ setup(
     name='careas_poligons',
     version='0.1.0',
     packages=['poligonal'],
-    package_dir = {'': "..\careas\poligonal"}, # "all" packages are here : expects a poligonal\__init__.py
+    package_dir = {'': "..\careas"}, # "all" packages are here : expects a poligonal\__init__.py
     install_requires=INSTALL_REQUIRES,
     extras_require={
         'full': extra,
