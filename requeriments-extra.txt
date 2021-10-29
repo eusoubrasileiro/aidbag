@@ -1,0 +1,7 @@
+requests
+requests_ntlm
+urllib3
+bs4
+selenium
+geopandas
+shapely
