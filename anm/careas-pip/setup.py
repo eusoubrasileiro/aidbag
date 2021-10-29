@@ -1,4 +1,5 @@
-from setuptools import setup, find_packages
+from setuptools import setup
+import os 
 
 #PACKAGES = find_packages(where='poligonal')
 
@@ -10,11 +11,14 @@ with open("requeriments.txt") as f:
 with open("requeriments-extra.txt") as f:
     extra = f.readlines()
 
+PACKAGE_DIR = os.path.joi('..', 'careas') # to deal with Linux/Windows different convention
+
 setup(
     name='careas_poligons',
     version='0.1.0',
-    packages=['poligonal'],
-    package_dir = {'': "..\careas"}, # "all" packages are here : expects a poligonal\__init__.py
+    # use packages=[''] for simple python files no folder\__init__.py needed 
+    packages=['poligonal'],  # expects a poligonal\__init__.py at package_dir specified
+    package_dir = {'': PACKAGE_DIR}, # ('' == "all") packages are in specified folder  
     install_requires=INSTALL_REQUIRES,
     extras_require={
         'full': extra,
