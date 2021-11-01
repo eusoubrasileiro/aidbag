@@ -21,8 +21,8 @@ mutex = Lock()
 # scm consulta dados (post) nao aceita formato diferente de 'xxx.xxx/xxxx'
 def fmtPname(pross_str):
     """format process name to xxx.xxx/yyyy
-    - input process might be also like this 2735/1935
-    prepend zeros in this case to form 002.735/1935"""
+    - input process might be also like this 735/1935
+    prepend zeros in this case to form 000.735/1935"""
     pross_str = ''.join(regex_processg.findall(pross_str)[0]) # use the first ocurrence    
     ncharsmissing = 10-len(pross_str) # size must be 10 chars
     pross_str = '0'*ncharsmissing+pross_str # prepend with zeros

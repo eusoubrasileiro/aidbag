@@ -11,14 +11,25 @@ __secor_timeout__ = 4*60 # sometimes sigareas server/r. interferncia takes a lon
 scm_timeout=(2*60)
 
 # Processes Regex
-
-# to write a test!
-# re.findall('(\d{1,3})\D*(\d{3})\D([1-2]\d{3})', "2.537/2016,832537-2016,48403.832.537/2016-09,832.537/2016-09") #'\D[1-2][09]\d{2}'
 # groups 
-regex_processg = re.compile('(\d{1,3})\D*(\d{3})\D([1-2]\d{3})') # use regex_processg return tupple groups
+regex_processg = re.compile('(\d{0,3})\D*(\d{1,3})\D([1-2]\d{3})') # use regex_processg return tupple groups
 # without groups
-regex_process = re.compile('\d{1,3}\D*\d{3}\D[1-2]\d{3}') # use regex_process.search(...) if None didn't find 
+regex_process = re.compile('\d{0,3}\D*\d{1,3}\D[1-2]\d{3}') # use regex_process.search(...) if None didn't find 
 # explanation: [1-2]\d{3} years from 1900-2999
+
+def test_regex_process():
+    testtext = "847/1945,xx2.537/2016,832537-2016,48403.832.537/2016-09,832.537/2016-09"
+    result = re.findall(regex_processg, testtext)
+    expected = [('84', '7', '1945'),
+    ('2', '537', '2016'),
+    ('832', '537', '2016'),
+    ('832', '537', '2016'),
+    ('832', '537', '2016')]
+    assert  result == expected
+
+# test regex when imported 
+test_regex_process()
+
 
 # SCM URL LIST
 # TODO complete the list as contants 
