@@ -1,5 +1,4 @@
 from .interferencia import (
-    Interferencia,
-    CancelaUltimoEstudoError,
+    Interferencia,    
     getEventosSimples
 )

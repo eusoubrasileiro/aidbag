@@ -9,6 +9,16 @@ from ..scm import *
 from ....web import htmlscrap 
 from ..SEI import *
 
+# fases necessarias e obrigatorias para retirada de interferencia 
+interferencia_fases = ['Requerimento de Pesquisa', 'Direito de Requerer a Lavra', 
+'Requerimento de Lavra', 'Requerimento de Licenciamento'] 
+
+def inFaseRInterferencia(fase_str):
+    for fase in interferencia_fases:
+        if fase.find(fase_str.strip()) != -1:
+            return True
+    return False 
+
 
 def getEventosSimples(wpage, processostr):
     """ Retorna tabela de eventos simples para processo especificado
@@ -26,9 +36,13 @@ def getEventosSimples(wpage, processostr):
     df.Processo = df.Processo.apply(lambda x: fmtPname(x)) # standard names
     return df
 
-class CancelaUltimoEstudoError(Exception):
+class CancelaUltimoEstudoFailed(Exception):
     """could not cancel ultimo estudo sigareas"""
     pass
+
+class DownloadRetiradaInterferenciaFailed(Exception):
+    """could not download retirada de interferencia"""
+    pass 
 
 class Interferencia:
     """Estudo de Retirada de Interferência SIGAREAS"""
@@ -58,22 +72,28 @@ class Interferencia:
         * wpage : wPage html 
             webpage scraping class com login e passwd preenchidos
 
-        * returns: tupple
-            (sucess status, instance `Interferencia`)
+        * returns: instance `Interferencia`
+
+        * exceptions: 
+            `DownloadRetiradaInterferenciaFailed`, `CancelaUltimoEstudoFailed`
         """
         estudo = Interferencia(wpage, processostr, dados=3, verbose=verbose)
         estudo.processo.salvaDadosBasicosHtml(estudo.processo_path)
-        estudo.processo.salvaDadosPoligonalHtml(estudo.processo_path)            
-        suceed = True
-        if estudo.salvaRetiradaInterferenciaHtml(estudo.processo_path):
-            # only if retirada interferencia html is saved we can create spreadsheets
-            # sometimes we just don't need it                 
-            if estudo.getTabelaInterferencia() is not None:
-                estudo.getTabelaInterferenciaTodos()
-                estudo.excelInterferencia()
-                estudo.excelInterferenciaAssociados()                
-            suceed = estudo.cancelaUltimoEstudo()
-        return suceed, estudo
+        estudo.processo.salvaDadosPoligonalHtml(estudo.processo_path)                    
+        # if fase correct MUST have access to retirada de 
+        if inFaseRInterferencia(estudo.processo.dados['fase']):
+            if not estudo.salvaRetiradaInterferenciaHtml(estudo.processo_path):
+                raise DownloadRetiradaInterferenciaFailed()
+            else:
+                # only if retirada interferencia html is saved we can create spreadsheets
+                # sometimes we just don't need it                 
+                if estudo.getTabelaInterferencia() is not None: # sometimes there is no interferences 
+                    estudo.getTabelaInterferenciaTodos()
+                    estudo.excelInterferencia()
+                    estudo.excelInterferenciaAssociados()                
+                if not estudo.cancelaUltimoEstudo():
+                    raise CancelaUltimoEstudoFailed()
+        return estudo
 
     # THIS stays here
     def salvaRetiradaInterferenciaHtml(self, html_path):
