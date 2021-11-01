@@ -22,7 +22,8 @@ from .workflows import (
     IncluiDocumentosSEIFolder, 
     EscreveDespacho,
     EstudoBatchRun,
-    IncluiDocumentosSEIFoldersFirstN
+    IncluiDocumentosSEIFoldersFirstN,
+    folder_process
 )
 
 # needed for connection so better be here

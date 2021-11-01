@@ -2,6 +2,7 @@ import tqdm
 import glob
 import os
 import sys
+import traceback
 from datetime import datetime
 from bs4 import BeautifulSoup
 from . import estudos
@@ -15,6 +16,12 @@ from .constants import (
     docs_externos_sei_txt,
     __secor_path__
     )
+
+def folder_process(process_str):
+    """get folder name used to store a process from NUP like 
+    '48054.831282/2021-23' is '831282-2021'
+    """
+    return '-'.join(scm.numberyearPname(process_str))
 
 
 __debugging__ = False
@@ -192,12 +199,11 @@ def EstudoBatchRun(wpage, processos, option=0, verbose=False):
     estudo = None
     for processo in tqdm.tqdm(processos):
         try:            
-            okay, estudo = estudos.Interferencia.make(wpage, processo, verbose=verbose)                 
-            if not okay:
-                raise estudos.CancelaUltimoEstudoError("Failed Cancel for Process {}".format(estudo.processo.processostr))                
-        except Exception as e:  # too generic is masking errors that I care for??             
-            print("Exception: ", e, " - Process: ", processo, file=sys.stderr)            
-            failed_NUPS.append(estudo.processo.NUP)            
+            estudo = estudos.Interferencia.make(wpage, processo, verbose=verbose)                 
+        except Exception as e:  # too generic is masking errors that I don't care for??             
+            print("Exception: ", type(e).__name__, " - Process: ", processo, file=sys.stderr)           
+            traceback.print_exc()          
+            failed_NUPS.append(scm.ProcessStorage[scm.fmtPname(processo)].NUP)            
         else:
             succeed_NUPs.append(estudo.processo.NUP)  
         
