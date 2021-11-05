@@ -25,10 +25,11 @@ class NotPairofCoordinatesError(Exception):
 # coordinates regex for degree minutes seconds and miliseconds 
 regex_dmsms = re.compile('(-)*(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{1,3})')
 regex_dmsms_ = re.compile('([-+]);(\d{1,3});(\d{1,2});(\d{1,2});(\d{1,3})')     # crazy SIGAREAS format
-# I could use a regex that supports both cases but I am not sure that's ideal 
-#regex_dmsmsg = re.compile('([-+])*;*(\d{1,3})\D+(\d{1,2})\D+(\d{1,3})\D+(\d{1,3})')
+# 10^-6 microseconds - 10^-5 seconds is 10 * microseconds - 
+# 5 decimal places - GTM PRO format
+regex_dms10us = re.compile('(-)*(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{5})') 
 
-def parse_coordinates(text, decimal=False):
+def parse_coordinates(text, decimal=False, fmt='auto'):
     """parse coordinate pairs `text` string using regex 
 
     * text: str          
@@ -37,7 +38,7 @@ def parse_coordinates(text, decimal=False):
         -;019;44;18;173;-;044;17;41;702 ...
         or 
         -19 44 18 174 -44 17 45 410 -24 17 15 410 ...          
-        # degree, minute, second and mili seconds   
+        # degree, minute, second and mili seconds (dmsms)
     
     ouput: numpy array - shape (-1, 2, 5) 
         [[-1, 19, 44, 18, 174], [-1, 44, 17, 41, 703] ...]
@@ -48,37 +49,47 @@ def parse_coordinates(text, decimal=False):
 
     coordinate have 5 fields:
         [ signal +/- 1, degree, minutes, seconds, miliseconds ]
-    
+
     * decimal: bool (default=False)
         convert coordinates to decimal degrees 
         output shape becomes (-1, 2) 
 
-    """
+    * fmt : 'auto' default
+        'auto' -> try generic dmsms than SIGAREAS format
+        'gtmpro' -> dms 10micro seconds, 5 decimal places
+
+    """    
     regex = regex_dmsms
-    if text.find('-;') != -1 or text.find('+;') != -1: # crazy SIGAREAS format
-        regex = regex_dmsms_
+    if fmt == 'auto':        
+        if text.find('-;') != -1 or text.find('+;') != -1: # crazy SIGAREAS format
+            regex = regex_dmsms_
+    if fmt == 'gtmpro':        
+        regex = regex_dms10us
     csparsed = re.findall(regex, text)
     coords = [ [int(sg+'1'), *map(int, [dg, mn, sc, msc])] 
                 for sg, dg, mn, sc, msc in csparsed ]
     if len(csparsed)%2 != 0: # must be even lat, lon pairs        
-        raise NotPairofCoordinatesError() 
-    #lat, lon = coords[::2],  coords[1::2]  
-    llcs = np.array(coords).reshape(-1, 2, 5)          
+        raise NotPairofCoordinatesError()     
+    llcs = np.array(coords) #lat, lon = coords[::2],  coords[1::2]     
+    if fmt == 'gtmpro': # convert from 10us (10^-5) to miliseconds (from gtmpro)
+        llcs[:, 4] = llcs[:, 4]*0.01        
     if decimal:
         npl = llcs.reshape(-1, 5)
         # convert to decimal ignore signal than finally multiply by signal back
         npl = np.sum(npl*[0, 1., 1/60., 1/3600., 0.001*1/3600.], axis=-1)*npl[:,0]
         llcs = npl.reshape(-1, 2)
+    else:
+        llcs = llcs.reshape(-1, 2, 5)
     return llcs 
 
 
-def memorialRead(llstr, decimal=False):
+def memorialRead(llstr, decimal=False, fmt='auto'):
     """
     Parse lat, lon string (`llstr`) #Aba Poligonal Scm#
     uses `parse_coordinates` that uses regex 
     generating numpy array of coordinates.     
     """
-    return parse_coordinates(llstr, decimal)
+    return parse_coordinates(llstr, decimal, fmt)
 
 
 def formatMemorial(latlon, endfirst=False, view=False,
