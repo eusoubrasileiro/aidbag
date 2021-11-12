@@ -1,5 +1,5 @@
 from .util import (
     formatMemorial,
-    memorialRead,
+    readMemorial,
     forceverdPoligonal       
 )

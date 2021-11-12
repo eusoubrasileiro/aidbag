@@ -38,7 +38,7 @@ def parse_coordinates(text, decimal=False, fmt='auto'):
         -;019;44;18;173;-;044;17;41;702 ...
         or 
         -19 44 18 174 -44 17 45 410 -24 17 15 410 ...          
-        # degree, minute, second and mili seconds (dmsms)
+        (dmsms) : degree, minute, second and mili seconds 
     
     ouput: numpy array - shape (-1, 2, 5) 
         [[-1, 19, 44, 18, 174], [-1, 44, 17, 41, 703] ...]
@@ -82,26 +82,40 @@ def parse_coordinates(text, decimal=False, fmt='auto'):
         llcs = llcs.reshape(-1, 2, 5)
     return llcs 
 
+readMemorial = parse_coordinates
+readMemorial.__doc__ = """Parse lat, lon string (`llstr`) #Aba Poligonal Scm#
+uses `parse_coordinates` that uses regex 
+generating numpy array of coordinates.     
+"""
 
-def memorialRead(llstr, decimal=False, fmt='auto'):
-    """
-    Parse lat, lon string (`llstr`) #Aba Poligonal Scm#
-    uses `parse_coordinates` that uses regex 
-    generating numpy array of coordinates.     
-    """
-    return parse_coordinates(llstr, decimal, fmt)
+# SIGAREAS
+# -;019;44;18;173;-;044;17;41;702
+# GTMPRO
+#t,dms,-17 16' 10.78600'',-41 34' 01.19200'',00/00/00,00:00:00,0,0
+#t,dms,-17 16' 10.78600'',-41 33' 58.96200'',00/00/00,00:00:00,0,0
+#t,dms,-17 16' 10.33500'',-41 33' 58.96200'',00/00/00,00:00:00,0,0
+# DECIMAL DEGREE
+# 
+#
+# 
 
-
-def formatMemorial(latlon, endfirst=False, view=False,
+def formatMemorial(latlon, fmt='sigareas', endfirst=False, view=False,
                     save=False, filename='MEMOCOORDS.TXT'):
     """
-    Create formated file poligonal ('Memorial Descritivo') to use on SIGAREAS
-        SIGAREAS->Administrador->Inserir Poligonal|Corrigir Poligonal
+    Create formated text file poligonal ('Memorial Descritivo') 
 
     * latlon: numpy array from `memorialRead`
         [[lat,lon]...]
 
     coordinate have 5 fields:  [ signal +/- 1, degree, minutes, seconds, miliseconds ]
+
+    * fmt : str 
+
+        'sigareas' : to use on SIGAREAS->Administrador->Inserir Poligonal|Corrigir Poligonal
+        
+        'gtmpro' : to use on GTM PRO ?
+        
+        'ddegree' : decimal degree
 
     * endfirst: default True
         copy first point in the end
@@ -115,18 +129,28 @@ def formatMemorial(latlon, endfirst=False, view=False,
     * returns: str 
         formatted string unless `view=True`
     """
-    lines = []
-    if isinstance(latlon, np.ndarray):
-        lines = latlon.reshape(-1, 10).tolist()
-    else:
-        return
-    if endfirst:  # copy first point in the end
-        lines.append(lines[0])
+    if not isinstance(latlon, np.ndarray):
+        raise NotImplemented()    
+    if endfirst:  # add first point to the end
+        latlon = np.append(latlon, latlon[-1]) 
     fmtlines = ""
-    for line in lines:
-        s0, s1 = map(str, [line[0], line[5]]) # to not print -1,+1 only - or +
-        fmtlines += "{0:};{3:03};{4:02};{5:02};{6:03};{1:};{8:03};{9:02};{10:02};{11:03}\n".format(
-        s0[0], s1[0], *line) # for the rest * use positional arguments ignoring the old signals args [2, 7]           
+    if fmt == "sigareas":
+        lines = latlon.reshape(-1, 10).tolist()
+        for line in lines:
+            # -;019;44;18;173;-;044;17;41;702
+            s0, s1 = map(str, [line[0], line[5]]) # to not print -1,+1 only - or +
+            s0, s1 = s0[0], s1[0]            
+            fmtlines += "{0:};{3:03};{4:02};{5:02};{6:03};{1:};{8:03};{9:02};{10:02};{11:03}\n".format(
+                    s0, s1, *line) # for the rest * use positional arguments ignoring the old signals args [2, 7]           
+    elif fmt == "gtmpro":
+        data = latlon.reshape(-1, 5).astype(np.double)
+        data[:,1] = data[:,0]*data[:,1] # 'add' signal 
+        data[:,3] = data[:,3]+0.001*data[:,4] # add miliseconds to seconds
+        data = data[:,1:4] # dms
+        for row in data.reshape(-1, 2, 3): # dms
+            #t,dms,-17 16' 10.33500'',-41 33' 58.96200'',00/00/00,00:00:00,0,0            
+            fmtlines += "t,dms,{:03.0f} {:02.0f}\' {:08.5f}\'\',{:03.0f} {:02.0f}\' {:08.5f}\'\',00/00/00,00:00:00,0,0 \n".format(
+                *row.flatten().tolist())            
     if save:
         with open(filename.upper(), 'w') as f: # must be CAPS otherwise can't upload
             f.write(fmtlines)
