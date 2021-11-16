@@ -1,5 +1,6 @@
 import re
 import numpy as np 
+import sys 
 
 from .geographic import ( 
     wgs84Inverse    
@@ -203,20 +204,20 @@ def forceverdPoligonal(vertices, tolerancem=0.5, view=False, close_poly=True, de
             if(dlat != 0.0 and abs(dist) < tolerancem ):
                 if debug:
                     print('line: {:>3d} - lat {:.8f} changed to {:.8f} distance {:2.2f} (m)'.format(i+1+j+1,
-                        lat, plat, dist))
+                        lat, plat, dist), file=sys.stderr)
                 vertices_new[i+1+j, 0] = plat
                 dists.append(dist)
             dist = wgs84Inverse(lat, lon, lat, plon)
             if(dlon != 0.0 and abs(dist) < tolerancem):
                 if debug:
                     print('line: {:>3d} - lon {:.8f} changed to {:.8f} distance {:2.2f} (m)'.format(i+1+j+1,
-                        lon, plon, dist))
+                        lon, plon, dist), file=sys.stderr)
                 dists.append(dist)
                 vertices_new[i+1+j, 1] = plon    
     if debug:
         # not dists: # no distances means all zero - already rumos verdadeiros            
         print("Changes statistics min (m) : {:2.2f}  p50: {:2.2f} max: {:2.2f}".format(
-            *(np.percentile(dists, [0, 50, 100]))))
+            *(np.percentile(dists, [0, 50, 100]))), file=sys.stderr)
     def test_verd(vertices):
         """test wether vertices are lat/lon 'rumos verdadeiros' """
         dlat, dlon = np.diff(vertices[:,0]), np.diff(vertices[:,1])
