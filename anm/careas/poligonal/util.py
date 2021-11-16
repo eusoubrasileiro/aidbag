@@ -70,7 +70,7 @@ def parse_coordinates(text, decimal=False, fmt='auto'):
                 for sg, dg, mn, sc, msc in csparsed ]
     if len(csparsed)%2 != 0: # must be even lat, lon pairs        
         raise NotPairofCoordinatesError()     
-    llcs = np.array(coords) #lat, lon = coords[::2],  coords[1::2]     
+    llcs = np.array(coords, dtype=np.double) #lat, lon = coords[::2],  coords[1::2]     
     if fmt == 'gtmpro': # convert from 10us (10^-5) to miliseconds (from gtmpro)
         llcs[:, 4] = llcs[:, 4]*0.01        
     if decimal:
