@@ -27,7 +27,7 @@ regex_dmsms = re.compile('(-)*(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{1,3})')
 regex_dmsms_ = re.compile('([-+]);(\d{1,3});(\d{1,2});(\d{1,2});(\d{1,3})')     # crazy SIGAREAS format
 # 10^-6 microseconds - 10^-5 seconds is 10 * microseconds - 
 # 5 decimal places - GTM PRO format
-regex_dms10us = re.compile('(-)*(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{5})') 
+regex_dms10us = re.compile('(-)*(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{5}).+[\r\n|\r|\n]') # adding new line at end
 
 def parse_coordinates(text, decimal=False, fmt='auto'):
     """parse coordinate pairs `text` string using regex 
