@@ -5,17 +5,17 @@ from .geographic import (
     wgs84Inverse    
 )
 
-def decdeg2dmsms(dd): 
-    """decimal degree to (degrees, minutes, seconds, miliseconds)
-        * dd : float
-
-    return tuple(degrees, minutes, seconds, miliseconds)
+def ddegree2dmsms(dd): 
+    """decimal degree to tuple (+/- 1 signal, degrees, minutes, seconds, miliseconds)
+        * dd : float64
+            degree coordinate (e.g. latitude or longitude)
+    return tuple(+/- 1 signal, degrees, minutes, seconds, miliseconds)
     """       
     minutes,seconds = divmod(abs(dd)*3600,60)
     degrees,minutes = divmod(minutes,60)    
     mseconds = 1000*(seconds - int(seconds))
     signal = -1 if dd < 0 else 1
-    return (signal*int(degrees), int(minutes), int(seconds), int(mseconds))
+    return (signal, int(degrees), int(minutes), int(seconds), mseconds)
 
 
 class NotPairofCoordinatesError(Exception):
@@ -104,9 +104,10 @@ gtmpro_header = """Version,212
 
 SIRGAS 2000,289, 6378137, 298.257222101, 0, 0, 0
 USER GRID,0,0,0,0,0
+
 """
 
-def formatMemorial(latlon, fmt='sigareas', endfirst=False, view=False,
+def formatMemorial(latlon, fmt='sigareas', close_poly=False, view=False,
                     save=False, filename='MEMOCOORDS.TXT'):
     """
     Create formated text file poligonal ('Memorial Descritivo') 
@@ -115,7 +116,6 @@ def formatMemorial(latlon, fmt='sigareas', endfirst=False, view=False,
         [[lat,lon]...]
 
     coordinate have 5 fields:  [ signal +/- 1, degree, minutes, seconds, miliseconds ]
-
     * fmt : str 
 
         'sigareas' : to use on SIGAREAS->Administrador->Inserir Poligonal|Corrigir Poligonal
@@ -124,10 +124,7 @@ def formatMemorial(latlon, fmt='sigareas', endfirst=False, view=False,
             uses header for SIRGAS 2000
 
         'ddegree' : decimal degree
-
-    * endfirst: default True
-        copy first point in the end
-    
+   
     * save: default=False
         save a file with this poligonal
     
@@ -139,8 +136,11 @@ def formatMemorial(latlon, fmt='sigareas', endfirst=False, view=False,
     """
     if not isinstance(latlon, np.ndarray):
         raise NotImplemented()    
-    if endfirst:  # add first point to the end
-        latlon = np.append(latlon, latlon[-1]) 
+    if len(latlon.shape) == 2: # decimal degree array as input shape(-1, 2) len(2) instead of len(3)
+        # turn in [ signal +/- 1, degree, minutes, seconds, miliseconds ] array
+        latlon = np.array(list(map(ddegree2dmsms, latlon.flatten()))).reshape(-1, 2, 5)
+    if close_poly and (not np.alltrue(latlon[0] == latlon[-1])):  
+        latlon = np.append(latlon, latlon[0:1], axis=0) # add first point to the end        
     fmtlines = ""
     if fmt == "sigareas":
         data = latlon.reshape(-1, 5)
@@ -178,46 +178,45 @@ def formatMemorial(latlon, fmt='sigareas', endfirst=False, view=False,
         return fmtlines
 
 
-def forceverdPoligonal(vertices, tolerancem=0.5, verbose=True, ignlast=True):
+def forceverdPoligonal(vertices, tolerancem=0.5, view=False, close_poly=True, debug=True):
     """
-    #Força rumos verdadeiros#
-    Force decimal coordinates (lat,lon) to previous (lat/lon)
-    otherwise sigareas wont accept this polygon
+    Aproxima coordenadas para rumos verdadeiros.
+    Aproximate decimal coordinates (lat,lon) to previous (lat or lon).    
 
-    *ignlast : default True
-            ignore last point (repeated from first)
+    *close_poly : default True
+            close polygon (if needed) repeating first vertex at the end
     *tolerancem: default 0.5 meter
             distance to accept as same lat or lon as previous
+    
     """
-    cvertices = np.copy(np.array(vertices))
+    if not isinstance(vertices, np.ndarray):
+        raise NotImplemented()          
+    if np.alltrue(vertices[0] == vertices[-1]): # needed for calculations bellow
+        vertices = vertices[:-1]  # remove end (repeated vertex)  
+    cvertices = np.copy(vertices)
     vertices_new = np.copy(cvertices)
-    if ignlast:
-        cvertices = cvertices[:-1]
     dists = []
     for i, (plat, plon) in enumerate(cvertices):
         for j, (lat, lon) in enumerate(cvertices[i+1:]): # compare with next one : downward
             dlat, dlon = lat-plat, lon-plon
             dist = wgs84Inverse(lat, lon, plat, lon)
             if(dlat != 0.0 and abs(dist) < tolerancem ):
-                print('line: {:>3d} - lat {:.8f} changed to {:.8f} distance {:2.2f} (m)'.format(i+1+j+1,
-                    lat, plat, dist))
+                if debug:
+                    print('line: {:>3d} - lat {:.8f} changed to {:.8f} distance {:2.2f} (m)'.format(i+1+j+1,
+                        lat, plat, dist))
                 vertices_new[i+1+j, 0] = plat
                 dists.append(dist)
             dist = wgs84Inverse(lat, lon, lat, plon)
             if(dlon != 0.0 and abs(dist) < tolerancem):
-                print('line: {:>3d} - lon {:.8f} changed to {:.8f} distance {:2.2f} (m)'.format(i+1+j+1,
-                    lon, plon, dist))
+                if debug:
+                    print('line: {:>3d} - lon {:.8f} changed to {:.8f} distance {:2.2f} (m)'.format(i+1+j+1,
+                        lon, plon, dist))
                 dists.append(dist)
-                vertices_new[i+1+j, 1] = plon
-    if ignlast: # replace instead of ignoring last
-        vertices_new[-1] = vertices_new[0]
-    
-    if not dists: # no distances means all zero - already rumos verdadeiros
-        print("Already rumos verdadeiros - no change!")
-    else:
+                vertices_new[i+1+j, 1] = plon    
+    if debug:
+        # not dists: # no distances means all zero - already rumos verdadeiros            
         print("Changes statistics min (m) : {:2.2f}  p50: {:2.2f} max: {:2.2f}".format(
             *(np.percentile(dists, [0, 50, 100]))))
-
     def test_verd(vertices):
         """test wether vertices are lat/lon 'rumos verdadeiros' """
         dlat, dlon = np.diff(vertices[:,0]), np.diff(vertices[:,1])
@@ -230,9 +229,14 @@ def forceverdPoligonal(vertices, tolerancem=0.5, verbose=True, ignlast=True):
                     continue
             return False
         return True
-    check_verd = test_verd(vertices_new)
-    print("rumos verdadeiros check: ", "passed" if check_verd else "failed")
-    return vertices_new
+    if test_verd(vertices_new) == False:
+        raise NotImplemented("failed check 'rumos verdadeiros'")     # 'rumos verdadeiros' NSEW check
+    if close_poly: # close polygon back
+        vertices_new = np.append(vertices_new, vertices_new[0:1], axis=0)
+    if view:
+        print(vertices_new)
+    else: 
+        return vertices_new
 
 
 
