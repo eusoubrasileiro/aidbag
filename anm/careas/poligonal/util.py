@@ -99,6 +99,13 @@ generating numpy array of coordinates.
 #
 # 
 
+# gtm pro header allways SIRGAS 2000
+gtmpro_header = """Version,212
+
+SIRGAS 2000,289, 6378137, 298.257222101, 0, 0, 0
+USER GRID,0,0,0,0,0
+"""
+
 def formatMemorial(latlon, fmt='sigareas', endfirst=False, view=False,
                     save=False, filename='MEMOCOORDS.TXT'):
     """
@@ -113,8 +120,9 @@ def formatMemorial(latlon, fmt='sigareas', endfirst=False, view=False,
 
         'sigareas' : to use on SIGAREAS->Administrador->Inserir Poligonal|Corrigir Poligonal
         
-        'gtmpro' : to use on GTM PRO ?
-        
+        'gtmpro' : to use on GTM PRO 
+            uses header for SIRGAS 2000
+
         'ddegree' : decimal degree
 
     * endfirst: default True
@@ -143,6 +151,7 @@ def formatMemorial(latlon, fmt='sigareas', endfirst=False, view=False,
             fmtlines += "{0:};{3:03};{4:02};{5:02};{6:03};{1:};{8:03};{9:02};{10:02};{11:03}\n".format(
                     s0, s1, *line) # for the rest * use positional arguments ignoring the old signals args [2, 7]           
     elif fmt == "gtmpro":
+        fmtlines += gtmpro_header
         data = latlon.reshape(-1, 5).astype(np.double)
         data[:,1] = data[:,0]*data[:,1] # 'add' signal 
         data[:,3] = data[:,3]+0.001*data[:,4] # add miliseconds to seconds
