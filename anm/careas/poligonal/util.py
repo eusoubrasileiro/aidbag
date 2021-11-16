@@ -143,7 +143,7 @@ def formatMemorial(latlon, fmt='sigareas', endfirst=False, view=False,
         latlon = np.append(latlon, latlon[-1]) 
     fmtlines = ""
     if fmt == "sigareas":
-        lines = latlon.reshape(-1, 10).tolist()
+        lines = latlon.reshape(-1, 10).astype(int).tolist()
         for line in lines:
             # -;019;44;18;173;-;044;17;41;702
             s0, s1 = map(str, [line[0], line[5]]) # to not print -1,+1 only - or +
