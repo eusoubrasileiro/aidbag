@@ -214,8 +214,7 @@ def forceverdPoligonal(vertices, tolerancem=0.5, view=False, close_poly=True, de
                         lon, plon, dist), file=sys.stderr)
                 dists.append(dist)
                 vertices_new[i+1+j, 1] = plon    
-    if debug:
-        # not dists: # no distances means all zero - already rumos verdadeiros            
+    if debug and dists: # not dists: no distances means all zero - already rumos verdadeiros            
         print("Changes statistics min (m) : {:2.2f}  p50: {:2.2f} max: {:2.2f}".format(
             *(np.percentile(dists, [0, 50, 100]))), file=sys.stderr)
     def test_verd(vertices):
