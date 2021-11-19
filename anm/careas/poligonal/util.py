@@ -6,29 +6,27 @@ from .geographic import (
     wgs84Inverse    
 )
 
-def ddegree2dmsms(dd): 
-    """decimal degree to tuple (+/- 1 signal, degrees, minutes, seconds, miliseconds)
+def ddegree2dms(dd): 
+    """decimal degree to tuple (degrees, minutes, seconds)
         * dd : float64
             degree coordinate (e.g. latitude or longitude)
-    return tuple(+/- 1 signal, degrees, minutes, seconds, miliseconds)
+    return tuple(degrees, minutes, seconds)
     """       
     minutes,seconds = divmod(abs(dd)*3600,60)
-    degrees,minutes = divmod(minutes,60)    
-    mseconds = 1000*(seconds - int(seconds))
+    degrees,minutes = divmod(minutes,60)        
     signal = -1 if dd < 0 else 1
-    return (signal, int(degrees), int(minutes), int(seconds), mseconds)
+    return (signal*int(degrees), int(minutes), seconds)
 
+
+# coordinates regex for degree minutes seconds and miliseconds 
+regex_dmsms = re.compile('([-|+]\d{1,2})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{1,3})')
+regex_dmsms_ = re.compile('([-+]);(\d{1,3});(\d{1,2});(\d{1,2});(\d{1,3})')     # crazy SIGAREAS format
+# N decimal places - GTM PRO format but also some dms formats
+regex_dms = re.compile('([-+]*\d{1,2})[ \'\"\,]+(\d{1,2})[ \'\"\,]+(\d{1,2}[\.\,]\d+)\D+')
 
 class NotPairofCoordinatesError(Exception):
     """It must be a pairs of coordinates (lat., lon) even number. Odd number found!"""
     pass
-
-# coordinates regex for degree minutes seconds and miliseconds 
-regex_dmsms = re.compile('(-)*(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{1,3})')
-regex_dmsms_ = re.compile('([-+]);(\d{1,3});(\d{1,2});(\d{1,2});(\d{1,3})')     # crazy SIGAREAS format
-# 10^-6 microseconds - 10^-5 seconds is 10 * microseconds - 
-# 5 decimal places - GTM PRO format
-regex_dms10us = re.compile('(-)*(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})[\.\,](\d{5})')
 
 def parse_coordinates(text, decimal=False, fmt='auto'):
     """parse coordinate pairs `text` string using regex 
@@ -40,16 +38,17 @@ def parse_coordinates(text, decimal=False, fmt='auto'):
         or 
         -19 44 18 174 -44 17 45 410 -24 17 15 410 ...          
         (dmsms) : degree, minute, second and mili seconds 
-    
-    ouput: numpy array - shape (-1, 2, 5) 
-        [[-1, 19, 44, 18, 174], [-1, 44, 17, 41, 703] ...]
+        or other supported format 
+
+    ouput: numpy array - shape (-1, 2, 3) 
+        [[-19, 44, 18.174], [-44, 17, 41.703] ...]
         [[lat0, lon0], [lat1, lon1]...]
 
     returns list of coordinates parsed
-        [[-1, 19, 44, 18, 174], [-1, 44, 17, 41, 703] ...]
+        [[-19, 44, 18.174], [-44, 17, 41.703] ...]
 
-    coordinate have 5 fields:
-        [ signal +/- 1, degree, minutes, seconds, miliseconds ]
+    coordinate has 3 fields:
+        [ degree, minutes, seconds ]
 
     * decimal: bool (default=False)
         convert coordinates to decimal degrees 
@@ -60,28 +59,29 @@ def parse_coordinates(text, decimal=False, fmt='auto'):
         'gtmpro' -> dms 10micro seconds, 5 decimal places
 
     """    
-    regex = regex_dmsms
-    if fmt == 'auto':        
+    text = re.sub("\n+", "\n", text) # \n\n are causes lots of problems even with re.MULTILINE
+    if fmt == 'auto': # degree minute second milisecond format         
         if text.find('-;') != -1 or text.find('+;') != -1: # crazy SIGAREAS format
-            regex = regex_dmsms_
-    if fmt == 'gtmpro':        
-        regex = regex_dms10us
-    csparsed = re.findall(regex, text)
-    coords = [ [int(sg+'1'), *map(int, [dg, mn, sc, msc])] 
-                for sg, dg, mn, sc, msc in csparsed ]
-    if len(csparsed)%2 != 0: # must be even lat, lon pairs        
-        raise NotPairofCoordinatesError()     
-    llcs = np.array(coords, dtype=np.double) #lat, lon = coords[::2],  coords[1::2]     
-    if fmt == 'gtmpro': # convert from 10us (10^-5) to miliseconds (from gtmpro)
-        llcs[:, 4] = llcs[:, 4]*0.01        
-    if decimal:
-        npl = llcs.reshape(-1, 5)
-        # convert to decimal ignore signal than finally multiply by signal back
-        npl = np.sum(npl*[0, 1., 1/60., 1/3600., 0.001*1/3600.], axis=-1)*npl[:,0]
-        llcs = npl.reshape(-1, 2)
+            data = np.array([ [ int(sg+d), int(m), float(s +'.'+ msc) ]  
+                for sg, d, m, s, msc in regex_dmsms_.findall(text) ], dtype=np.double)
+        else: # some degree minute second milisecond format 
+            data = np.array([ [ int(d), int(m), float(s+'.'+ms)] 
+                for d, m, s, ms in regex_dmsms.findall(text)], dtype=np.double)  
+    elif fmt == 'gtmpro': # degree minute second decimal format               
+        #text = re.sub("^[^t].*", "", text, flags=re.MULTILINE)  # must remove lines not with start pattern t,dms  
+        text = text.replace(',','.')        
+        data = np.array([ [*map(float, values)] 
+            for values in regex_dms.findall(text) ], dtype=np.double)
     else:
-        llcs = llcs.reshape(-1, 2, 5)
-    return llcs 
+        raise NotImplementedError()
+    if data.shape[0]%2 != 0: # must be even lat, lon pairs        
+        raise NotPairofCoordinatesError()     
+    if decimal:        
+        data = np.sum(np.abs(data)*[1., 1/60., 1/3600.], axis=-1)*np.sign(data[:,0])
+        data = data.reshape(-1, 2)
+    else:
+        data = data.reshape(-1, 2, 3)
+    return data 
 
 readMemorial = parse_coordinates
 readMemorial.__doc__ = """Parse lat, lon string (`llstr`) #Aba Poligonal Scm#
@@ -93,11 +93,7 @@ generating numpy array of coordinates.
 # -;019;44;18;173;-;044;17;41;702
 # GTMPRO
 #t,dms,-17 16' 10.78600'',-41 34' 01.19200'',00/00/00,00:00:00,0,0
-#t,dms,-17 16' 10.78600'',-41 33' 58.96200'',00/00/00,00:00:00,0,0
-#t,dms,-17 16' 10.33500'',-41 33' 58.96200'',00/00/00,00:00:00,0,0
 # DECIMAL DEGREE
-# 
-#
 # 
 
 # gtm pro header allways SIRGAS 2000
@@ -108,7 +104,7 @@ USER GRID,0,0,0,0,0
 
 """
 
-def formatMemorial(latlon, fmt='sigareas', close_poly=False, view=False,
+def formatMemorial(latlon, fmt='sigareas', close_poly=True, view=False,
                     save=False, filename='MEMOCOORDS.TXT'):
     """
     Create formated text file poligonal ('Memorial Descritivo') 
@@ -116,7 +112,7 @@ def formatMemorial(latlon, fmt='sigareas', close_poly=False, view=False,
     * latlon: numpy array from `memorialRead`
         [[lat,lon]...]
 
-    coordinate have 5 fields:  [ signal +/- 1, degree, minutes, seconds, miliseconds ]
+    coordinate have 3 fields:  [ degree, minutes, seconds ]
     * fmt : str 
 
         'sigareas' : to use on SIGAREAS->Administrador->Inserir Poligonal|Corrigir Poligonal
@@ -138,35 +134,27 @@ def formatMemorial(latlon, fmt='sigareas', close_poly=False, view=False,
     if not isinstance(latlon, np.ndarray):
         raise NotImplemented()    
     if len(latlon.shape) == 2: # decimal degree array as input shape(-1, 2) len(2) instead of len(3)
-        # turn in [ signal +/- 1, degree, minutes, seconds, miliseconds ] array
-        latlon = np.array(list(map(ddegree2dmsms, latlon.flatten()))).reshape(-1, 2, 5)
+        # turn in [ degree, minutes, seconds ] array
+        latlon = np.array(list(map(ddegree2dms, latlon.flatten()))).reshape(-1, 2, 3)
     if close_poly and (not np.alltrue(latlon[0] == latlon[-1])):  
         latlon = np.append(latlon, latlon[0:1], axis=0) # add first point to the end        
     fmtlines = ""
     if fmt == "sigareas":
-        data = latlon.reshape(-1, 5)
-        data[:, 4] = np.round(data[:, 4], 0) # round to 0 decimal places
-        lines = data.reshape(-1, 10).astype(int).tolist()
-        for line in lines:
+        for line in latlon.tolist():
             # -;019;44;18;173;-;044;17;41;702
-            s0, s1 = map(str, [line[0], line[5]]) # to not print -1,+1 only - or +
-            s0, s1 = s0[0], s1[0]            
-            fmtlines += "{0:};{3:03};{4:02};{5:02};{6:03};{1:};{8:03};{9:02};{10:02};{11:03}\n".format(
-                    s0, s1, *line) # for the rest * use positional arguments ignoring the old signals args [2, 7]           
+            line = [ [ str(np.sign(d))[0] , abs(int(d)), int(m), int(s), int(np.round(1000*(s-int(s)),0))  ] 
+                for d, m, s in line ]
+            fmtlines += "{:};{:03};{:02};{:02};{:03};{:};{:03};{:02};{:02};{:03}\n".format(*line[0], *line[1])      
     elif fmt == "gtmpro":
         fmtlines += gtmpro_header
-        data = latlon.reshape(-1, 5).astype(np.double)
-        data[:,1] = data[:,0]*data[:,1] # 'add' signal 
-        data[:,3] = data[:,3]+0.001*data[:,4] # add miliseconds to seconds
-        data = data[:,1:4] # dms
-        for row in data.reshape(-1, 2, 3): # dms
+        for row in latlon.reshape(-1, 2, 3): # dms
             #t,dms,-17 16' 10.33500'',-41 33' 58.96200'',00/00/00,00:00:00,0,0            
             fmtlines += "t,dms,{:03.0f} {:02.0f}\' {:08.5f}\'\',{:03.0f} {:02.0f}\' {:08.5f}\'\',00/00/00,00:00:00,0,0 \n".format(
                 *row.flatten().tolist())     
     elif fmt == "ddegree":
-        data = latlon.reshape(-1, 5)
+        data = latlon.reshape(-1, 3)
         # convert to decimal ignore signal than finally multiply by signal back
-        data = np.sum(data*[0, 1., 1/60., 1/3600., 0.001*1/3600.], axis=-1)*data[:,0]
+        data = np.sum(np.abs(data)*[1., 1/60., 1/3600.], axis=-1)*np.sign(data[:,0])
         for row in data.reshape(-1, 2):                 
             fmtlines += "{:12.9f} {:12.9f} \n".format(*row.flatten().tolist())             
     if save:
