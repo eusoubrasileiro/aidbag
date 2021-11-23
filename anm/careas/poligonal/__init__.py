@@ -1,7 +1,8 @@
 from .util import (
     formatMemorial,
     readMemorial,
-    forceverdPoligonal       
+    forceverdPoligonal,
+    forceverdFailed       
 )
 
 def test(verbose=True, coverage=False):
