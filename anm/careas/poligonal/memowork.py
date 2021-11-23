@@ -2,7 +2,7 @@ import numpy as np
 
 from .util import (
     forceverdPoligonal,
-    memorialRead, 
+    readMemorial, 
     formatMemorial,    
     )
 
@@ -106,7 +106,7 @@ def translate_info(coords, ref_coords, displace_dist=1.5):
     ref_points = ref_coords.copy()
     points = coords.copy()
     if isinstance(ref_points, str):
-        ref_points = memorialRead(ref_points, decimal=True, verbose=True)
+        ref_points = readMemorial(ref_points, decimal=True, verbose=True)
     elif( (isinstance(ref_points, list) or isinstance(ref_points, np.ndarray)) and
         (isinstance(points, list) or isinstance(points, np.ndarray)) ):
         pass
@@ -145,14 +145,14 @@ def memorial_acostar(memorial, memorial_ref, reference_dist=50, mtolerance=0.5):
 
     """
     if isinstance(memorial_ref, str):
-        ref_points = memorialRead(memorial_ref, decimal=True, verbose=False)
+        ref_points = readMemorial(memorial_ref, decimal=True, verbose=False)
     else:
         print('memorial_ref : deve ser copiado da aba-poligonal (string)')
         return
     if isinstance(memorial, list):
         points = np.array(memorial)
     elif isinstance(memorial, str):
-        points = np.array(memorialRead(memorial, decimal=True, verbose=False))
+        points = np.array(readMemorial(memorial, decimal=True, verbose=False))
     elif isinstance(memorial, np.ndarray):
         points = memorial
     else:
