@@ -28,7 +28,7 @@ class NotPairofCoordinatesError(Exception):
     """It must be a pairs of coordinates (lat., lon) even number. Odd number found!"""
     pass
 
-def parse_coordinates(text, decimal=False, fmt='auto'):
+def parse_coordinates(text, decimal=False, fmt='scm'):
     """parse coordinate pairs `text` string using regex 
 
     * text: str          
@@ -54,13 +54,13 @@ def parse_coordinates(text, decimal=False, fmt='auto'):
         convert coordinates to decimal degrees 
         output shape becomes (-1, 2) 
 
-    * fmt : 'auto' default
-        'auto' -> try generic dmsms than SIGAREAS format
+    * fmt : 'scm' default
+        'scm' -> try generic dmsms than SIGAREAS format
         'gtmpro' -> dms 10micro seconds, 5 decimal places
 
     """    
     text = re.sub("\n+", "\n", text) # \n\n are causes lots of problems even with re.MULTILINE
-    if fmt == 'auto': # degree minute second milisecond format         
+    if fmt == 'scm': # degree minute second milisecond format         
         if text.find('-;') != -1 or text.find('+;') != -1: # crazy SIGAREAS format
             data = np.array([ [ int(sg+d), int(m), float(s +'.'+ msc) ]  
                 for sg, d, m, s, msc in regex_dmsms_.findall(text) ], dtype=np.double)

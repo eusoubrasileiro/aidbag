@@ -81,15 +81,17 @@ def test_simple_memo():
 # parse xml and create test data samples 
 root = ET.parse(os.path.join(os.path.dirname(__file__), 'tests.xml'))
 test_samples = [] 
+test_names = []
 for test in root.findall("test"):
-     input, expected = list(test)
-     # expected from xml comes with two \n begin and end  
-     test_samples.append((input.text, input.attrib['type'], 
+    input, expected = list(test)
+    # expected from xml comes with two \n begin and end  
+    test_samples.append((input.text, input.attrib['type'], 
         expected.attrib['type'], expected.text.strip(), expected.attrib['nsew'] == 'true'))
+    test_names.append(test.attrib['name'])    
 
 
-@pytest.mark.parametrize("text, itype, otype, expected, nsew", test_samples)
-def test_with_memorial_samples(text, itype, otype, expected, nsew):
+@pytest.mark.parametrize("text, itype, otype, expected, nsew", test_samples, ids=test_names)
+def test_memorial(text, itype, otype, expected, nsew):
      parsed_data = readMemorial(text, fmt=itype, decimal=True)
      if nsew:        
         parsed_data = forceverdPoligonal(parsed_data, debug=False)
