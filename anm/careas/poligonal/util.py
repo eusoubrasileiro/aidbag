@@ -167,6 +167,28 @@ def formatMemorial(latlon, fmt='sigareas', close_poly=True, view=False,
     else:
         return fmtlines
 
+def check_nsew_memo(data, maxdev=1):
+    """simple fast check if its a nsew navigation
+
+    * latlon: numpy array from `memorialRead(...,decimal=True)`
+        [[lat,lon]...]
+
+    * maxdev : angle in degrees for maximum deviation acceptable
+        from north/south/east/west
+
+    tan of theta = theta : for angles < 9 degrees (error < 1%)
+
+    Hence we calculate tan(deviation angle) on first quadrant using 
+    deviation angle (min(abs(lat),abs(lon))/max(abs(lat), abs(lon)))
+
+    Note: use maxdev=0 for check use on sigareas
+    """
+    vectors = np.abs(np.diff(data, axis=0)) # vectors on first quadrant
+    maxs = np.max(vectors, axis=-1) 
+    mins = np.min(vectors, axis=-1)
+    dev_angles = np.rad2deg(mins/maxs) # angles of deviation from n/s/e/w
+    return np.alltrue(dev_angles <= maxdev)  
+
 class forceverdFailed(Exception):
     """increase the tolerance distance to adjust to nsew"""
     pass
@@ -209,28 +231,11 @@ def forceverdPoligonal(vertices, tolerancem=0.5, view=False, close_poly=True, de
     if debug and dists: # not dists: no distances means all zero - already rumos verdadeiros            
         print("Changes statistics min (m) : {:2.2f}  p50: {:2.2f} max: {:2.2f}".format(
             *(np.percentile(dists, [0, 50, 100]))), file=sys.stderr)
-    def test_verd(vertices):
-        """test wether vertices are lat/lon 'rumos verdadeiros' """
-        dlat, dlon = np.diff(vertices[:,0]), np.diff(vertices[:,1])
-        for dif in (dlat, dlon): # for lat and lon check
-            if np.alltrue(dif[::2] != 0):
-                if np.alltrue(dif[1::2] == 0):
-                    continue
-            if np.alltrue(dif[::2] == 0):
-                if np.alltrue(dif[1::2] != 0):
-                    continue
-            return False
-        return True
-    if test_verd(vertices_new) == False:
-        raise forceverdFailed()  # 'rumos verdadeiros' NSEW check
+    if check_nsew_memo(vertices_new, 0) == False:
+        raise forceverdFailed()  # 'rumos verdadeiros' NSEW check sigareas deviation 0
     if close_poly: # close polygon back
         vertices_new = np.append(vertices_new, vertices_new[0:1], axis=0)
     if view:
         print(vertices_new)
     else: 
         return vertices_new
-
-
-
-
-
