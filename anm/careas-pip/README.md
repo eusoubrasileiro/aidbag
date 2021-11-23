@@ -48,8 +48,8 @@ Pip install -e . (doesn't work yet)
 
 ### Tests
 
-For development works from careas folder this bellow works even if not installed
+For development run from careas folder
 
 ```
-python -m pytest --pyargs poligonal
+python -m pytest -vv
 ```
