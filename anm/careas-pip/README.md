@@ -4,12 +4,18 @@
 Install from this folder with:
 
 ```
-python setup.py install 
+pip install .
 ```
 
-remove with `pip uninstall careas-poligons`
+remove with `pip uninstall careas-poligonal`
 
 ### Network install
+
+Pip subdirectory install.
+
+```
+pip3 install git+https://github.com/eusoubrasileiro/aidbag.git#subdirectory=anm/careas-pip
+```
 
 Clone with `--depth 1` only last commit on history.
 And install on your virtual env.
@@ -17,13 +23,33 @@ And install on your virtual env.
 ```
 git clone --depth 1 https://github.com/eusoubrasileiro/aidbag.git
 cd aidbag/anm/careas-pip 
-python3 setup.py install
 ```
+Then use 
 
-Pip subdirectory install won't work. 
+```pip install .```
+
+or 
+
+```python3 -m pip install .```
+
+or 
+
+```python3 setup.py install```
+
+
+### Pip editable mode
+
+Pip install -e . (doesn't work yet)
+
+> -e,--editable <path/url>
+> Install a project in editable mode (i.e.  setuptools "develop mode") from a local project path or a VCS url.
+> normally just a link to the folder
+
+
+### Tests
+
+For development works from careas folder this bellow works even if not installed
 
 ```
-pip3 install -e git+https://github.com/eusoubrasileiro/aidbag.git#egg=version_subpkg\&#subdirectory=anm/careas-pip
+python -m pytest --pyargs poligonal
 ```
-
-Since `setup.py` uses a backward relative reference `'..\'`
