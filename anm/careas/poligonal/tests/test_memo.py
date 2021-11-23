@@ -92,7 +92,6 @@ for test in root.findall("test"):
 def test_with_memorial_samples(text, itype, otype, expected, nsew):
      parsed_data = readMemorial(text, fmt=itype, decimal=True)
      if nsew:        
-        result = formatMemorial(forceverdPoligonal(parsed_data, debug=False), fmt=otype)
-     else:
-        result = formatMemorial(parsed_data, fmt=otype)
+        parsed_data = forceverdPoligonal(parsed_data, debug=False)
+     result = formatMemorial(parsed_data, fmt=otype)
      assert(result == expected) 

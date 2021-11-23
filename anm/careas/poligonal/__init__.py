@@ -34,6 +34,3 @@ def test(verbose=True, coverage=False):
     args.append(package)    
     status = pytest.main(args)
     assert status == 0, "Some tests have failed."
-
-# from careas folder this bellow works even if not installed
-#python -m pytest --pyargs poligonal
