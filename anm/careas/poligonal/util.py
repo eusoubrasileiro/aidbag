@@ -22,7 +22,7 @@ def ddegree2dms(dd):
 regex_dmsms = re.compile('([-|+]\d{1,2})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{1,3})')
 regex_dmsms_ = re.compile('([-+]);(\d{1,3});(\d{1,2});(\d{1,2});(\d{1,3})')     # crazy SIGAREAS format
 # N decimal places - GTM PRO format but also some dms formats
-regex_dms = re.compile('([-+]*\d{1,2})[ \'\"\,]+(\d{1,2})[ \'\"\,]+(\d{1,2}[\.\,]\d+)\D+')
+regex_dms = re.compile('([-+]*\d{1,2})[ \'\"\,]+(\d{1,2})[ \'\"\,]+(\d{1,2}[\.\,]\d+)\D')
 
 class NotPairofCoordinatesError(Exception):
     """It must be a pairs of coordinates (lat., lon) even number. Odd number found!"""
