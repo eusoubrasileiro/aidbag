@@ -1,23 +1,27 @@
+import os 
+import pytest 
 import numpy as np
 import numpy.testing as npt
+import xml.etree.ElementTree as ET
 
 from poligonal.util import (
-        readMemorial,
-        formatMemorial
-        )
+    readMemorial,
+    formatMemorial,
+    forceverdPoligonal
+    )
 
 from poligonal.memowork import (
-        simple_memo_direct,
-        simple_memo_inverse
-        )
+    simple_memo_direct,
+    simple_memo_inverse
+    )
 
 from poligonal.geographic import (
-        wgs84PolygonAtributes
-        )
+    wgs84PolygonAtributes
+    )
 
 # from poligonal.deprecated import (
-#         memoPoligonPA
-#         )
+#   memoPoligonPA
+#   )
 
 
 # def test_memoPoligonPA():
@@ -74,10 +78,21 @@ def test_simple_memo():
     npt.assert_allclose(np.array(points_direct), np.array(points[:-1]))
 
 
-# @pytest.fixture
-# def fruit_basket(my_fruit):
-#     return [Fruit("banana"), my_fruit]
+# parse xml and create test data samples 
+root = ET.parse(os.path.join(os.path.dirname(__file__), 'tests.xml'))
+test_samples = [] 
+for test in root.findall("test"):
+     input, expected = list(test)
+     # expected from xml comes with two \n begin and end  
+     test_samples.append((input.text, input.attrib['type'], 
+        expected.attrib['type'], expected.text.strip(), expected.attrib['nsew'] == 'true'))
 
 
-# def test_my_fruit_in_basket(my_fruit, fruit_basket):
-#     assert my_fruit in fruit_basket
+@pytest.mark.parametrize("text, itype, otype, expected, nsew", test_samples)
+def test_with_memorial_samples(text, itype, otype, expected, nsew):
+     parsed_data = readMemorial(text, fmt=itype, decimal=True)
+     if nsew:        
+        result = formatMemorial(forceverdPoligonal(parsed_data, debug=False), fmt=otype)
+     else:
+        result = formatMemorial(parsed_data, fmt=otype)
+     assert(result == expected) 
