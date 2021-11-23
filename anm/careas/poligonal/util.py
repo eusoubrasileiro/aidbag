@@ -149,14 +149,15 @@ def formatMemorial(latlon, fmt='sigareas', close_poly=True, view=False,
         fmtlines += gtmpro_header
         for row in latlon.reshape(-1, 2, 3): # dms
             #t,dms,-17 16' 10.33500'',-41 33' 58.96200'',00/00/00,00:00:00,0,0            
-            fmtlines += "t,dms,{:03.0f} {:02.0f}\' {:08.5f}\'\',{:03.0f} {:02.0f}\' {:08.5f}\'\',00/00/00,00:00:00,0,0 \n".format(
+            fmtlines += "t,dms,{:03.0f} {:02.0f}\' {:08.5f}\'\',{:03.0f} {:02.0f}\' {:08.5f}\'\',00/00/00,00:00:00,0,0\n".format(
                 *row.flatten().tolist())     
     elif fmt == "ddegree":
         data = latlon.reshape(-1, 3)
         # convert to decimal ignore signal than finally multiply by signal back
         data = np.sum(np.abs(data)*[1., 1/60., 1/3600.], axis=-1)*np.sign(data[:,0])
         for row in data.reshape(-1, 2):                 
-            fmtlines += "{:12.9f} {:12.9f} \n".format(*row.flatten().tolist())             
+            fmtlines += "{:12.9f} {:12.9f} \n".format(*row.flatten().tolist())         
+    fmtlines = fmtlines[:-1]  # remove last newline
     if save:
         with open(filename.upper(), 'w') as f: # must be CAPS otherwise can't upload
             f.write(fmtlines)
