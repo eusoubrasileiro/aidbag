@@ -167,6 +167,9 @@ def formatMemorial(latlon, fmt='sigareas', close_poly=True, view=False,
     else:
         return fmtlines
 
+class forceverdFailed(Exception):
+    """increase the tolerance distance to adjust to nsew"""
+    pass
 
 def forceverdPoligonal(vertices, tolerancem=0.5, view=False, close_poly=True, debug=True):
     """
@@ -219,7 +222,7 @@ def forceverdPoligonal(vertices, tolerancem=0.5, view=False, close_poly=True, de
             return False
         return True
     if test_verd(vertices_new) == False:
-        raise NotImplemented("failed check 'rumos verdadeiros'")     # 'rumos verdadeiros' NSEW check
+        raise forceverdFailed()  # 'rumos verdadeiros' NSEW check
     if close_poly: # close polygon back
         vertices_new = np.append(vertices_new, vertices_new[0:1], axis=0)
     if view:
