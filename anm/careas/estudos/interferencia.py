@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 
-from ..constants import __secor_path__, __secor_timeout__, __eventos_scm__
+from ..constants import __secor_timeout__, __eventos_scm__, processPathSecor
 from ..scm import *
 from ....web import htmlscrap 
 from ..SEI import *
@@ -18,7 +18,6 @@ def inFaseRInterferencia(fase_str):
         if fase.find(fase_str.strip()) != -1:
             return True
     return False 
-
 
 def getEventosSimples(wpage, processostr):
     """ Retorna tabela de eventos simples para processo especificado
@@ -54,12 +53,8 @@ class Interferencia:
         self.processo = Processo.Get(processostr, wpage, dados, verbose)
         self.wpage = wpage
         self.verbose = verbose
-        # pasta padrao salvar processos todos, mais simples
-        self.secorpath = os.path.join(__secor_path__, 'Processos')
-        self.processo_path = os.path.join(self.secorpath,
-                    self.processo.number+'-'+self.processo.year )
-        if not os.path.exists(self.processo_path): # cria a pasta  se nao existir
-            os.mkdir(self.processo_path)
+       
+        self.processo_path = processPathSecor(self.processo)
 
     @staticmethod
     def make(wpage, processostr, verbose=False):

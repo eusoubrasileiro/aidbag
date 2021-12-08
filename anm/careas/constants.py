@@ -80,3 +80,16 @@ docs_externos_sei_tipo = [ 'Estudo',
 docs_externos_sei_txt = [ u"de Retirada de Interferência", # Nome na Arvore
         u"Pré de Alvará", 'de Licenciamento', u"de Opção", 'de Portaria de Lavra',
         u"de Permissão de Lavra Garimpeira", u"1 Análise de Requerimento de Lavra SECOR-MG"]
+
+def processPathSecor(processo, create=True):
+    """pasta padrao salvar todos processos 
+    * processo : `Processo` class
+    * create: create the path/folder if true (default)
+    """
+    secorpath = os.path.join(__secor_path__, 'Processos')
+    processo_path = os.path.join(secorpath,
+                processo.number+'-'+processo.year)    
+    
+    if create and not os.path.exists(processo_path): # cria a pasta se nao existir
+        os.mkdir(processo_path)                
+    return processo_path

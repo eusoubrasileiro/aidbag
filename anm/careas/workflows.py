@@ -3,6 +3,7 @@ import glob
 import os
 import sys
 import traceback
+import shutil
 from datetime import datetime
 from bs4 import BeautifulSoup
 from . import estudos
@@ -16,13 +17,23 @@ from .constants import (
     docs_externos_sei_txt,
     __secor_path__
     )
+from aidbag.anm.careas import constants
+
+### move process folders to Concluidos
 
 def folder_process(process_str):
-    """get folder name used to store a process from NUP like 
+    """get folder name used to store a process from NUP or whatever other form like 
     '48054.831282/2021-23' is '831282-2021'
     """
     return '-'.join(scm.numberyearPname(process_str))
 
+def move_process_folder(src_folder, dest_folder='Concluidos'):
+    """move process folder path `src_folder` to `dest_folder`
+    MUST be on same folder as `src_folder`
+    """
+    source_dir = os.path.join(os.getcwd(), src_folder)
+    target_dir = os.path.join(os.getcwd(), dest_folder)
+    shutil.move(source_dir, target_dir)
 
 __debugging__ = False
 
@@ -187,26 +198,31 @@ def IncluiTermoAberturaPE(sei, ProcessoNUP):
         pass
     sei.driver.switch_to.default_content() # go back to main document
 
-def EstudoBatchRun(wpage, processos, option=0, verbose=False):
+def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False):
     """
-    - Analise de Requerimento de Pesquisa - opcao 0
-    TODO implement:
-    - Analise de Formulario 1 - opcao 1
-    - Analise de Opcao de Area - opcao 2    
+    * tipo : str
+        'interferencia' - Analise de Requerimento de Pesquisa  
+        'opção'- Analise de Opcao de Area 
+      
+    TODO?
+    - Analise de Formulario 1
     """
     succeed_NUPs = [] # suceed 
     failed_NUPS = [] # failed
     estudo = None
-    for processo in tqdm.tqdm(processos):
+    for processo in tqdm.tqdm(processos):        
         try:            
-            estudo = estudos.Interferencia.make(wpage, processo, verbose=verbose)                 
+            if tipo == 'interferencia':
+                estudo = estudos.Interferencia.make(wpage, processo, verbose=verbose)   
+                proc = estudo.processo              
+            elif tipo == 'opção':
+                proc = scm.Processo.Get(processo, wpage, dados=1,verbose=False)
+                proc.salvaDadosBasicosHtml(constants.processPathSecor(proc))
         except Exception as e:  # too generic is masking errors that I don't care for??             
-            print("Exception: ", type(e).__name__, " - Process: ", processo, file=sys.stderr)           
-            traceback.print_exc()          
+            print("Process {:} Exception: ".format(processo), traceback.format_exc(), file=sys.stderr)                       
             failed_NUPS.append(scm.ProcessStorage[scm.fmtPname(processo)].NUP)            
         else:
-            succeed_NUPs.append(estudo.processo.NUP)  
-        
+            succeed_NUPs.append(proc.NUP)  
     # print all NUPS
     if verbose:
         print('SEI NUPs sucess:')
@@ -347,8 +363,8 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=N
                 IncluiDespacho(sei, NUP, 4) # - 4 - Recomenda opção
                 IncluiDespacho(sei, NUP, 5) # - 5 - Recomenda interferencia total
             else:
-                # IncluiDespacho(sei, NUP, 3) # - Recomenda análise de plano c/ notificação titular
-                IncluiDespacho(sei, NUP, 12) # - Recomenda Só análise de plano s/ notificação titular
+                #IncluiDespacho(sei, NUP, 3) # - Recomenda análise de plano c/ notificação titular
+                IncluiDespacho(sei, NUP, 12) # - Recomenda Só análise de plano s/ notificação titular (mais comum)
     #     pass
     sei.ProcessoAtribuir() # default chefe
     os.chdir(cur_path) # restore original path , to not lock the folder-path
