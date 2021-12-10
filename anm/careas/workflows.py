@@ -13,8 +13,7 @@ from .SEI import *
 
 from .constants import (
     mcodigos,
-    docs_externos_sei_tipo,
-    docs_externos_sei_txt,
+    docs_externos,
     __secor_path__
     )
 from aidbag.anm.careas import constants
@@ -42,13 +41,13 @@ def IncluiDocumentoExternoSEI(sei, ProcessoNUP, doc=0, pdf_path=None):
     Inclui pdf como documento externo no SEI
 
     doc :
-        0  - Estudo     - 'de Retirada de Interferência'
-        1  - Minuta     - 'Pré de Alvará'
-        2  - Minuta     - 'de Licenciamento'
-        3  - Estudo     - 'de Opção'
-        4  - Minuta     - 'de Portaria de Lavra'
-        5  - Minuta     - 'de Permissão de Lavra Garimpeira'
-        6 - Formulario  - '1 Análise de Requerimento de Lavra'
+        0  - Estudo      - 'de Retirada de Interferência'
+        1  - Minuta      - 'Pré de Alvará'
+        2  - Minuta      - 'de Licenciamento'
+        3  - Estudo      - 'de Opção'
+        4  - Minuta      - 'de Portaria de Lavra'
+        5  - Minuta      - 'de Permissão de Lavra Garimpeira'
+        6  - Formulario  - '1 Análise de Requerimento de Lavra'
 
     pdf_path :
         if None cria sem anexo
@@ -56,10 +55,10 @@ def IncluiDocumentoExternoSEI(sei, ProcessoNUP, doc=0, pdf_path=None):
     sei.Pesquisa(ProcessoNUP) # Entra neste processo
     sei.ProcessoIncluiDoc(0) # Inclui Externo
     # Preenchendo
-    sei.driver.find_element_by_id('selSerie').send_keys(docs_externos_sei_tipo[doc]) # Tipo de Documento
+    sei.driver.find_element_by_id('selSerie').send_keys(docs_externos[doc]['tipo']) # Tipo de Documento
     # Data do Documento
     sei.driver.find_element_by_id('txtDataElaboracao').send_keys(datetime.today().strftime('%d/%m/%Y')) # put TODAY
-    sei.driver.find_element_by_id('txtNumero').send_keys(docs_externos_sei_txt[doc]) # Nome na Arvore
+    sei.driver.find_element_by_id('txtNumero').send_keys(docs_externos[doc]['desc']) # Nome na Arvore
     sei.driver.find_element_by_id('optNato').click() #   Nato-digital
     sei.driver.find_element_by_id('lblPublico').click() # Publico
     if pdf_path is not None: # existe documento para anexar
@@ -355,7 +354,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=N
             IncluiDocumentoExternoSEI(sei, NUP, 6, None)
             IncluiDespacho(sei, NUP, 8) # - Recomenda aguardar cunprimento de exigências
             IncluiDespacho(sei, NUP, 9) # - Recomenda c/ retificação de alvará
-        elif 'pesquisa' in tipo.lower(): # 1 - Minuta - 'Pré de Alvará'
+        elif 'pesquisa' in tipo.lower(): # Requerimento de Pesquisa - 1 - Minuta - 'Pré de Alvará'
             # Inclui Estudo pdf como Doc Externo no SEI
             IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
             IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)

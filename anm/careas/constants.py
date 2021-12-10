@@ -73,13 +73,15 @@ scm_data_tags = { # "data name" ; soup.find fields( "tag", "attributes")
 mcodigos = ['1537881', '1947449', '1618347', '2725631', '1133380', '2725639', 
 '1206693', '1243175', '1453503', '1995116', '1995741', '2052065', '3044089']
 
-docs_externos_sei_tipo = [ 'Estudo',
-        'Minuta', 'Minuta', 'Estudo', 'Minuta', 'Minuta', u'Formulário']
-
-# needs u"" unicode string because of latim characters
-docs_externos_sei_txt = [ u"de Retirada de Interferência", # Nome na Arvore
-        u"Pré de Alvará", 'de Licenciamento', u"de Opção", 'de Portaria de Lavra',
-        u"de Permissão de Lavra Garimpeira", u"1 Análise de Requerimento de Lavra SECOR-MG"]
+docs_externos = {
+    0: {'tipo': 'Estudo', 'desc': 'de Retirada de Interferência'},
+    1: {'tipo': 'Minuta', 'desc': 'Pré de Alvará'},
+    2: {'tipo': 'Minuta', 'desc': 'de Licenciamento'},
+    3: {'tipo': 'Estudo', 'desc': 'de Opção'},
+    4: {'tipo': 'Minuta', 'desc': 'de Portaria de Lavra'},
+    5: {'tipo': 'Minuta', 'desc': 'de Permissão de Lavra Garimpeira'},
+    6: {'tipo': 'Formulário', 'desc': '1 Análise de Requerimento de Lavra SECOR-MG'}
+}
 
 def processPathSecor(processo, create=True):
     """pasta padrao salvar todos processos 
