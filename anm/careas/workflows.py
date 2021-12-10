@@ -14,7 +14,8 @@ from .SEI import *
 from .constants import (
     mcodigos,
     docs_externos,
-    __secor_path__
+    __secor_path__,
+    SEI_DOCS
     )
 from aidbag.anm.careas import constants
 
@@ -234,7 +235,8 @@ def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False):
 
 
 
-def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=None, verbose=True):
+def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=None, 
+        empty=False, wpage=None, verbose=True):
     """
     Inclui process documents from specified folder:
     `__secor_path__\\path\\process_folder`
@@ -261,6 +263,14 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=N
         avisa ausência de pdfs, quando cria documentos sem anexos
     * empty : True
         cria documentos sem anexos
+
+    * infer : True 
+        infer from tipo and fase dados basicos processo 
+        documents to add 
+    
+    * sei_doc : enum 
+        Enum `SEI_DOCS`
+
     """
     cur_path = os.getcwd() # for restoring after
     main_path = os.path.join(__secor_path__, path)
@@ -329,42 +339,49 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=N
     except Exception as e:
         IncluiTermoAberturaPE(sei, NUP)
 
-    if 'licen' in tipo.lower():
-        # Inclui Estudo pdf como Doc Externo no SEI
-        IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
-        # 2 - Minuta - 'de Licenciamento'
-        IncluiDocumentoExternoSEI(sei, NUP, 2, pdf_adicional)
-        IncluiDespacho(sei, NUP, 3) # - Recomenda análise de plano
-    elif 'garimpeira' in tipo.lower():
-        if 'requerimento' in fase.lower(): # Minuta de P. de Lavra Garimpeira
+    if infer: # infer from tipo, fase 
+        if 'licen' in tipo.lower():
             # Inclui Estudo pdf como Doc Externo no SEI
             IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
-            IncluiDocumentoExternoSEI(sei, NUP, 5, pdf_adicional)
+            # 2 - Minuta - 'de Licenciamento'
+            IncluiDocumentoExternoSEI(sei, NUP, 2, pdf_adicional)
             IncluiDespacho(sei, NUP, 3) # - Recomenda análise de plano
-    else:
-        # tipo - requerimento de cessão parcial ou outros
-        if 'lavra' in fase.lower(): # minuta portaria de Lavra
-            # parecer de retificação de alvará
-            IncluiParecer(sei, NUP, 0)
-            # Inclui Estudo pdf como Doc Externo no SEI
-            IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
-            IncluiDocumentoExternoSEI(sei, NUP, 4, pdf_adicional)
-            # Adicionado manualmente depois o PDF gerado
-            # com links p/ SEI
-            IncluiDocumentoExternoSEI(sei, NUP, 6, None)
-            IncluiDespacho(sei, NUP, 8) # - Recomenda aguardar cunprimento de exigências
-            IncluiDespacho(sei, NUP, 9) # - Recomenda c/ retificação de alvará
-        elif 'pesquisa' in tipo.lower(): # Requerimento de Pesquisa - 1 - Minuta - 'Pré de Alvará'
-            # Inclui Estudo pdf como Doc Externo no SEI
-            IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
-            IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)
-            if pdf_adicional is None:
-                IncluiDespacho(sei, NUP, 4) # - 4 - Recomenda opção
-                IncluiDespacho(sei, NUP, 5) # - 5 - Recomenda interferencia total
-            else:
-                #IncluiDespacho(sei, NUP, 3) # - Recomenda análise de plano c/ notificação titular
-                IncluiDespacho(sei, NUP, 12) # - Recomenda Só análise de plano s/ notificação titular (mais comum)
-    #     pass
+        elif 'garimpeira' in tipo.lower():
+            if 'requerimento' in fase.lower(): # Minuta de P. de Lavra Garimpeira
+                # Inclui Estudo pdf como Doc Externo no SEI
+                IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
+                IncluiDocumentoExternoSEI(sei, NUP, 5, pdf_adicional)
+                IncluiDespacho(sei, NUP, 3) # - Recomenda análise de plano
+        else:
+            # tipo - requerimento de cessão parcial ou outros
+            if 'lavra' in fase.lower(): # minuta portaria de Lavra
+                # parecer de retificação de alvará
+                IncluiParecer(sei, NUP, 0)
+                # Inclui Estudo pdf como Doc Externo no SEI
+                IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
+                IncluiDocumentoExternoSEI(sei, NUP, 4, pdf_adicional)
+                # Adicionado manualmente depois o PDF gerado
+                # com links p/ SEI
+                IncluiDocumentoExternoSEI(sei, NUP, 6, None)
+                IncluiDespacho(sei, NUP, 8) # - Recomenda aguardar cunprimento de exigências
+                IncluiDespacho(sei, NUP, 9) # - Recomenda c/ retificação de alvará
+            elif 'pesquisa' in tipo.lower(): # Requerimento de Pesquisa - 1 - Minuta - 'Pré de Alvará'
+                # Inclui Estudo pdf como Doc Externo no SEI
+                IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
+                IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)
+                if pdf_adicional is None:
+                    IncluiDespacho(sei, NUP, 4) # - 4 - Recomenda opção
+                    IncluiDespacho(sei, NUP, 5) # - 5 - Recomenda interferencia total
+                else:
+                    #IncluiDespacho(sei, NUP, 3) # - Recomenda análise de plano c/ notificação titular
+                    IncluiDespacho(sei, NUP, 12) # - Recomenda Só análise de plano s/ notificação titular (mais comum)
+        #     pass
+    else: # dont infer, especify explicitly        
+        if sei_doc == SEI_DOCS.REQUERIMENTO_OPCAO_ALVARA: # opção de área na fase de requerimento                
+            IncluiDocumentoExternoSEI(sei, NUP, 3, pdf_interferencia) # estudo opção
+            IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)  # minuta alvará
+            IncluiDespacho(sei, NUP, 13)  # despacho  análise de plano alvará
+
     sei.ProcessoAtribuir() # default chefe
     os.chdir(cur_path) # restore original path , to not lock the folder-path
     # should also close the openned text window - going to previous state
@@ -373,42 +390,34 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', empty=False, wpage=N
         print(NUP)
 
 
-def IncluiDocumentosSEIFolders(sei, process_folders, path='Processos', wpage=None, verbose=True):
+def IncluiDocumentosSEIFolders(sei, process_folders, path='Processos', **kwargs):
     """
-    Inclui docs. from process folders [list of process-folder-names] on SEI.
+    Inclui docs. from process folders [list of process-folder-names] on SEI.  
 
-    - Estudo
-    - Minuta
-    - Marca Acompanhamento Especial
-    - Despacho
-
+    Wrapper for `IncluiDocumentosSEIFolder` 
+    
+    Aditional args shoudl ne passed as keyword arguments
     """
     for folder_name in process_folders:
         try:
-            IncluiDocumentosSEIFolder(sei, folder_name, path, verbose=verbose)
-        except Exception as e:
-            print("Exception: ", e, " - Process: ", folder_name, file=sys.stderr)
+            IncluiDocumentosSEIFolder(sei, folder_name, path, **kwargs)
+        except Exception:
+            print("Process {:} Exception: ".format(folder_name), traceback.format_exc(), file=sys.stderr)           
             continue
 
-def IncluiDocumentosSEIFoldersFirstN(sei, nfirst=1, path='Processos', wpage=None, verbose=True):
+def IncluiDocumentosSEIFoldersFirstN(sei, nfirst=1, path='Processos', **kwargs):
     """
-    Inclui first process folders `nfirst` (list of folders) docs on SEI.
-    Follow order of glob(*) using `chdir(tipo) + chdir(path)`
-
-    - Estudo
-    - Minuta
-    - Marca Acompanhamento Especial
-    - Despacho
-
+    Inclui first process folders `nfirst` (list of folders) docs on SEI. Follow order of glob(*) 
+    
+    Wrapper for `IncluiDocumentosSEIFolder` 
+    
+    Aditional args shoudl ne passed as keyword arguments
     """
     os.chdir(os.path.join(__secor_path__, path))
     files_folders = glob.glob('*')
-    # very dirty approach
-    # get only process folders with '-' on its name like 830324-1997
-    # TODO: use Regex
     process_folders = []
     for cur_path in files_folders: # remove what is NOT a process folder
         if scm.regex_process.search(cur_path) and os.path.isdir(cur_path):
             process_folders.append(cur_path)
     process_folders = process_folders[:nfirst]
-    IncluiDocumentosSEIFolders(sei, process_folders, path, wpage, verbose)
+    IncluiDocumentosSEIFolders(sei, process_folders, path, **kwargs)

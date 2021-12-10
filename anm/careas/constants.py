@@ -1,5 +1,7 @@
 from pathlib import Path
 import os, re
+from enum import Enum
+
 
 userhome = str(Path.home()) # get userhome folder
 # eventos que inativam or ativam processo
@@ -69,9 +71,10 @@ scm_data_tags = { # "data name" ; soup.find fields( "tag", "attributes")
 # 10 - 1995741	Chefe SECOR Requerimento de Lavra: Recomendo encaminhar para preenchimento de check-list
 # 11 - 2052065	Chefe SECOR Requerimento de Lavra: Encaminhar avaliar necessidade de reavaliar reservas - redução de área
 # 12 - 3044089  Chefe SECOR Requerimento: Recomendo Só Análise de Plano 100%
+# 13 - 3369278  Chefe SECOR Requerimento: Opção Executada Recomendo Analise de Plano	
 
 mcodigos = ['1537881', '1947449', '1618347', '2725631', '1133380', '2725639', 
-'1206693', '1243175', '1453503', '1995116', '1995741', '2052065', '3044089']
+'1206693', '1243175', '1453503', '1995116', '1995741', '2052065', '3044089', '3369278']
 
 docs_externos = {
     0: {'tipo': 'Estudo', 'desc': 'de Retirada de Interferência'},
@@ -82,6 +85,10 @@ docs_externos = {
     5: {'tipo': 'Minuta', 'desc': 'de Permissão de Lavra Garimpeira'},
     6: {'tipo': 'Formulário', 'desc': '1 Análise de Requerimento de Lavra SECOR-MG'}
 }
+
+class SEI_DOCS(Enum):
+    REQUERIMENTO_OPCAO_ALVARA = 0  # opção de área na fase de requerimento  
+    
 
 def processPathSecor(processo, create=True):
     """pasta padrao salvar todos processos 
