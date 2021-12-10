@@ -426,12 +426,12 @@ class Processo:
 
     @staticmethod
     def fromHtml(path='.', processostr=None, verbose=True):
-        """Try create a `Processo` from a html's of basicos and poligonal        
+        """Try create a `Processo` from a html's of basicos and additionally poligonal        
         """
         curdir = os.getcwd()
         os.chdir(path)
         path_main_html = glob.glob('*basicos*.html')[0] # html file on folder
-        path_poligon_html = glob.glob('*poligonal*.html')[0] # html file on folder
+        path_poligon_html = glob.glob('*poligonal*.html') # html file on folder
 
         main_html = None        
         poligon_html = None
@@ -445,7 +445,8 @@ class Processo:
         processo.scm_dbasicospage_html = main_html
         processo.dadosBasicosGet(parse_only=True)   
 
-        if path_poligon_html:
+        if path_poligon_html: # if present
+            path_poligon_html = path_poligon_html[0]
             with open(path_poligon_html, 'r') as f: # read html scm
                 poligon_html = f.read()
             processo.scm_poligonpage_html = poligon_html
