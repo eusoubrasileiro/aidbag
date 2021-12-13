@@ -396,7 +396,7 @@ def IncluiDocumentosSEIFolders(sei, process_folders, path='Processos', **kwargs)
 
     Wrapper for `IncluiDocumentosSEIFolder` 
     
-    Aditional args shoudl ne passed as keyword arguments
+    Aditional args should be passed as keyword arguments
     """
     for folder_name in process_folders:
         try:
@@ -411,7 +411,7 @@ def IncluiDocumentosSEIFoldersFirstN(sei, nfirst=1, path='Processos', **kwargs):
     
     Wrapper for `IncluiDocumentosSEIFolder` 
     
-    Aditional args shoudl ne passed as keyword arguments
+    Aditional args should be passed as keyword arguments
     """
     os.chdir(os.path.join(__secor_path__, path))
     files_folders = glob.glob('*')

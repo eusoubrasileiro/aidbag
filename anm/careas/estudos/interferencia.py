@@ -11,7 +11,7 @@ from ..SEI import *
 
 # fases necessarias e obrigatorias para retirada de interferencia 
 interferencia_fases = ['Requerimento de Pesquisa', 'Direito de Requerer a Lavra', 
-'Requerimento de Lavra', 'Requerimento de Licenciamento'] 
+'Requerimento de Lavra', 'Requerimento de Licenciamento', 'Requerimento de Lavra Garimpeira'] 
 
 def inFaseRInterferencia(fase_str):
     for fase in interferencia_fases:
