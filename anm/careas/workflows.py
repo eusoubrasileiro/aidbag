@@ -4,6 +4,8 @@ import os
 import sys
 import traceback
 import shutil
+import json
+from pathlib import Path
 from datetime import datetime
 from bs4 import BeautifulSoup
 from . import estudos
@@ -11,15 +13,57 @@ from . import scm
 from ...web import htmlscrap
 from .SEI import *
 
+
 from .constants import (
     mcodigos,
     docs_externos,
     __secor_path__,
+    regex_process,
     SEI_DOCS
     )
+
 from aidbag.anm.careas import constants
 
-### move process folders to Concluidos
+
+# Current Processes being worked on features
+# tha means that workflows.py probably should be a package 
+# with this being another .py 
+
+ProcessPathStorage = {} # stores paths for current process being worked on 
+processpath_json = os.path.join(os.path.join(__secor_path__,"Processos","processes_path.json"))
+
+try: # Read paths for current process being worked on from file 
+    with open(processpath_json, "r") as f:
+        ProcessPathStorage = json.load(f)
+except:
+    pass 
+
+def currentProcessGet(path='Processos', clear=False):
+    """update `ProcessPathStorage` dict with process names and paths
+    * clear : clear `ProcessPathStorage` before updating (ignore json file)"""
+    cwd = os.getcwd() # save path state
+    process_path = os.path.join(__secor_path__, path) 
+    os.chdir(process_path)
+    if clear: # ignore json file 
+        ProcessPathStorage.clear()
+    files_folders = glob.glob('*')    
+    for cur_path in files_folders: # remove what is NOT a process folder
+        if regex_process.search(cur_path) and os.path.isdir(cur_path):
+            ProcessPathStorage.update({ scm.fmtPname(cur_path) : os.path.join(process_path, cur_path)})    
+    with open(processpath_json, "w") as f: # Serialize data into file
+        json.dump(ProcessPathStorage, f)
+    os.chdir(cwd) # restore path state 
+
+
+def currentProcessFromHtml(path='Processos', clear=True):
+    """load `scm.ProcessStorage` using `Processo.fromHtml` from paths in `ProcessPathStorage`"""
+    cwd = os.getcwd() # save path state
+    process_path = os.path.join(__secor_path__, path) 
+    if clear:
+        scm.ProcessStorage.clear()
+    for _, process_path in tqdm.tqdm(ProcessPathStorage.items()):    
+        scm.Processo.fromHtml(process_path, verbose=False)
+    os.chdir(cwd) # restore path state 
 
 def folder_process(process_str):
     """get folder name used to store a process from NUP or whatever other form like 
@@ -27,13 +71,24 @@ def folder_process(process_str):
     """
     return '-'.join(scm.numberyearPname(process_str))
 
-def move_process_folder(src_folder, dest_folder='Concluidos'):
-    """move process folder path `src_folder` to `dest_folder`
-    MUST be on same folder as `src_folder`
+### can be used to move process folders to Concluidos
+def currentProcessMove(process_str, dest_folder='Concluidos', rootpath=os.path.join(__secor_path__, "Processos")):
     """
-    source_dir = os.path.join(os.getcwd(), src_folder)
-    target_dir = os.path.join(os.getcwd(), dest_folder)
-    shutil.move(source_dir, target_dir)
+    move process folder path to `dest_folder`
+    * process_str : process name to move folder
+    * dest_folder : path relative to root_path  default `__secor_path__\Processos`
+    also stores the new path on `ProcessPathStorage` 
+    """    
+    process_str = scm.fmtPname(process_str) # just to make sure it is unique
+    dest_path =  Path(rootpath).joinpath(dest_folder).joinpath(folder_process(process_str)).resolve() # resolve, solves "..\" to an absolute path 
+    shutil.move(ProcessPathStorage[process_str], dest_path)
+    ProcessPathStorage[process_str] = str(dest_path)
+    with open(processpath_json, "w") as f: # Serialize data into file
+        json.dump(ProcessPathStorage, f)
+
+
+
+
 
 __debugging__ = False
 

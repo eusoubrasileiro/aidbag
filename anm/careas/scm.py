@@ -112,6 +112,7 @@ class Processo:
                 3 - anterior + correção prioridade ancestor list
         """        
         self.processostr = fmtPname(processostr) # `fmtPname` unique string process number/year
+        self.name = self.processostr
         self.number, self.year = numberyearPname(self.processostr)
         self.wpage = htmlscrap.wPageNtlm(wpagentlm.user, wpagentlm.passwd)
         self.verbose = verbose
