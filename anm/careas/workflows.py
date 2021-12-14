@@ -74,7 +74,7 @@ def folder_process(process_str):
 ### can be used to move process folders to Concluidos
 def currentProcessMove(process_str, dest_folder='Concluidos', rootpath=os.path.join(__secor_path__, "Processos")):
     """
-    move process folder path to `dest_folder`
+    move process folder path to `dest_folder` (this can create a new folder)
     * process_str : process name to move folder
     * dest_folder : path relative to root_path  default `__secor_path__\Processos`
     also stores the new path on `ProcessPathStorage` 
