@@ -25,7 +25,7 @@ from .constants import (
 from aidbag.anm.careas import constants
 
 
-# Current Processes being worked on features
+# Current Processes being worked on - features
 # tha means that workflows.py probably should be a package 
 # with this being another .py 
 
@@ -72,18 +72,24 @@ def folder_process(process_str):
     return '-'.join(scm.numberyearPname(process_str))
 
 ### can be used to move process folders to Concluidos
-def currentProcessMove(process_str, dest_folder='Concluidos', rootpath=os.path.join(__secor_path__, "Processos")):
+def currentProcessMove(process_str, dest_folder='Concluidos', 
+    rootpath=os.path.join(__secor_path__, "Processos"), delpath=False):
     """
     move process folder path to `dest_folder` (this can create a new folder)
     * process_str : process name to move folder
     * dest_folder : path relative to root_path  default `__secor_path__\Processos`
     also stores the new path on `ProcessPathStorage` 
+    * delpath : False (default) 
+        delete the path from `ProcessPathStorage` (stop tracking)
     """    
     process_str = scm.fmtPname(process_str) # just to make sure it is unique
     dest_path =  Path(rootpath).joinpath(dest_folder).joinpath(folder_process(process_str)).resolve() # resolve, solves "..\" to an absolute path 
-    shutil.move(ProcessPathStorage[process_str], dest_path)
-    ProcessPathStorage[process_str] = str(dest_path)
-    with open(processpath_json, "w") as f: # Serialize data into file
+    shutil.move(ProcessPathStorage[process_str], dest_path)    
+    if delpath: 
+        del ProcessPathStorage[process_str]
+    else:
+        ProcessPathStorage[process_str] = str(dest_path)
+    with open(processpath_json, "w") as f: # Serialize 
         json.dump(ProcessPathStorage, f)
 
 
