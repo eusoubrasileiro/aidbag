@@ -4,6 +4,7 @@ import re
 import os, sys
 import requests
 from urllib3.util.retry import Retry
+from urllib.parse import urljoin
 from requests import adapters
 from bs4 import BeautifulSoup
 
@@ -63,18 +64,20 @@ class wPage: # html  webpage scraping with soup and requests
                 if verbose:
                     print(exc, '\n', file=sys.stderr)
 
-    def save(self, pagefilename='page'):
+    def save(self, pagepath='page'):
         """
-        save html page and supported contents
-        pagefilename  : specified folder
+        using last html page accessed save its html and supported contents        
+        * pagepath : path-to-page   
+        It will create a file  `'path-to-page'.html` and a folder `'path-to-page'_files`
         """
         self.url = self.response.url # needed above findAllnSave
         self.soup = BeautifulSoup(self.response.text, features="lxml")
-        pagefolder = pagefilename+'_files' # page contents
+        path, _ = os.path.splitext(pagepath)
+        pagefolder = path+'_files' # page contents
         self.findAllnSave(pagefolder, 'img', inner='src')
         self.findAllnSave(pagefolder, 'link', inner='href')
         self.findAllnSave(pagefolder, 'script', inner='src')
-        with open(pagefilename+'.html', 'w') as file:
+        with open(path+'.html', 'w') as file:
             file.write(self.soup.prettify())
 
     def post(self, arg, save=True, **kwargs):
