@@ -5,7 +5,9 @@ from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait as wait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select # drop down select
-import time
+from selenium.common import exceptions
+import time, sys
+
 
 class SEI:
     def __init__(self, user, passwd, headless=False, implicit_wait=10):
@@ -38,9 +40,12 @@ class SEI:
         self.driver = driver
         # to avoid problems start saving main window handle
         self.mainwindow = self.driver.current_window_handle
-        # close disturbing and problematic popups
-        wait(self.driver, 10).until(expected_conditions.number_of_windows_to_be(2))
-        self.closeOtherWindows()
+        # close disturbing and problematic popups if showing up
+        try:  # I disabled it ... just try
+            wait(self.driver, 10).until(expected_conditions.number_of_windows_to_be(2))
+            self.closeOtherWindows()
+        except exceptions.TimeoutException:
+            print("Ignoring start pop-up. Did you disabled it?", file=sys.stderr)
 
     # context manager support so bellow works.
     # with SEI(user, pass) as sei:
