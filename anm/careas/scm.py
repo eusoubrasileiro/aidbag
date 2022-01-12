@@ -378,21 +378,24 @@ class Processo:
                 print("dadosPoligonalGet - parsing: ", self.processostr, file=sys.stderr)
         
         htmltables = soup.findAll('table', { 'class' : 'BordaTabela' }) #table[class="BordaTabela"]
-        memorial = htmlscrap.tableDataText(htmltables[-1])
-        data = htmlscrap.tableDataText(htmltables[1])
-        data = data[0:5] # informações memo descritivo
-        self.polydata = {'area'     : float(data[0][1].replace(',', '.')), 
-                    'datum'     : data[0][3],
-                    'cmin'      : float(data[1][1]), 
-                    'cmax'      : float(data[1][3]),
-                    'amarr_lat' : data[2][1],
-                    'amarr_lon' : data[2][3],
-                    'amarr_cum' : data[3][3],
-                    'amarr_ang' : data[4][1],
-                    'amarr_rum' : data[4][3],
-                    'memo'      : memorial
-                    }
-        return True
+        if htmltables: 
+            memorial = htmlscrap.tableDataText(htmltables[-1])
+            data = htmlscrap.tableDataText(htmltables[1])
+            data = data[0:5] # informações memo descritivo
+            self.polydata = {'area'     : float(data[0][1].replace(',', '.')), 
+                        'datum'     : data[0][3],
+                        'cmin'      : float(data[1][1]), 
+                        'cmax'      : float(data[1][3]),
+                        'amarr_lat' : data[2][1],
+                        'amarr_lon' : data[2][3],
+                        'amarr_cum' : data[3][3],
+                        'amarr_ang' : data[4][1],
+                        'amarr_rum' : data[4][3],
+                        'memo'      : memorial
+                        }
+            return True
+        else: # might not have poligonal data, some error
+            return False        
 
     def _dadosBasicosGetMissing(self):
         """obtém dados faltantes (se houver) pelo processo associado (pai):
@@ -451,7 +454,8 @@ class Processo:
             with open(path_poligon_html, 'r') as f: # read html scm
                 poligon_html = f.read()
             processo.scm_poligonpage_html = poligon_html
-            processo.dadosPoligonalGet(parse_only=True)
+            if not processo.dadosPoligonalGet(parse_only=True):
+                print('Some error on poligonal page cant read poligonal table', file=sys.stderr) 
         else:
             print('Didnt find a poligonal page html saved', file=sys.stderr)
 
