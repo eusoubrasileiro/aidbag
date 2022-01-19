@@ -96,13 +96,11 @@ generating numpy array of coordinates.
 # DECIMAL DEGREE
 # 
 
-# gtm pro header allways SIRGAS 2000
-gtmpro_header = """Version,212
-
-SIRGAS 2000,289, 6378137, 298.257222101, 0, 0, 0
-USER GRID,0,0,0,0,0
-
-"""
+# gtm pro header/footer allways SIRGAS 2000
+gtmpro_header = "Version,212\n\nSIRGAS 2000,289, 6378137, 298.257222101, 0, 0, 0\nUSER GRID,0,0,0,0,0\n\n"
+gtmpro_footer = "\nn,Track 0001,16711680,1,13\n" 
+# cannot have new lines at the end of the file 
+# due pytest using XML tree parser that strips them 
 
 def formatMemorial(latlon, fmt='sigareas', close_poly=True, view=False,
                     save=False, filename='MEMOCOORDS.TXT'):
@@ -146,11 +144,13 @@ def formatMemorial(latlon, fmt='sigareas', close_poly=True, view=False,
                 for d, m, s in line ]
             fmtlines += "{:};{:03};{:02};{:02};{:03};{:};{:03};{:02};{:02};{:03}\n".format(*line[0], *line[1])      
     elif fmt == "gtmpro":
-        fmtlines += gtmpro_header
+        fmtlines += gtmpro_header # add header
         for row in latlon.reshape(-1, 2, 3): # dms
             #t,dms,-17 16' 10.33500'',-41 33' 58.96200'',00/00/00,00:00:00,0,0            
             fmtlines += "t,dms,{:03.0f} {:02.0f}\' {:08.5f}\'\',{:03.0f} {:02.0f}\' {:08.5f}\'\',00/00/00,00:00:00,0,0\n".format(
                 *row.flatten().tolist())     
+        fmtlines += gtmpro_footer # add footer 
+        ## replace line ending by windows one '\r\n' ?? otherwise GTMPRO can't read??
     elif fmt == "ddegree":
         data = latlon.reshape(-1, 3)
         # convert to decimal ignore signal than finally multiply by signal back
@@ -159,7 +159,7 @@ def formatMemorial(latlon, fmt='sigareas', close_poly=True, view=False,
             fmtlines += "{:12.9f} {:12.9f} \n".format(*row.flatten().tolist())         
     fmtlines = fmtlines[:-1]  # remove last newline
     if save:
-        with open(filename.upper(), 'w') as f: # must be CAPS otherwise can't upload
+        with open(filename.upper(), 'wt') as f: # 't' for text, must be CAPS otherwise can't upload
             f.write(fmtlines)
         print("Output filename is: ", filename.upper())    
     if view: # only to see         
