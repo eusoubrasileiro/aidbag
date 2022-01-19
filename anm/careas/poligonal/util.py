@@ -151,7 +151,8 @@ def formatMemorial(latlon, fmt='sigareas', close_poly=True, view=False,
             fmtlines += "t,dms,{:03.0f} {:02.0f}\' {:08.5f}\'\',{:03.0f} {:02.0f}\' {:08.5f}\'\',00/00/00,00:00:00,0,0\n".format(
                 *row.flatten().tolist())     
         fmtlines += gtmpro_footer # add footer 
-        ## replace line ending by windows one '\r\n' otherwise GTMPRO can't read (bellow)
+        ## needs line ending by windows one '\r\n' otherwise GTMPRO can't read - string will be downloaded directly
+        fmtlines = fmtlines.replace("\n", "\r\n") # change here to windows lineseparator '\r\n'
     elif fmt == "ddegree":
         data = latlon.reshape(-1, 3)
         # convert to decimal ignore signal than finally multiply by signal back
@@ -160,10 +161,8 @@ def formatMemorial(latlon, fmt='sigareas', close_poly=True, view=False,
             fmtlines += "{:12.9f} {:12.9f} \n".format(*row.flatten().tolist())         
     fmtlines = fmtlines[:-1]  # remove last newline
     if save:
-        setnewline = os.linesep # default os line separator
-        if fmt == "gtmpro": # gtmpro needs windows newline separator
-            setnewline = "\r\n"        
-        with open(filename.upper(), 'wt', newline=setnewline) as f: # 't' for text, must be CAPS otherwise can't upload
+        # newline='' force it not to change lineseparator chars
+        with open(filename.upper(), 'wt', newline='') as f: # 't' for text, must be CAPS otherwise can't upload
             f.write(fmtlines)
         print("Output filename is: ", filename.upper())    
     if view: # only to see         
