@@ -96,4 +96,6 @@ def test_memorial(text, itype, otype, expected, nsew):
      if nsew:        
         parsed_data = forceverdPoligonal(parsed_data, debug=False)
      result = formatMemorial(parsed_data, fmt=otype)
+     if otype == 'gtmpro': # uses '\r\n' as line ending 
+        result = result.replace("\r\n", "\n") # since python string defaults to '\n'     
      assert(result == expected) 
