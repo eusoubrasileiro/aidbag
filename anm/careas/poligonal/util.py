@@ -99,7 +99,7 @@ generating numpy array of coordinates.
 
 # gtm pro header/footer allways SIRGAS 2000
 gtmpro_header = "Version,212\n\nSIRGAS 2000,289, 6378137, 298.257222101, 0, 0, 0\nUSER GRID,0,0,0,0,0\n\n"
-gtmpro_footer = "\nn,Track 0001,16711680,1,13\n" 
+gtmpro_footer = "\nn,Track 0001,16711680,1,13" 
 # cannot have new lines at the end of the file 
 # due pytest using XML tree parser that strips them 
 
@@ -153,13 +153,15 @@ def formatMemorial(latlon, fmt='sigareas', close_poly=True, view=False,
         fmtlines += gtmpro_footer # add footer 
         ## needs line ending by windows one '\r\n' otherwise GTMPRO can't read - string will be downloaded directly
         fmtlines = fmtlines.replace("\n", "\r\n") # change here to windows lineseparator '\r\n'
+        fmtlines += 'x' # to be removed bellow due pytest xml tree data load 'gambiarra'
     elif fmt == "ddegree":
         data = latlon.reshape(-1, 3)
         # convert to decimal ignore signal than finally multiply by signal back
         data = np.sum(np.abs(data)*[1., 1/60., 1/3600.], axis=-1)*np.sign(data[:,0])
         for row in data.reshape(-1, 2):                 
-            fmtlines += "{:12.9f} {:12.9f} \n".format(*row.flatten().tolist())         
-    fmtlines = fmtlines[:-1]  # remove last newline
+            fmtlines += "{:12.9f} {:12.9f} \n".format(*row.flatten().tolist())     
+    # remove last newline due pytest xml tree test data load ignoring it    
+    fmtlines = fmtlines[:-1]  
     if save:
         # newline='' force it not to change lineseparator chars
         with open(filename.upper(), 'wt', newline='') as f: # 't' for text, must be CAPS otherwise can't upload
