@@ -134,7 +134,12 @@ class SEI:
         
     def processOpen(self):
         """return True if `processBarCmds` len is 22"""
-        return len(self.processBarCmdsGet()) == 22
+        try : 
+            lenbarcmds = len(self.processBarCmdsGet())
+        except: # if not open may not even show the processbar buttons
+            return False 
+        else:
+            return lenbarcmds == 22
 
     def processBarCmdsGet(self):
         self._processoMainMenu()
