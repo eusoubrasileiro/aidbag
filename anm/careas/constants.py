@@ -72,9 +72,12 @@ scm_data_tags = { # "data name" ; soup.find fields( "tag", "attributes")
 # 11 - 2052065	Chefe SECOR Requerimento de Lavra: Encaminhar avaliar necessidade de reavaliar reservas - redução de área
 # 12 - 3044089  Chefe SECOR Requerimento: Recomendo Só Análise de Plano 100%
 # 13 - 3369278  Chefe SECOR Requerimento: Opção Executada Recomendo Analise de Plano	
-
+# 14 - 3680185  Informe: Requerimento de Lavra Formulario 1 realizado
+# 15 - 3645367  Para DFMNM: Requerimento de Lavra para análise de cumprimento de exigências
+# 16 - 3656770  Para SECOR-MG Expedição: Requerimento de Lavra para análise
 mcodigos = ['1537881', '1947449', '1618347', '2725631', '1133380', '2725639', 
-'1206693', '1243175', '1453503', '1995116', '1995741', '2052065', '3044089', '3369278']
+'1206693', '1243175', '1453503', '1995116', '1995741', '2052065', '3044089', 
+'3369278', '3680185', '3645367', '3656770']
 
 docs_externos = {
     0: {'tipo': 'Estudo', 'desc': 'de Retirada de Interferência'},

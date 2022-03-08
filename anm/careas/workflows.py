@@ -137,8 +137,30 @@ def IncluiDocumentoExternoSEI(sei, ProcessoNUP, doc=0, pdf_path=None):
         pass
     sei.driver.switch_to.default_content() # go back to main document
 
+def IncluiInforme(sei, ProcessoNUP, idxcodigo):
+    """
+    Inclui Informe - por index código
+    """
+    mcodigo = mcodigos[idxcodigo]
+    sei.Pesquisa(ProcessoNUP) # Entra neste processo
+    sei.ProcessoIncluiDoc(4) # Informe
+    sei.driver.find_element_by_id('lblProtocoloDocumentoTextoBase').click() # Documento Modelo
+    sei.driver.find_element_by_id('txtProtocoloDocumentoTextoBase').send_keys(mcodigo)
+    sei.driver.find_element_by_id('lblPublico').click() # Publico
+    save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'btnSalvar')))
+    save.click()
+    try :
+        # wait 5 seconds
+        alert = wait(sei.driver, 5).until(expected_conditions.alert_is_present()) # may sometimes show
+        alert.accept()
+    except:
+        pass
+    sei.driver.switch_to.default_content() # go back to main document
 
-def IncluiDespacho(sei, ProcessoNUP, idxcodigo):
+#Divisão de Fiscalização da Mineração de Não Metálicos (DFMNM-MG)
+#Setor de Controle e Registro (SECOR-MG)
+def IncluiDespacho(sei, ProcessoNUP, idxcodigo, 
+    setor=u"Setor de Controle e Registro (SECOR-MG)"):
     """
     Inclui Despacho - por index código
     """
@@ -147,7 +169,7 @@ def IncluiDespacho(sei, ProcessoNUP, idxcodigo):
     sei.ProcessoIncluiDoc(1) # Despacho
     sei.driver.find_element_by_id('lblProtocoloDocumentoTextoBase').click() # Documento Modelo
     sei.driver.find_element_by_id('txtProtocoloDocumentoTextoBase').send_keys(mcodigo)
-    sei.driver.find_element_by_id('txtDestinatario').send_keys(u"Setor de Controle e Registro (SECOR-MG)")
+    sei.driver.find_element_by_id('txtDestinatario').send_keys(setor)
     destinatario_set = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'divInfraAjaxtxtDestinatario')))
     destinatario_set.click() # wait a little pop-up show up to click or send ENTER
     # sei.driver.find_element_by_id('txtDestinatario').send_keys(Keys.ENTER) #ENTER
@@ -424,8 +446,13 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
                 # Adicionado manualmente depois o PDF gerado
                 # com links p/ SEI
                 IncluiDocumentoExternoSEI(sei, NUP, 6, None)
-                IncluiDespacho(sei, NUP, 8) # - Recomenda aguardar cunprimento de exigências
-                IncluiDespacho(sei, NUP, 9) # - Recomenda c/ retificação de alvará
+                IncluiInforme(sei, NUP, 14) # 14 Informe: Requerimento de Lavra Formulario 1 realizado
+                # 15 - Para DFMNM: Requerimento aguardar cunprimento de exigências
+                IncluiDespacho(sei, NUP, 15, 
+                    setor=u"Divisão de Fiscalização da Mineração de Não Metálicos (DFMNM-MG)") 
+                # 16 - Para SECOR-MG Expedição: Requerimento de Lavra para análise
+                IncluiDespacho(sei, NUP, 16)
+                # IncluiDespacho(sei, NUP, 9) # - Recomenda c/ retificação de alvará
             elif 'pesquisa' in tipo.lower(): # Requerimento de Pesquisa - 1 - Minuta - 'Pré de Alvará'
                 # Inclui Estudo pdf como Doc Externo no SEI
                 IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)

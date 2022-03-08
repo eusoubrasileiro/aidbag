@@ -178,8 +178,9 @@ class SEI:
             1  - 'Despacho'
             2  - 'Parecer'
             3  - 'Termo de Abertura de Processo Eletrônico'
+            4  - 'Informe'
         """
-        texts = [ ' Externo', 'Despacho', 'Parecer', 'Termo de Abertura de Processo Eletrônico']
+        texts = [ ' Externo', 'Despacho', 'Parecer', 'Termo de Abertura de Processo Eletrônico', 'Informe']
         self.processBarCmdsClick(0)  # botao[0] incluir doc
         items = wait(self.driver, 10).until(
             expected_conditions.visibility_of_all_elements_located(
