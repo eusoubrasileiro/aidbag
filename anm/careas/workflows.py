@@ -398,8 +398,8 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
         if wpage is None:
             raise Exception("Não há página html, please set wpage parameter")
         processostr = scm.fmtPname(process_folder) # from folder name
-        scm.dadosBasicosPageRetrieve(processostr, wpage)
-        html = wpage.response.text
+        response = scm.dadosBasicosPageRetrieve(processostr, wpage)
+        html = response.text
     # get everything needed
     soup = BeautifulSoup(html, features="lxml")
     data = htmlscrap.dictDataText(soup, scm.scm_data_tags)

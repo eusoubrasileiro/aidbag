@@ -1,107 +1,64 @@
 import sys, os
-import glob
+import glob, json
 from bs4 import BeautifulSoup
 from datetime import datetime
-import re
 import concurrent.futures
 import threading
 from threading import Lock
 from ...web import htmlscrap
 
+from .scm_requests import (
+    dadosBasicosPageRetrieve,
+    dadosPoligonalPageRetrieve
+)
+
+from .scm_util import (
+    fmtPname,
+    numberyearPname,
+    findfmtPnames,
+    findPnames
+)
+
 from .constants import (
-    regex_processg, 
-    regex_process, 
-    scm_timeout, 
-    scm_dados_processo_main_url,
     scm_data_tags
 )
 
 mutex = Lock()
 
-# scm consulta dados (post) nao aceita formato diferente de 'xxx.xxx/xxxx'
-def fmtPname(pross_str):
-    """format process name to xxx.xxx/yyyy
-    - input process might be also like this 735/1935
-    prepend zeros in this case to form 000.735/1935"""
-    pross_str = ''.join(regex_processg.findall(pross_str)[0]) # use the first ocurrence    
-    ncharsmissing = 10-len(pross_str) # size must be 10 chars
-    pross_str = '0'*ncharsmissing+pross_str # prepend with zeros
-    return pross_str[:3]+'.'+pross_str[3:6]+r'/'+pross_str[6:]
-
-def numberyearPname(pross_str):
-    "return process (number, year)"
-    pross_str = fmtPname(pross_str) # to make sure
-    pross_str = ''.join(re.findall('\d', pross_str))
-    return pross_str[:6], pross_str[6:]
-
-def findfmtPnames(text):
-    """
-    Find all process names on `text` return list with strings format xxx.xxx/yyyy like `fmtPname`
-    """
-    ps = regex_process.findall(text)    
-    return [ p[0]+'.'+p[1]+'/'+p[2] for p in ps ]
-
-def findPnames(pross_str):    
-    """
-    Find all process names on `text` return list with strings as found
-    """
-    return regex_process.findall(pross_str)
-
-def dadosBasicosPageRetrieve(processostr, wpage, process=None):
-    """   Get & Post na página dados do Processo do Cadastro  Mineiro (SCM)
-    """
-    class fakeproc : pass
-    self = fakeproc # mock Process class
-    if process is not None:
-        self = process
-    else: # mock Process class
-        self.wpage = wpage
-        self.processostr = fmtPname(processostr)
-    if hasattr(self, 'scm_dbasicospage_response'): # already downloaded
-        self.wpage.response = self.scm_dbasicospage_response
-        return self.wpage.response
-    self.wpage.get(scm_dados_processo_main_url)
-    formcontrols = {
-        'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnConsultarProcesso',
-        'ctl00$conteudo$txtNumeroProcesso': self.processostr,
-        'ctl00$conteudo$btnConsultarProcesso': 'Consultar',
-        '__VIEWSTATEENCRYPTED': ''}
-    formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
-    self.wpage.post(scm_dados_processo_main_url,
-                  data=formdata, timeout=scm_timeout)
-    self.scm_dbasicospage_response = self.wpage.response
-    self.scm_dbasicospage_html = self.wpage.response.content
-    return self.wpage.response
-    
-def dadosPoligonalPageRetrieve(processostr, wpage, process=None):
-    """   Get & Post na página dados poligonal do Processo do Cadastro  Mineiro (SCM)
-    """
-    class fakeproc : pass
-    self = fakeproc # mock Process class
-    if process is not None:
-        self = process
-    else: # mock Process class
-        self.wpage = wpage
-        self.processostr = fmtPname(processostr)   
-    if hasattr(self, 'scm_poligonpage_response'): # already downloaded
-        self.wpage.response = self.scm_poligonpage_response
-        return True
-    formcontrols = {
-        'ctl00$conteudo$btnPoligonal': 'Poligonal',
-        'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnPoligonal'}
-    formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
-    self.wpage.post(scm_dados_processo_main_url,
-                    data=formdata)
-    self.scm_poligonpage_response = self.wpage.response
-    self.scm_poligonpage_html = self.wpage.response.content
-    return self.wpage.response
-
-
 
 """
 Use `Processo.Get` to avoid creating duplicate Processo's
 """
-class Processo:
+class Processo:    
+    dados = {} 
+    """dados to be parsed uses `htmlscrap.dictDataText` """
+    polydata = {}
+    """dados da poligonal to be parsed"""
+    # and python.requests responses to be-reused and to save page content
+    response_dbasicospage = None  
+    """python.requests response for dbasicos page to be-reused and to save page content"""
+    response_poligonpage = None  
+    """python.requests responses for poligonal page to be-reused and to save page content"""
+    html_dbasicospage = None     
+    """html source of all data (aba dados basicos) to be parsed"""
+    html_poligonpage = None         
+    """html source of all data (aba poligonal) to be parsed"""
+    # anscestors control  
+    # process 'processos associados' to get father, grandfather etc.
+    associados = False
+    anscestorsprocesses = []
+    anscestors = []
+    dsons = [] # direct sons
+    assprocesses = {}
+    # prioridade
+    prioridade = None
+    prioridadec = None 
+    """prioridade corrigida by ancestors"""    
+    data_protocolo = None
+    """data de protocolo"""
+    NUP = ''
+    """numero unico processo SEI"""
+
     def __init__(self, processostr, wpagentlm, verbose=True):
         """
         Hint: Use `Processo.Get` to avoid creating duplicate Processo's
@@ -122,6 +79,7 @@ class Processo:
         self.fathernsons_run = False
         self.isfree = threading.Event()
         self.isfree.set() # make it free right now so it can execute
+        
 
     def runtask(self, task=None, cdados=0):
         """
@@ -151,38 +109,43 @@ class Processo:
             task(**params)
         self.isfree.set() # make it free
 
-    @classmethod # not same as @staticmethod (has a self)
+    #@classmethod # not same as @staticmethod (has a self)
+    #can be created on other file where the class is no present by reference it 
     def fromNumberYear(self, processo_number, processo_year, wpage):
         processostr = processo_number + r'/' + processo_year
         return self(processostr, wpage)
 
     @staticmethod
-    def specifyData(data=['prioridade', 'UF']):
+    def specifyDataToParse(data=['prioridade', 'UF']):
         """return scm_data_tags from specified data labels"""
         return dict(zip(data, [ scm_data_tags[key] for key in data ]))
 
     @staticmethod
     def getNUP(processostr, wpagentlm):
-        dadosBasicosPageRetrieve(processostr, wpagentlm)
-        soup = BeautifulSoup(wpagentlm.response.text, features="lxml")
+        response = dadosBasicosPageRetrieve(processostr, wpagentlm)
+        soup = BeautifulSoup(response.text, features="lxml")
         return soup.select_one('[id=ctl00_conteudo_lblNup]').text
 
-    def _dadosBasicosPageRetrieve(self):
-        dadosBasicosPageRetrieve(None, None, process=self)
-        return True
+    def dadosBasicosPageRetrieve(self):
+        if not self.html_dbasicospage:             
+            self.response_dbasicospage = dadosBasicosPageRetrieve(self.processostr, self.wpage, False)
+            self.html_dbasicospage = self.response_dbasicospage.content
+        return self.response_dbasicospage
 
     def salvaDadosBasicosHtml(self, html_path):
-        self._dadosBasicosPageRetrieve() # self.wpage.response will be filled
+        self.wpage.response = self.dadosBasicosPageRetrieve() # re-use request.response
         dadosbasicosfname = 'scm_basicos_'+self.number+'_'+self.year
-        # sobrescreve
+        # re-use request.response overwrite html saved
         self.wpage.save(os.path.join(html_path, dadosbasicosfname))
 
-    def _dadosPoligonalPageRetrieve(self):
-        dadosPoligonalPageRetrieve(None, None, process=self)
-        return True
+    def dadosPoligonalPageRetrieve(self):
+        if not self.html_poligonpage: 
+            self.response_poligonpage = dadosPoligonalPageRetrieve(self.processostr, self.wpage, False)
+            self.html_poligonpage = self.response_poligonpage.content
+        return self.response_poligonpage
 
     def salvaDadosPoligonalHtml(self, html_path):
-        self._dadosPoligonalPageRetrieve() # self.wpage.response will be filled
+        self.wpage.response = self.dadosPoligonalPageRetrieve() # re-use request.response
         # sobrescreve
         dadospolyfname = 'scm_poligonal_'+self.number+'_'+self.year
         self.wpage.save(os.path.join(html_path, dadospolyfname))
@@ -198,15 +161,10 @@ class Processo:
         if not self.dadosbasicos_run:
             self.dadosBasicosGet()
 
-        if self.fathernsons_run: # might need to run more than once
+        if self.fathernsons_run: # might need to run more than once?
             return self.associados
 
-       # process 'processos associados' to get father, grandfather etc.
-        self.anscestors = []
-        self.dsons = []
-        self.assprocesses = {}
-        self.associados = False
-
+       
         if (not (self.dados['associados'][0][0] == 'Nenhum processo associado.')):
             self.associados = True
             # 'processo original' vs 'processo'  (many many times) wrong
@@ -323,23 +281,18 @@ class Processo:
         self.data_protocolo = datetime.strptime(self.dados['data_protocolo'], "%d/%m/%Y %H:%M:%S")
         return self.prioridade
 
-    def dadosBasicosGet(self, data_tags=None, redo=False, parse_only=False):
+    def dadosBasicosGet(self, data_tags=None, download=True):
         """dowload the dados basicos scm main html page or 
-        use the existing one stored at `self.scm_dbasicospage_html` 
+        use the existing one stored at `self.html_dbasicospage` 
         than parse all data_tags passed storing the resulting in `self.dados`
         return True if succeed on parsing every tag False ortherwise
         """
         if data_tags is None: # data tags to fill in 'dados' with
             data_tags = scm_data_tags.copy()
-        if not parse_only:
-            if not hasattr(self, 'dados') or redo == True:
-                self._dadosBasicosPageRetrieve()
-                self.dados = {}
-            else:
-                return len(self.dados) == len(data_tags)
-        else: # dont need to retrieve anything
-            self.dados = {}
-        soup = BeautifulSoup(self.scm_dbasicospage_html, features="lxml")
+        if download: # download get with python.requests page html response            
+            self.dadosBasicosPageRetrieve()
+        # using class field directly       
+        soup = BeautifulSoup(self.html_dbasicospage, features="lxml")
         if self.verbose:
             with mutex:
                 print("dadosBasicosGet - parsing: ", self.processostr, file=sys.stderr)
@@ -358,21 +311,17 @@ class Processo:
 
         return len(self.dados) == len(data_tags) # return if got w. asked for
 
-    def dadosPoligonalGet(self, redo=False, parse_only=False):
+    def dadosPoligonalGet(self, redo=False, download=True):
         """dowload the dados scm poligonal html page or 
-        use the existing one stored at `self.scm_poligonpage_html` 
+        use the existing one stored at `self.html_poligonpage` 
         than parse all data_tags passed storing the resulting in `self.polydata`
-        return True 
+        return True           
+          * note: not used by self.run!
         """
-        if not parse_only:
-            if not hasattr(self, 'dados') or redo == True:
-                self._dadosPoligonalPageRetrieve()
-                self.polydata = {}
-            else:
-                return True
-        else: # dont need to retrieve anything
-            self.polydata = {}
-        soup = BeautifulSoup(self.scm_poligonpage_html, features="lxml")
+        if download: # download get with python.requests page html response  
+            self.dadosPoligonalPageRetrieve()
+        # dont need to retrieve anything
+        soup = BeautifulSoup(self.html_poligonpage, features="lxml")
         if self.verbose:
             with mutex:
                 print("dadosPoligonalGet - parsing: ", self.processostr, file=sys.stderr)
@@ -397,7 +346,7 @@ class Processo:
         else: # might not have poligonal data, some error
             return False        
 
-    def _dadosBasicosGetMissing(self):
+    def dadosBasicosFillMissing(self):
         """obtém dados faltantes (se houver) pelo processo associado (pai):
            - UF
            - substancias
@@ -414,7 +363,7 @@ class Processo:
             missing.append('substancias')
         if self.dados['municipios'][0][0] == 'Nenhum município.':
             missing.append('municipios')
-        miss_data_tags = Processo.specifyData(missing)
+        miss_data_tags = Processo.specifyDataToParse(missing)
         # processo father
         fathername = self.dados['processos_associados'][1][5]
         if fmtPname(fathername) == fmtPname(self.processostr): # doesn't have father
@@ -425,44 +374,60 @@ class Processo:
         del father
         return self.dados
 
-    def save(self):
-        pass
+
+    def to_json(self):
+        """json serialize this process 
+            - not fully tested
+            - no thread support yet"""
+        proc = {}
+
+        # create a dict of the object and then to json 
+        return json.dumps()
+
+
+    @staticmethod
+    def fromStrHtml(processostr, html_basicos, html_poligonal=None, verbose=True):
+        """Create a `Processo` from a html str of basicos and poligonal (if available)
+            - main_html : str (optional)
+                directly from a request.response.content string previouly saved  
+                `processostr` must be set
+        """
+        processo = Processo.Get(processostr, htmlscrap.wPageNtlm('', ''), verbose=verbose, run=False)
+        processo.html_dbasicospage = html_basicos
+        processo.dadosBasicosGet(download=False) 
+        if html_poligonal:
+            processo.html_poligonpage = html_poligonal
+            if not processo.dadosPoligonalGet(download=False):
+                if verbose:
+                    print('Some error on poligonal page cant read poligonal table', file=sys.stderr)
+        return processo
+
 
     @staticmethod
     def fromHtml(path='.', processostr=None, verbose=True):
-        """Try create a `Processo` from a html's of basicos and additionally poligonal        
+        """Try create a `Processo` from a html's of basicos and poligonal (optional)       
         """
         curdir = os.getcwd()
         os.chdir(path)
         path_main_html = glob.glob('*basicos*.html')[0] # html file on folder
         path_poligon_html = glob.glob('*poligonal*.html') # html file on folder
-
         main_html = None        
         poligon_html = None
-
         if not processostr: # get process str name by file name
             processostr= fmtPname(glob.glob('*basicos*.html')[0])
-        processo = Processo.Get(processostr, htmlscrap.wPageNtlm('', ''), None, verbose, run=False)
 
         with open(path_main_html, 'r') as f: # read html scm
             main_html = f.read()
-        processo.scm_dbasicospage_html = main_html
-        processo.dadosBasicosGet(parse_only=True)   
 
         if path_poligon_html: # if present
             path_poligon_html = path_poligon_html[0]
             with open(path_poligon_html, 'r') as f: # read html scm
                 poligon_html = f.read()
-            processo.scm_poligonpage_html = poligon_html
-            if not processo.dadosPoligonalGet(parse_only=True):
-                print('Some error on poligonal page cant read poligonal table', file=sys.stderr) 
         else:
             print('Didnt find a poligonal page html saved', file=sys.stderr)
-
-        ProcessStorage[processostr] = processo   # store this new guy
-        
         os.chdir(curdir) # go back
-        return processo
+        
+        return Processo.fromStrHtml(processostr, main_html, poligon_html, verbose=verbose)
 
     @staticmethod
     def Get(processostr, wpagentlm, dados=3, verbose=True, run=True):
@@ -472,10 +437,10 @@ class Processo:
         processostr : numero processo format xxx.xxx/ano
         wpage : wPage html webpage scraping class com login e passwd preenchidos
 
-        dados :
-                        1 - scm dados basicos page
-                        2 - anterior + processos associados (father and direct sons)
-                        3 - anterior + correção prioridade ancestor list
+        Dados:
+        1. scm dados basicos page  
+        2. anterior + processos associados (father and direct sons)  
+        3. anterior + correção prioridade ancestor list  
         """
         processo = None
         processostr = fmtPname(processostr)
@@ -490,14 +455,33 @@ class Processo:
                     print("Processo __new___ placing on storage ", processostr, file=sys.stderr)
         processo = Processo(processostr, wpagentlm,  verbose)
         ProcessStorage[processostr] = processo   # store this new guy
-        if run: # wether run the task, sometimes loading from file no run
+        if run: # wether run the task, dont run when loading from file/str
             processo.runtask(cdados=dados)
         return processo
 
-############################################################
-# Container of processes to avoid :
-# 1. connecting/open page of SCM again
-# 2. parsing all information again
-# If it was already parsed save it in here
-ProcessStorage = {}
-# key - fmtPname pross_str - value Processo object
+
+# Inherits from dict since it is:
+# 1. the recommended global approach 
+# 2. thread safe for 'simple set/get'
+class ProcessStorageClass(dict):
+    """Container of processes to avoid 
+    1. connecting/open page of SCM again
+    2. parsing all information again    
+    * If it was already parsed save it in here { key : value }
+    * key : unique `fmtPname` process string
+    * value : `scm.Processo` object
+    """
+    @staticmethod
+    def saveStorageJson(self):
+        pass
+
+    @staticmethod
+    def loadStorageJson(self):
+        pass
+
+ProcessStorage = ProcessStorageClass()
+
+
+
+
+
