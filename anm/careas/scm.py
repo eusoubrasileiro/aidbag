@@ -5,6 +5,8 @@ from datetime import datetime
 import concurrent.futures
 import threading
 from threading import Lock
+
+from numpy import true_divide
 from ...web import htmlscrap
 
 from .scm_requests import (
@@ -23,42 +25,14 @@ from .constants import (
     scm_data_tags
 )
 
-mutex = Lock()
 
+mutex = Lock()
+"""`threading.Lock` exists due ancestry search with multiple threads"""
 
 """
 Use `Processo.Get` to avoid creating duplicate Processo's
 """
 class Processo:    
-    dados = {} 
-    """dados to be parsed uses `htmlscrap.dictDataText` """
-    polydata = {}
-    """dados da poligonal to be parsed"""
-    # and python.requests responses to be-reused and to save page content
-    response_dbasicospage = None  
-    """python.requests response for dbasicos page to be-reused and to save page content"""
-    response_poligonpage = None  
-    """python.requests responses for poligonal page to be-reused and to save page content"""
-    html_dbasicospage = None     
-    """html source of all data (aba dados basicos) to be parsed"""
-    html_poligonpage = None         
-    """html source of all data (aba poligonal) to be parsed"""
-    # anscestors control  
-    # process 'processos associados' to get father, grandfather etc.
-    associados = False
-    anscestorsprocesses = []
-    anscestors = []
-    dsons = [] # direct sons
-    assprocesses = {}
-    # prioridade
-    prioridade = None
-    prioridadec = None 
-    """prioridade corrigida by ancestors"""    
-    data_protocolo = None
-    """data de protocolo"""
-    NUP = ''
-    """numero unico processo SEI"""
-
     def __init__(self, processostr, wpagentlm, verbose=True):
         """
         Hint: Use `Processo.Get` to avoid creating duplicate Processo's
@@ -79,12 +53,43 @@ class Processo:
         self.fathernsons_run = False
         self.isfree = threading.Event()
         self.isfree.set() # make it free right now so it can execute
-        
+        self.dados = {} 
+        """dados to be parsed uses `htmlscrap.dictDataText` """
+        self.polydata = {}
+        """dados da poligonal to be parsed"""
+        # and python.requests responses to be-reused and to save page content
+        self.response_dbasicospage = None  
+        """python.requests response for dbasicos page to be-reused and to save page content"""
+        self.response_poligonpage = None  
+        """python.requests responses for poligonal page to be-reused and to save page content"""
+        self.html_dbasicospage = None     
+        """html source of all data (aba dados basicos) to be parsed"""
+        self.html_poligonpage = None         
+        """html source of all data (aba poligonal) to be parsed"""
+        # anscestors control  
+        # process 'processos associados' to get father, grandfather etc.
+        self.associados = False 
+        """aba dados basicos tabela associados presente ou não """
+        self.assprocesses = {}
+        """aba dados basicos tabela associados processos dict {'processostr' : scm.Processo}
+        dict of key process name : value process objects"""
+        self.anscestorsprocesses = []
+        self.anscestors = []
+        self.dsons = [] # direct sons
+        # prioridade
+        self.prioridade = None
+        self.prioridadec = None 
+        """prioridade corrigida by ancestors"""    
+        self.data_protocolo = None
+        """data de protocolo"""
+        self.NUP = ''
+        """numero unico processo SEI"""
+   
 
     def runtask(self, task=None, cdados=0):
         """
         codedados :
-                1 - scm dados basicos page + poligonal memorial
+                1 - scm dados basicos page 
                 2 - anterior + processos associados (father and direct sons)
                 3 - anterior + correção prioridade (ancestors list)
         """
@@ -115,10 +120,24 @@ class Processo:
         processostr = processo_number + r'/' + processo_year
         return self(processostr, wpage)
 
+    def isOlder(self, other):
+        """simple check wether
+        self 02/2005 is older than 03/2005"""
+        if self.year < other.year:
+            return True 
+        if self.year > other.year:
+            return False 
+        # same year now 
+        if self.number < other.number:
+            return True 
+        if self.number > other.number:
+            return False 
+        raise Exception("Error `IsOlder` process are equal")
+
     @staticmethod
     def specifyDataToParse(data=['prioridade', 'UF']):
         """return scm_data_tags from specified data labels"""
-        return dict(zip(data, [ scm_data_tags[key] for key in data ]))
+        return dict(zip(data, [ scm_data_tags[key] for key in data ]))    
 
     @staticmethod
     def getNUP(processostr, wpagentlm):
@@ -181,20 +200,34 @@ class Processo:
             assprocesses_name = list(map(fmtPname, assprocesses_name)) # formatted process names
             assprocesses_name.remove(self.processostr)# remove SELF from list
             ass_ignore = fmtPname(ass_ignore) if ass_ignore != '' else ''
-            if ass_ignore in assprocesses_name:  # ignore this process (son)
+
+            if ass_ignore in assprocesses_name:  # ignore this process
                 assprocesses_name.remove(ass_ignore) # removing circular reference
             if self.verbose:
                 with mutex:
                     print("fathernSons - getting associados: ", self.processostr,
-                    ' - ass_ignore: ', ass_ignore, file=sys.stderr)
-            self.assprocesses = {} #dict of key process name : value process objects
-            # ignoring empty lists
-            # only one son or father that is ignored
+                    ' - ass_ignore: ', ass_ignore, file=sys.stderr)   
+                    print("fathernSons - getting associados: ", self.processostr,
+                    ' assprocesses_name: ', assprocesses_name, file=sys.stderr)            
+
+            # helper function to search outword only
+            def exploreAssociados(name, wp, ignore, verbosity):
+                """ *ass_ignore : must be set to avoid being waiting for parent-source searcher
+                    the search will spread outward only"""
+                proc = Processo.Get(name, wp, 0, verbosity, False)
+                proc.dadosBasicosGet()
+                proc.fathernSons(ass_ignore=ignore)
+                return proc
+
+            # ignoring empty lists only one son or father that is ignored
             if assprocesses_name:
-                with concurrent.futures.ThreadPoolExecutor() as executor: # thread number optmial       
+                with concurrent.futures.ThreadPoolExecutor() as executor: # thread number optimal       
                     # use a dict to map { process name : future_wrapped_Processo }             
                     # due possibility of exception on Thread and to know which process was responsible for that
-                    future_processes = {process_name : executor.submit(Processo.Get, process_name, self.wpage, 1, self.verbose) 
+                    #future_processes = {process_name : executor.submit(Processo.Get, process_name, self.wpage, 1, self.verbose) 
+                    #    for process_name in assprocesses_name}
+                    future_processes = {process_name : executor.submit(exploreAssociados, 
+                        process_name, self.wpage, self.processostr, self.verbose) 
                         for process_name in assprocesses_name}
                     concurrent.futures.wait(future_processes.values())
                     #for future in concurrent.futures.as_completed(future_processes):         
@@ -206,19 +239,25 @@ class Processo:
                             print("Exception raised while running fathernSons thread for process {:0}".format(
                                 process_name), file=sys.stderr)
                             raise(exc)
-                if self.verbose:
-                    with mutex:
-                        print("fathernSons - finished associados: ", self.processostr, file=sys.stderr)
-                #from here we get dsons, first run (might be wrong)
-                # TODO: run again once prioridade is fixed
-                for kname, vprocess in self.assprocesses.items():
-                    if vprocess.data_protocolo >= self.prioridade:
-                        self.dsons.append(kname)
-                    else: # and anscestors if any
-                        self.anscestors.append(kname)
-                # go up on ascestors until no other parent
-                if len(self.anscestors) > 1:
-                    raise Exception("fathernSons - failed more than one parent: ", self.processostr)
+            # put back the 'ass_ignore', so the comparison bellow works
+            if ass_ignore != '':
+                self.assprocesses.update({ ass_ignore : ProcessStorage[ass_ignore]})  
+            if self.verbose:
+                with mutex:
+                    print("fathernSons - self.assprocesses: ", self.assprocesses, file=sys.stderr)
+            # from here we get dsons, first run 
+            # TODO: run again once prioridade is fixed
+            for name, process in self.assprocesses.items():
+                if process.isOlder(self):
+                    self.anscestors.append(name)                        
+                else: # yonger
+                    self.dsons.append(name)
+            # go up on ascestors until no other parent?
+            if len(self.anscestors) > 1:
+                raise Exception("fathernSons - failed more than one parent: ", self.processostr)
+            if self.verbose:
+                with mutex:
+                    print("fathernSons - finished associados: ", self.processostr, file=sys.stderr)
         # nenhum associado
         self.fathernsons_run = True
         return self.associados
@@ -480,7 +519,13 @@ class ProcessStorageClass(dict):
         pass
 
 ProcessStorage = ProcessStorageClass()
-
+"""Container of processes to avoid 
+1. connecting/open page of SCM again
+2. parsing all information again    
+* If it was already parsed save it in here { key : value }
+* key : unique `fmtPname` process string
+* value : `scm.Processo` object
+"""
 
 
 
