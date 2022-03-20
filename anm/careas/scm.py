@@ -174,15 +174,14 @@ class Processo:
         * ass_ignore - to ignore in associados list (remove)
 
         'associados' must be in self.dados dict to build anscestors and sons
-        - build self.anscestors lists ( father only)
-        - build direct sons (self.dsons) list
+        - build self.anscestors lists father only
+        - build self.dsons list direct sons 
         """
         if not self.dadosbasicos_run:
             self.dadosBasicosGet()
 
         if self.fathernsons_run: # might need to run more than once?
             return self.associados
-
        
         if (not (self.dados['associados'][0][0] == 'Nenhum processo associado.')):
             self.associados = True
@@ -207,10 +206,8 @@ class Processo:
                 with mutex:
                     print("fathernSons - getting associados: ", self.processostr,
                     ' - ass_ignore: ', ass_ignore, file=sys.stderr)   
-                    print("fathernSons - getting associados: ", self.processostr,
-                    ' assprocesses_name: ', assprocesses_name, file=sys.stderr)            
 
-            # helper function to search outword only
+            # helper function to search outward only
             def exploreAssociados(name, wp, ignore, verbosity):
                 """ *ass_ignore : must be set to avoid being waiting for parent-source searcher
                     the search will spread outward only"""
@@ -242,23 +239,17 @@ class Processo:
             # put back the 'ass_ignore', so the comparison bellow works
             if ass_ignore != '':
                 self.assprocesses.update({ ass_ignore : ProcessStorage[ass_ignore]})  
-            if self.verbose:
-                with mutex:
-                    print("fathernSons - self.assprocesses: ", self.assprocesses, file=sys.stderr)
-            # from here we get dsons, first run 
-            # TODO: run again once prioridade is fixed
+            # from here we get direct sons and parents/anscestors
             for name, process in self.assprocesses.items():
                 if process.isOlder(self):
                     self.anscestors.append(name)                        
                 else: # yonger
                     self.dsons.append(name)
-            # go up on ascestors until no other parent?
-            if len(self.anscestors) > 1:
+            if len(self.anscestors) > 1: # should it be an exception? englobamento?
                 raise Exception("fathernSons - failed more than one parent: ", self.processostr)
             if self.verbose:
                 with mutex:
                     print("fathernSons - finished associados: ", self.processostr, file=sys.stderr)
-        # nenhum associado
         self.fathernsons_run = True
         return self.associados
 
@@ -283,7 +274,7 @@ class Processo:
         if self.associados and len(self.anscestors) > 0:
             # first father already has an process class object (get it)
             self.anscestorsprocesses = [] # storing the ancestors processes objects
-            parent = self.assprocesses[self.anscestors[0]] #first father get by process name string
+            parent = self.assprocesses[self.anscestors[0]] # first father get by process name string
             son_name = self.processostr # self is the son
             if self.verbose:
                 with mutex:
