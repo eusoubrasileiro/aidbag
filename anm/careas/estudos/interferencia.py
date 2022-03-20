@@ -175,7 +175,7 @@ class Interferencia:
         #                                     itertools.repeat(3),
         #                                     itertools.repeat(self.verbose)))
         # # create dict of key process name , value process objects
-        # self.processes_interf = dict(zip(list(map(lambda p: p.processostr, self.processes_interf)),
+        # self.processes_interf = dict(zip(list(map(lambda p: p.name, self.processes_interf)),
         #                                 self.processes_interf))
         self.processes_interf = {}
         for process_name in processos_interferentes:
@@ -193,14 +193,14 @@ class Interferencia:
             processo = self.processes_interf[processo_name]
             self.tabela_interf.loc[row[0], 'Processo'] = processo_name
             self.tabela_interf.loc[row[0], 'Ativo'] = processo.dados['ativo']
-            if processo.associados:
+            if processo.Associados:
                 assoc_items = pd.DataFrame(processo.dados['associados'][1:],
                         columns=self.tabela_assoc.columns[2:])
-                assoc_items['Main'] = processo.processostr
+                assoc_items['Main'] = processo.name
                 assoc_items['Prior'] = (processo.prioridadec if hasattr(processo, 'prioridadec') else processo.prioridade)
                 # number of direct sons/ ancestors
-                self.tabela_interf.loc[row[0], 'Sons'] = len(processo.dsons)
-                self.tabela_interf.loc[row[0], 'Dads'] = len(processo.anscestors)
+                self.tabela_interf.loc[row[0], 'Sons'] = len(processo.sons)
+                self.tabela_interf.loc[row[0], 'Dads'] = len(processo.parents)
                 self.tabela_assoc = self.tabela_assoc.append(assoc_items, sort=False, ignore_index=True)
         return self.tabela_interf
 

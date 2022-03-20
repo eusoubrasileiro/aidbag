@@ -42,15 +42,14 @@ class Processo:
                 2 - anterior + processos associados (father and direct sons)
                 3 - anterior + correção prioridade ancestor list
         """        
-        self.processostr = fmtPname(processostr) # `fmtPname` unique string process number/year
-        self.name = self.processostr
-        self.number, self.year = numberyearPname(self.processostr)
+        self.name = fmtPname(processostr) # `fmtPname` unique string process number/year
+        self.number, self.year = numberyearPname(self.name)
         self.wpage = htmlscrap.wPageNtlm(wpagentlm.user, wpagentlm.passwd)
         self.verbose = verbose
         # control to avoid running again
         self.ancestry_run = False
         self.dadosbasicos_run = False
-        self.fathernsons_run = False
+        self.parentnsons_run = False
         self.isfree = threading.Event()
         self.isfree.set() # make it free right now so it can execute
         self.dados = {} 
@@ -66,16 +65,14 @@ class Processo:
         """html source of all data (aba dados basicos) to be parsed"""
         self.html_poligonpage = None         
         """html source of all data (aba poligonal) to be parsed"""
-        # anscestors control  
+        # anscestors assessment: parents and sons  
         # process 'processos associados' to get father, grandfather etc.
-        self.associados = False 
-        """aba dados basicos tabela associados presente ou não """
-        self.assprocesses = {}
-        """aba dados basicos tabela associados processos dict {'processostr' : scm.Processo}
-        dict of key process name : value process objects"""
+        self.Associados = {}
+        self.parents = [] # anscestors : Associados
+        self.sons = [] # direct sons : Associados
+        """Aba dados basicos tabela associados processos }
+        dict { 'process name' : scm.Processo }"""
         self.anscestorsprocesses = []
-        self.anscestors = []
-        self.dsons = [] # direct sons
         # prioridade
         self.prioridade = None
         self.prioridadec = None 
@@ -96,13 +93,13 @@ class Processo:
         # check if some taks is running
         # only ONE can have this process at time
         if not self.isfree.wait(60.*2):
-            raise Exception("runtask - wait time-out for process: ", self.processostr)
+            raise Exception("runtask - wait time-out for process: ", self.name)
         self.isfree.clear() # make it busy
         if cdados: # passed argument to perform a default call without args
             if (cdados == 1) and not self.dadosbasicos_run:
                 task = (self.dadosBasicosGet, {})
-            elif (cdados == 2) and not self.fathernsons_run:
-                task = (self.fathernSons, {})
+            elif (cdados == 2) and not self.parentnsons_run:
+                task = (self.parentnSons, {})
             elif (cdados == 3) and not self.ancestry_run:
                 task = (self.ancestrySearch, {})
         if task:
@@ -110,7 +107,7 @@ class Processo:
             if self.verbose:
                 with mutex:
                     print('task to run: ', task.__name__, ' params: ', params,
-                    ' - process: ', self.processostr, file=sys.stderr)
+                    ' - process: ', self.name, file=sys.stderr)
             task(**params)
         self.isfree.set() # make it free
 
@@ -147,7 +144,7 @@ class Processo:
 
     def dadosBasicosPageRetrieve(self):
         if not self.html_dbasicospage:             
-            self.response_dbasicospage = dadosBasicosPageRetrieve(self.processostr, self.wpage, False)
+            self.response_dbasicospage = dadosBasicosPageRetrieve(self.name, self.wpage, False)
             self.html_dbasicospage = self.response_dbasicospage.content
         return self.response_dbasicospage
 
@@ -159,7 +156,7 @@ class Processo:
 
     def dadosPoligonalPageRetrieve(self):
         if not self.html_poligonpage: 
-            self.response_poligonpage = dadosPoligonalPageRetrieve(self.processostr, self.wpage, False)
+            self.response_poligonpage = dadosPoligonalPageRetrieve(self.name, self.wpage, False)
             self.html_poligonpage = self.response_poligonpage.content
         return self.response_poligonpage
 
@@ -169,22 +166,27 @@ class Processo:
         dadospolyfname = 'scm_poligonal_'+self.number+'_'+self.year
         self.wpage.save(os.path.join(html_path, dadospolyfname))
 
-    def fathernSons(self, ass_ignore=''):
+    def parentnSons(self, ass_ignore=''):
         """
         * ass_ignore - to ignore in associados list (remove)
 
         'associados' must be in self.dados dict to build anscestors and sons
         - build self.anscestors lists father only
         - build self.dsons list direct sons 
+
+        The search is done using a ThreadPool for all 'associados'.
+        That cascades father and sons searches for each 'associado' also using a ThreadPool. 
+        To make it outward only (avoiding circular reference) 
+        the source of the search is always passed to be ignored on the next search.
+
         """
         if not self.dadosbasicos_run:
             self.dadosBasicosGet()
 
-        if self.fathernsons_run: # might need to run more than once?
-            return self.associados
+        if self.parentnsons_run: # might need to run more than once?
+            return self.Associados
        
         if (not (self.dados['associados'][0][0] == 'Nenhum processo associado.')):
-            self.associados = True
             # 'processo original' vs 'processo'  (many many times) wrong
             # sons / father association are many times wrong
             # father as son and vice-versa
@@ -197,14 +199,14 @@ class Processo:
                              [ self.dados['associados'][i][5] for i in range(1, nrows) ])
             assprocesses_name = list(set(assprocesses_name)) # Unique Process Only
             assprocesses_name = list(map(fmtPname, assprocesses_name)) # formatted process names
-            assprocesses_name.remove(self.processostr)# remove SELF from list
+            assprocesses_name.remove(self.name)# remove SELF from list
             ass_ignore = fmtPname(ass_ignore) if ass_ignore != '' else ''
 
             if ass_ignore in assprocesses_name:  # ignore this process
                 assprocesses_name.remove(ass_ignore) # removing circular reference
             if self.verbose:
                 with mutex:
-                    print("fathernSons - getting associados: ", self.processostr,
+                    print("fathernSons - getting associados: ", self.name,
                     ' - ass_ignore: ', ass_ignore, file=sys.stderr)   
 
             # helper function to search outward only
@@ -213,7 +215,7 @@ class Processo:
                     the search will spread outward only"""
                 proc = Processo.Get(name, wp, 0, verbosity, False)
                 proc.dadosBasicosGet()
-                proc.fathernSons(ass_ignore=ignore)
+                proc.parentnSons(ass_ignore=ignore)
                 return proc
 
             # ignoring empty lists only one son or father that is ignored
@@ -224,34 +226,34 @@ class Processo:
                     #future_processes = {process_name : executor.submit(Processo.Get, process_name, self.wpage, 1, self.verbose) 
                     #    for process_name in assprocesses_name}
                     future_processes = {process_name : executor.submit(exploreAssociados, 
-                        process_name, self.wpage, self.processostr, self.verbose) 
+                        process_name, self.wpage, self.name, self.verbose) 
                         for process_name in assprocesses_name}
                     concurrent.futures.wait(future_processes.values())
                     #for future in concurrent.futures.as_completed(future_processes):         
                     for process_name, future_process in future_processes.items():               
                         try:
                             # create dict of key process name, value process objects
-                            self.assprocesses.update({process_name : future_process.result()})
+                            self.Associados.update({process_name : future_process.result()})
                         except Exception as exc:
                             print("Exception raised while running fathernSons thread for process {:0}".format(
                                 process_name), file=sys.stderr)
                             raise(exc)
             # put back the 'ass_ignore', so the comparison bellow works
             if ass_ignore != '':
-                self.assprocesses.update({ ass_ignore : ProcessStorage[ass_ignore]})  
+                self.Associados.update({ ass_ignore : ProcessStorage[ass_ignore]})  
             # from here we get direct sons and parents/anscestors
-            for name, process in self.assprocesses.items():
+            for name, process in self.Associados.items():
                 if process.isOlder(self):
-                    self.anscestors.append(name)                        
+                    self.parents.append(name)                        
                 else: # yonger
-                    self.dsons.append(name)
-            if len(self.anscestors) > 1: # should it be an exception? englobamento?
-                raise Exception("fathernSons - failed more than one parent: ", self.processostr)
+                    self.sons.append(name)
+            if len(self.parents) > 1: # should it be an exception? englobamento?
+                raise Exception("fathernSons - failed more than one parent: ", self.name)
             if self.verbose:
                 with mutex:
-                    print("fathernSons - finished associados: ", self.processostr, file=sys.stderr)
-        self.fathernsons_run = True
-        return self.associados
+                    print("fathernSons - finished associados: ", self.name, file=sys.stderr)
+        self.parentnsons_run = True
+        return self.Associados
 
     def ancestrySearch(self, ass_ignore=''):
         """
@@ -265,20 +267,20 @@ class Processo:
 
         if self.verbose:
             with mutex:
-                print("ancestrySearch - starting: ", self.processostr, file=sys.stderr)
+                print("ancestrySearch - starting: ", self.name, file=sys.stderr)
 
-        if not self.fathernsons_run:
-            self.fathernSons(ass_ignore)
+        if not self.parentnsons_run:
+            self.parentnSons(ass_ignore)
 
         self.prioridadec = self.prioridade
-        if self.associados and len(self.anscestors) > 0:
+        if self.Associados and len(self.parents) > 0:
             # first father already has an process class object (get it)
             self.anscestorsprocesses = [] # storing the ancestors processes objects
-            parent = self.assprocesses[self.anscestors[0]] # first father get by process name string
-            son_name = self.processostr # self is the son
+            parent = self.Associados[self.parents[0]] # first father get by process name string
+            son_name = self.name # self is the son
             if self.verbose:
                 with mutex:
-                    print("ancestrySearch - going up: ", parent.processostr, file=sys.stderr)
+                    print("ancestrySearch - going up: ", parent.name, file=sys.stderr)
             # find corrected data prioridade by ancestry
             while True: # how long will this take?
                 # must run on same thread to block the sequence
@@ -286,23 +288,29 @@ class Processo:
                 parent.runtask((parent.ancestrySearch,{'ass_ignore':son_name}))
                 # remove circular reference to son
                 self.anscestorsprocesses.append(parent)
-                if len(parent.anscestors) > 1:
-                    raise Exception("ancestrySearch - failed More than one parent: ", parent.processostr)
+                if len(parent.parents) > 1:
+                    raise Exception("ancestrySearch - failed More than one parent: ", parent.name)
                 else:
-                    if len(parent.anscestors) == 0: # case only 1 parent, FINISHED
+                    if len(parent.parents) == 0: # case only 1 parent, FINISHED
                         if parent.prioridadec < self.prioridadec:
                             self.prioridadec = parent.prioridadec
                         if self.verbose:
                             with mutex:
-                                print("ancestrySearch - finished: ", self.processostr, file=sys.stderr)
+                                print("ancestrySearch - finished: ", self.name, file=sys.stderr)
                         break
                     else: # 1 anscestors, LOOP again
-                        self.anscestors.append(parent.anscestors[0]) # store its name string
-                        son_name = parent.processostr
-                        parent = Processo.Get(parent.anscestors[0], self.wpage, 1, self.verbose)
+                        self.parents.append(parent.parents[0]) # store its name string
+                        son_name = parent.name
+                        parent = Processo.Get(parent.parents[0], self.wpage, 1, self.verbose)
                         # its '1' above because the loop will ask for 3 `ancestrySearch`
                         # do not correct prioridadec until end is reached
         self.ancestry_run = True
+
+    def buildGraphAssociados(self):
+        """"""
+        if not self.parentnsons_run:
+            self.parentnSons()       
+
 
     def _toDates(self):
         """prioridade pode estar errada, por exemplo, quando uma cessão gera processos 300
@@ -325,7 +333,7 @@ class Processo:
         soup = BeautifulSoup(self.html_dbasicospage, features="lxml")
         if self.verbose:
             with mutex:
-                print("dadosBasicosGet - parsing: ", self.processostr, file=sys.stderr)
+                print("dadosBasicosGet - parsing: ", self.name, file=sys.stderr)
 
         new_dados = htmlscrap.dictDataText(soup, data_tags)
         self.dados.update(new_dados)
@@ -334,7 +342,7 @@ class Processo:
             self.dados['data_protocolo'] = self.dados['prioridade']
             if self.verbose:
                 with mutex:
-                    print('dadosBasicosGet - missing <data_protocolo>: ', self.processostr, file=sys.stderr)
+                    print('dadosBasicosGet - missing <data_protocolo>: ', self.name, file=sys.stderr)
         self._toDates()
         self.NUP = self.dados['NUP'] # numero unico processo SEI
         self.dadosbasicos_run = True
@@ -354,7 +362,7 @@ class Processo:
         soup = BeautifulSoup(self.html_poligonpage, features="lxml")
         if self.verbose:
             with mutex:
-                print("dadosPoligonalGet - parsing: ", self.processostr, file=sys.stderr)
+                print("dadosPoligonalGet - parsing: ", self.name, file=sys.stderr)
         
         htmltables = soup.findAll('table', { 'class' : 'BordaTabela' }) #table[class="BordaTabela"]
         if htmltables: 
@@ -396,7 +404,7 @@ class Processo:
         miss_data_tags = Processo.specifyDataToParse(missing)
         # processo father
         fathername = self.dados['processos_associados'][1][5]
-        if fmtPname(fathername) == fmtPname(self.processostr): # doesn't have father
+        if fmtPname(fathername) == fmtPname(self.name): # doesn't have father
             return False
         father = Processo.Get(fathername, self.wpage)
         father.dadosBasicosGet(miss_data_tags)
