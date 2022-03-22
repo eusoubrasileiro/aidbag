@@ -18,7 +18,8 @@ from .scm_util import (
     fmtPname,
     numberyearPname,
     findfmtPnames,
-    findPnames
+    findPnames,
+    comparePnames
 )
 
 from .constants import (
@@ -27,7 +28,7 @@ from .constants import (
 
 
 mutex = Lock()
-"""`threading.Lock` exists due ancestry search with multiple threads"""
+"""`threading.Lock` exists due 'associados' search with multiple threads"""
 
 """
 Use `Processo.Get` to avoid creating duplicate Processo's
@@ -67,7 +68,10 @@ class Processo:
         """html source of all data (aba poligonal) to be parsed"""
         # anscestors assessment: parents and sons  
         # process 'processos associados' to get father, grandfather etc.
-        self.Associados = {}
+        self.Associados = {}  
+        """key : value - processo name : scm.Processo"""
+        self.AssociadosData = {} 
+        """dict {} keys 'tipo' e 'dada' de associação """
         self.parents = [] # anscestors : Associados
         self.sons = [] # direct sons : Associados
         """Aba dados basicos tabela associados processos }
@@ -119,7 +123,8 @@ class Processo:
 
     def isOlder(self, other):
         """simple check wether
-        self 02/2005 is older than 03/2005"""
+        self 02/2005 is older than 03/2005
+        don't cover comparison with process starting with 300.xxx/..."""
         if self.year < other.year:
             return True 
         if self.year > other.year:
@@ -186,24 +191,27 @@ class Processo:
         if self.parentnsons_run: # might need to run more than once?
             return self.Associados
        
-        if (not (self.dados['associados'][0][0] == 'Nenhum processo associado.')):
-            # 'processo original' vs 'processo'  (many many times) wrong
-            # sons / father association are many times wrong
-            # father as son and vice-versa
+        table_associados = self.dados['associados'] 
+        nrows = len(table_associados)   
+        data = {}
+        if (not (table_associados[0][0] == 'Nenhum processo associado.')):
+            # 'processo original' & 'processo'  (many times wrong)
             # get all processes listed on processos associados
-            # dados['associados'][0][:] header line
-            # dados['associados'][1][5] # coluna 5 'processo original'
-            # dados['associados'][1][0] # coluna 0 'processo'
-            nrows = len(self.dados['associados'])
-            assprocesses_name = ([self.dados['associados'][i][0] for i in range(1, nrows) ] +
-                             [ self.dados['associados'][i][5] for i in range(1, nrows) ])
-            assprocesses_name = list(set(assprocesses_name)) # Unique Process Only
-            assprocesses_name = list(map(fmtPname, assprocesses_name)) # formatted process names
-            assprocesses_name.remove(self.name)# remove SELF from list
+            # table_associados[0][:] header line
+            # table_associados[1][5] # coluna 5 'processo original'
+            # table_associados[1][0] # coluna 0 'processo'            
+            associados = ([table_associados[i][0] for i in range(1, nrows) ] +
+                             [table_associados[i][5] for i in range(1, nrows) ])            
+            associados = list(dict.fromkeys(associados)) # unique process mantaining order py3.7+
+            associados = list(map(fmtPname, associados)) # formatted process names
+            associados.remove(self.name) # remove SELF from list
+            # tipo e data de associação, ordem é mantida key : process name             
+            data = { associados[i-1] : {'tipo' : table_associados[i][2], 
+                      'data' : datetime.strptime(table_associados[i][3], "%d/%m/%Y")} 
+                        for i in range(1, nrows) }            
             ass_ignore = fmtPname(ass_ignore) if ass_ignore != '' else ''
-
-            if ass_ignore in assprocesses_name:  # ignore this process
-                assprocesses_name.remove(ass_ignore) # removing circular reference
+            if ass_ignore in associados:  # ignore this process
+                associados.remove(ass_ignore) # removing circular reference
             if self.verbose:
                 with mutex:
                     print("fathernSons - getting associados: ", self.name,
@@ -211,15 +219,15 @@ class Processo:
 
             # helper function to search outward only
             def exploreAssociados(name, wp, ignore, verbosity):
-                """ *ass_ignore : must be set to avoid being waiting for parent-source searcher
-                    the search will spread outward only"""
+                """ *ass_ignore : must be set to avoid being waiting for parent-source 
+                    Also make the search spread outward only"""
                 proc = Processo.Get(name, wp, 0, verbosity, False)
                 proc.dadosBasicosGet()
                 proc.parentnSons(ass_ignore=ignore)
                 return proc
 
             # ignoring empty lists only one son or father that is ignored
-            if assprocesses_name:
+            if associados:
                 with concurrent.futures.ThreadPoolExecutor() as executor: # thread number optimal       
                     # use a dict to map { process name : future_wrapped_Processo }             
                     # due possibility of exception on Thread and to know which process was responsible for that
@@ -227,7 +235,7 @@ class Processo:
                     #    for process_name in assprocesses_name}
                     future_processes = {process_name : executor.submit(exploreAssociados, 
                         process_name, self.wpage, self.name, self.verbose) 
-                        for process_name in assprocesses_name}
+                        for process_name in associados}
                     concurrent.futures.wait(future_processes.values())
                     #for future in concurrent.futures.as_completed(future_processes):         
                     for process_name, future_process in future_processes.items():               
@@ -253,6 +261,7 @@ class Processo:
                 with mutex:
                     print("fathernSons - finished associados: ", self.name, file=sys.stderr)
         self.parentnsons_run = True
+        self.AssociadosData = data
         return self.Associados
 
     def ancestrySearch(self, ass_ignore=''):
