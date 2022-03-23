@@ -19,7 +19,7 @@ def graphAddEdges(process, G, ignore=''):
     G.add_edges_from([(process.name, associado, associados[associado]) for associado in associados.keys()])
     for associado in associados.values():
         graphAddEdges(associado['obj'], G, process.name)
-        
+
 
 def createGraphAssociados(process):
     """
@@ -36,7 +36,7 @@ def createGraphAssociados(process):
     for sc, tg in Gdg.edges():
         if comparePnames(sc, tg) > 0:
             Gd.remove_edge(sc, tg)
-    sortedNodes = sorted(list(G.nodes), key=cmp_to_key(comparePnames), reverse=True)
+    sortedNodes = sorted(list(Gd.nodes), key=cmp_to_key(comparePnames), reverse=False)
     # sortedNodes[0] is the root process oldest
     return Gd, sortedNodes[0]
 

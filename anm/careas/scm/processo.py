@@ -224,10 +224,10 @@ class Processo:
             with mutex:
                 print("ancestrySearch - building graph: ", self.name, file=sys.stderr)
         
-        self['prioridadec'] = self['prioridade']
+        self.dados['prioridadec'] = self['prioridade']
         if self.Associados:
             graph, root = ancestry.createGraphAssociados(self)
-            self['prioridadec'] = ProcessStorage[root]['prioridade']
+            self.dados['prioridadec'] = ProcessStorage[root]['prioridade']
 
         self.ancestry_run = True
         return self['prioridadec']
