@@ -52,8 +52,7 @@ class Interferencia:
         """
         self.processo = Processo.Get(processostr, wpage, dados, verbose)
         self.wpage = wpage
-        self.verbose = verbose
-       
+        self.verbose = verbose       
         self.processo_path = processPathSecor(self.processo)
 
     @staticmethod
@@ -197,7 +196,7 @@ class Interferencia:
                 assoc_items = pd.DataFrame(processo.dados['associados'][1:],
                         columns=self.tabela_assoc.columns[2:])
                 assoc_items['Main'] = processo.name
-                assoc_items['Prior'] = (processo.prioridadec if hasattr(processo, 'prioridadec') else processo.prioridade)
+                assoc_items['Prior'] = processo['prioridadec'] if processo['prioridadec'] else processo['prioridade']
                 # number of direct sons/ ancestors
                 self.tabela_interf.loc[row[0], 'Sons'] = len(processo.sons)
                 self.tabela_interf.loc[row[0], 'Dads'] = len(processo.parents)
@@ -240,7 +239,7 @@ class Interferencia:
                 lambda strdate: datetime.strptime(strdate, "%d/%m/%Y %H:%M:%S"))
             # to add an additional row caso a primeira data dos eventos diferente
             # da prioritária correta
-            processo_prioridadec = self.processes_interf[fmtPname(row[1][1])].prioridadec
+            processo_prioridadec = self.processes_interf[fmtPname(row[1][1])]['prioridadec']
             if processo_events['Data'].values[-1] > np.datetime64(processo_prioridadec):
                 processo_events = processo_events.append(processo_events.tail(1), ignore_index=True) # repeat the last/or first
                 processo_events.loc[processo_events.index[-1], 'Data'] = np.datetime64(processo_prioridadec)
@@ -258,10 +257,10 @@ class Interferencia:
         self.tabela_interf_eventos = self.tabela_interf_eventos[columns_order]
         ### Todos os eventos posteriores a data de prioridade são marcados
         # como 0 na coluna Prioridade otherwise 1
-        self.tabela_interf_eventos['DataPrior'] = self.processo.prioridadec
+        self.tabela_interf_eventos['DataPrior'] = self.processo['prioridadec']
         self.tabela_interf_eventos['EvPrior'] = 0 # 1 prioritario 0 otherwise
         self.tabela_interf_eventos['EvPrior'] = self.tabela_interf_eventos.apply(
-            lambda row: 1 if row['Data'] <= self.processo.prioridadec else 0, axis=1)
+            lambda row: 1 if row['Data'] <= self.processo['prioridadec'] else 0, axis=1)
         ### fill-in column with inativam or ativam processo for each event
         ### using excel 'eventos_scm_09102019.xls'
         eventos = pd.read_excel(__eventos_scm__)
@@ -281,7 +280,7 @@ class Interferencia:
             alive = np.sum(events.Inativ.values) # alive or dead
             if alive < 0: # DEAD - get by data da última inativação
                 data_inativ = events.loc[events.Inativ == -1]['Data'].values[0]
-                if data_inativ  <= np.datetime64(self.processo.prioridadec):
+                if data_inativ  <= np.datetime64(self.processo['prioridadec']):
                     # morreu antes do atual, não é prioritário
                     prior = -1
             self.tabela_interf_eventos.loc[

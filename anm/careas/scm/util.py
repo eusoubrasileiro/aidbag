@@ -1,9 +1,24 @@
 import re
 
-from .constants import (
-    regex_processg, 
-    regex_process, 
-)
+# Processes Regex 
+# groups 
+regex_processg = re.compile('(\d{0,3})\D*(\d{1,3})\D([1-2]\d{3})') # use regex_processg return tupple groups
+# without groups
+regex_process = re.compile('\d{0,3}\D*\d{1,3}\D[1-2]\d{3}') # use regex_process.search(...) if None didn't find 
+# explanation: [1-2]\d{3} years from 1900-2999
+
+def test_regex_process():
+    testtext = "847/1945,xx2.537/2016,832537-2016,48403.832.537/2016-09,832.537/2016-09"
+    result = re.findall(regex_processg, testtext)
+    expected = [('84', '7', '1945'),
+    ('2', '537', '2016'),
+    ('832', '537', '2016'),
+    ('832', '537', '2016'),
+    ('832', '537', '2016')]
+    assert  result == expected
+
+# test regex when imported 
+test_regex_process()
 
 # scm consulta dados (post) nao aceita formato diferente de 'xxx.xxx/xxxx'
 def fmtPname(pross_str):
@@ -36,7 +51,7 @@ def findPnames(pross_str):
 
 def comparePnames(process, other, check=False):
     """simple check wether which process is older than other (e.g.) 
-    based on custom sort function for list 
+    custom sort function for list based on
     https://stackoverflow.com/questions/5213033/sort-a-list-of-lists-with-a-custom-compare-function
 
     if item1 < item2 ? -1   

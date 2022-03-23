@@ -1,3 +1,5 @@
+from . import scm 
+
 from .scm import (
     Processo, 
     ProcessStorage, 
@@ -10,10 +12,7 @@ from .scm import (
 from .constants import (
     __secor_path__,
     __eventos_scm__,
-    __secor_timeout__,
-    regex_processg, 
-    regex_process, 
-    scm_timeout, 
+    __secor_timeout__
 )
 
 from .util import ContaPrazo

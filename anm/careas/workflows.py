@@ -17,10 +17,11 @@ from .SEI import *
 from .constants import (
     mcodigos,
     docs_externos,
-    __secor_path__,
-    regex_process,
+    __secor_path__,    
     SEI_DOCS
     )
+
+from .scm.util import regex_process
 
 from aidbag.anm.careas import constants
 
@@ -385,9 +386,6 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
             pdf_adicional = os.path.join(process_path, pdf_adicional)
         elif verbose:
             print('Nao encontrou pdf Imprimir*.pdf', file=sys.stderr)
-
-    #  GET NUP and tipo from html
-    # GetProcesso(fathername, self.wpage))
 
     html = None
     try:

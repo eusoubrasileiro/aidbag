@@ -1,13 +1,15 @@
-from ...web import htmlscrap
+from ....web import htmlscrap
 
-from .scm_util import (
+from .util import (
     fmtPname
 )
 
-from .constants import (
-    scm_timeout, 
-    scm_dados_processo_main_url
-)
+# SCM URL LIST
+# TODO complete the list of links
+#'https://sistemas.anm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx' # might change again
+scm_dados_processo_main_url='https://sistemas.anm.gov.br/scm/intra/site/admin/dadosprocesso.aspx'
+scm_timeout=(2*60)
+
 
 def dadosBasicosPageRetrieve(processostr, wpage, fmtName=True):
     """   Get & Post na página dados do Processo do Cadastro  Mineiro (SCM)
