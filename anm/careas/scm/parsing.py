@@ -83,20 +83,14 @@ def parseDadosBasicos(dbasicos_page, name, verbose, mutex, data_tags=scm_data_ta
         dados['sons'] = []
         dados['parents'] = []
         for associado in dados['associados']:
-            code = comparePnames(associado, name)
+            code = comparePnames(associado, name) # compare by number/year only
             if code == -1: # before
                 dados['parents'].append(associado)
             elif code == 1: # after
                 dados['sons'].append(associado)        
     return dados 
 
-# fonte de informação da data de origem do processo 
-# 1. numero do processo 
-# 2. data de associacao 
-# data de associacao não existe para self 
-# but data protocolo pode ou não existir
-# se prioridade existe pode não ser útil para associação
-# não há opção tem que ser por nome mesmo
+
 
 def parseDadosPoligonal(poligonpage):
     polydata = {}
@@ -130,29 +124,3 @@ def getMissingTagsBasicos(dados):
     miss_data_tags = { key : scm_data_tags[key] for key in missing }        
     return miss_data_tags
 
-    # def isOlderAssociado(self, other):
-    #     """simple check for associados 
-    #     wether self 02/2005 is older than 03/2005"""
-    #     # if starts with 3xx
-    #     # if self.disp: # if disponibilidade get data associação mais antiga -> origen
-    #     #     datas = [ d['data'] for d in self.AssociadosData.values() ]
-    #     #     datas.sort(reverse=False)
-    #     #     syear = datas[0].year
-    #     # else:
-    #     #     syear = self.year 
-    #     # if other.disp: # if disponibilidade get data associação mais antiga -> origen
-    #     #     datas = [ d['data'] for d in other.AssociadosData.values() ]
-    #     #     datas.sort(reverse=False)
-    #     #     oyear = datas[0].year 
-    #     # else:
-    #     #     oyear = other.year 
-    #     if self.year < other.year:
-    #         return True 
-    #     if self.year > other.year:
-    #         return False 
-    #     # same year now       
-    #     if self.number < other.number:
-    #         return True 
-    #     if self.number > other.number:
-    #         return False 
-    #     raise Exception("Error `IsOlder` process are equal")

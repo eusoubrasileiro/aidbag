@@ -49,6 +49,44 @@ def findPnames(pross_str):
     """
     return regex_process.findall(pross_str)
 
+
+# fonte de informação da data de origem do processo 
+# 1. numero do processo 
+# 2. data de associacao 
+# data de associacao não existe para self 
+# but data protocolo pode ou não existir
+# se prioridade existe pode não ser útil para associação
+# não há opção tem que ser por nome mesmo
+
+    # def isOlderAssociado(self, other):
+    #     """simple check for associados 
+    #     wether self 02/2005 is older than 03/2005"""
+    #     # if starts with 3xx
+    #     # if self.disp: # if disponibilidade get data associação mais antiga -> origen
+    #     #     datas = [ d['data'] for d in self.AssociadosData.values() ]
+    #     #     datas.sort(reverse=False)
+    #     #     syear = datas[0].year
+    #     # else:
+    #     #     syear = self.year 
+    #     # if other.disp: # if disponibilidade get data associação mais antiga -> origen
+    #     #     datas = [ d['data'] for d in other.AssociadosData.values() ]
+    #     #     datas.sort(reverse=False)
+    #     #     oyear = datas[0].year 
+    #     # else:
+    #     #     oyear = other.year 
+    #     if self.year < other.year:
+    #         return True 
+    #     if self.year > other.year:
+    #         return False 
+    #     # same year now       
+    #     if self.number < other.number:
+    #         return True 
+    #     if self.number > other.number:
+    #         return False 
+    #     raise Exception("Error `IsOlder` process are equal")
+
+## this is a key function for associados 
+## it seams there is no other option 
 def comparePnames(process, other, check=False):
     """simple check wether which process is older than other (e.g.) 
     custom sort function for list based on

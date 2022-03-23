@@ -1,5 +1,7 @@
 import sys, os, copy
 import glob, json
+
+from . import ancestry
 from ....web.htmlscrap import wPageNtlm
 import concurrent.futures
 import threading
@@ -36,9 +38,9 @@ class Processo:
         Hint: Use `Processo.Get` to avoid creating duplicate Processo's
 
         dados :
-                1 - scm dados basicos page
-                2 - anterior + processos associados (father and direct sons)
-                3 - anterior + correção prioridade ancestor list
+        1. scm dados basicos parse   
+        2. 1 + expand associados   
+        3. 2 + correção prioridade (ancestors list)   
         """        
         self.name = fmtPname(processostr) # `fmtPname` unique string process number/year
         self.number, self.year = numberyearPname(self.name)
@@ -67,12 +69,8 @@ class Processo:
         # anscestors assessment: parents and sons  
         # process 'processos associados' to get father, grandfather etc.
         self.Associados = {}  
-        """key : value - processo name : {attributes}"""
-        """attributes {} keys 'tipo','data' de associação, 'obj' scm.processo.Processo etc..."""
-        self.parents = [] # anscestors : Associados
-        self.sons = [] # direct sons : Associados
-        """Aba dados basicos tabela associados processos }
-        dict { 'process name' : scm.Processo }"""
+        """key : value - processo name : {attributes}
+        attributes {} keys 'tipo','data' de associação, 'obj' scm.processo.Processo etc..."""        
         self.anscestorsprocesses = []
 
    
@@ -85,9 +83,9 @@ class Processo:
     def runtask(self, task=None, cdados=0):
         """
         codedados :
-                1 - scm dados basicos page 
-                2 - anterior + processos associados (father and direct sons)
-                3 - anterior + correção prioridade (ancestors list)
+        1. scm dados basicos parse   
+        2. 1 + expand associados   
+        3. 2 + correção prioridade (ancestors list)   
         """
         # check if some taks is running
         # only ONE can have this process at time
@@ -100,7 +98,7 @@ class Processo:
             elif (cdados == 2) and not self.associados_run:
                 task = (self.expandAssociados, {})
             elif (cdados == 3) and not self.ancestry_run:
-                task = (self.ancestrySearch, {})
+                task = (self.ancestry, {})
         if task:
             task, params = task
             if self.verbose:
@@ -211,56 +209,28 @@ class Processo:
         self.associados_run = True
         return self.Associados
 
-    def ancestrySearch(self):
+    def ancestry(self):
         """
-        upsearch for ancestry of this process
-        - create the 'correct' prioridade (self.prioridadec)
-        - complete the self.anscestors lists ( ..., grandfather, great-grandfather etc.) from
-        closer to farther
+        Build graph of all associados.
+        Get root node or older parent.               
         """
         if self.ancestry_run:
-            return
-
-        if self.verbose:
-            with mutex:
-                print("ancestrySearch - starting: ", self.name, file=sys.stderr)
+            return self['prioridadec']
 
         if not self.associados_run:
             self.expandAssociados()
 
+        if self.verbose:
+            with mutex:
+                print("ancestrySearch - building graph: ", self.name, file=sys.stderr)
+        
         self['prioridadec'] = self['prioridade']
-        if self.Associados and len(self.parents) > 0:
-            # first father already has an process class object (get it)
-            self.anscestorsprocesses = [] # storing the ancestors processes objects
-            parent = self.Associados[self.parents[0]] # first father get by process name string
-            son_name = self.name # self is the son
-            if self.verbose:
-                with mutex:
-                    print("ancestrySearch - going up: ", parent.name, file=sys.stderr)
-            # find corrected data prioridade by ancestry
-            while True: # how long will this take?
-                # must run on same thread to block the sequence
-                # of instructions just after this
-                parent.runtask((parent.ancestrySearch,{'ass_ignore':son_name}))
-                # remove circular reference to son
-                self.anscestorsprocesses.append(parent)
-                if len(parent.parents) > 1:
-                    raise Exception("ancestrySearch - failed More than one parent: ", parent.name)
-                else:
-                    if len(parent.parents) == 0: # case only 1 parent, FINISHED
-                        if parent['prioridadec'] < self['prioridadec']:
-                            self['prioridadec'] = parent['prioridadec']
-                        if self.verbose:
-                            with mutex:
-                                print("ancestrySearch - finished: ", self.name, file=sys.stderr)
-                        break
-                    else: # 1 anscestors, LOOP again
-                        self.parents.append(parent.parents[0]) # store its name string
-                        son_name = parent.name
-                        parent = Processo.Get(parent.parents[0], self.wpage, 1, self.verbose)
-                        # its '1' above because the loop will ask for 3 `ancestrySearch`
-                        # do not correct prioridadec until end is reached
+        if self.Associados:
+            graph, root = ancestry.createGraphAssociados(self)
+            self['prioridadec'] = ProcessStorage[root]['prioridade']
+
         self.ancestry_run = True
+        return self['prioridadec']
 
     def dadosBasicosGet(self, data_tags=None, download=True):
         """dowload the dados basicos scm main html page or 
@@ -279,8 +249,6 @@ class Processo:
         new_dados = parseDadosBasicos(self.html_dbasicospage, self.name, self.verbose, mutex, data_tags)
         self.dados.update(new_dados)
         self.Associados = self.dados['associados']
-        self.parents  = self.dados['parents']
-        self.sons  = self.dados['sons']
         return len(self.dados) == len(data_tags) # return if got w. asked for
 
     def dadosPoligonalGet(self, download=True):
@@ -307,7 +275,7 @@ class Processo:
             self.expandAssociados()
         if self.Associados:
             miss_data_tags = getMissingTagsBasicos(self.dados)        
-            father = Processo.Get(self.parents[0], self.wpage, verbose=self.verbose, run=False)
+            father = Processo.Get(self.dados['parents'][0], self.wpage, verbose=self.verbose, run=False)
             father.dadosBasicosGet(miss_data_tags)
             self.dados.update(father.dados)
             return True
@@ -375,11 +343,6 @@ class Processo:
 
         processostr : numero processo format xxx.xxx/ano
         wpage : wPage html webpage scraping class com login e passwd preenchidos
-
-        Dados:
-        1. scm dados basicos page  
-        2. anterior + processos associados (father and direct sons)  
-        3. anterior + correção prioridade ancestor list  
         """
         processo = None
         processostr = fmtPname(processostr)

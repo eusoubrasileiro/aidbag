@@ -2,16 +2,15 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import copy, numpy as np 
 import random 
+from functools import cmp_to_key
 from .util import comparePnames
 
 
-
-
-def GraphAddEdges(process, G, ignore=''):
+def graphAddEdges(process, G, ignore=''):
     """ 
-        * process : `scm.processo.Processo` instance
-        * ignore : to avoid infinit-loop also builds outward
-        * G : `networkx` graph undirected
+    * process : `scm.processo.Processo` instance
+    * ignore : to avoid infinit-loop also builds outward
+    * G : `networkx` graph undirected
     """
     associados = copy.copy(process.Associados)    
     if ignore in associados:
@@ -19,15 +18,38 @@ def GraphAddEdges(process, G, ignore=''):
     # add edge source, target, edge attributes dict
     G.add_edges_from([(process.name, associado, associados[associado]) for associado in associados.keys()])
     for associado in associados.values():
-        GraphAddEdges(associado['obj'], G, process.name)
+        graphAddEdges(associado['obj'], G, process.name)
+        
 
-def DrawGraphAssociados(G):
+def createGraphAssociados(process):
+    """
+    create graph of associados direct -> each edge has a direction 
+    each node is a process, each edge (connection) has 
+    the attributes of `Processo.Associados[process.name]`
+    """
+    G = nx.Graph()
+    graphAddEdges(process, G)
+    Gdg = nx.DiGraph(G)
+    del G
+    # remove vertices that are not source = older -> target = younger 
+    Gd = Gdg.copy()
+    for sc, tg in Gdg.edges():
+        if comparePnames(sc, tg) > 0:
+            Gd.remove_edge(sc, tg)
+    sortedNodes = sorted(list(G.nodes), key=cmp_to_key(comparePnames), reverse=True)
+    # sortedNodes[0] is the root process oldest
+    return Gd, sortedNodes[0]
+
+
+def plotGraphAssociados(G):
+    """Plot undirected graph of associados
+    Node sizes are giving from older to younger
+    Labels are 'tipo' e 'data' da associação"""
     # compare process to get older to create node sizes?    
     sortedNodes = sorted(list(G.nodes), key=cmp_to_key(comparePnames), reverse=True)
     sizes = np.geomspace(100, 600,num=len(sortedNodes), dtype=int) # better sizes than limspace
     node_sizes = { k:v for k,v in zip(sortedNodes, sizes) }
-
-    pos = nx.spring_layout(G, seed=150)
+    pos = nx.spring_layout(G)
     plt.figure(figsize=(9,9))
     nx.draw(G, pos, 
         node_size=[node_sizes[node] for node in G.nodes], 
@@ -41,26 +63,19 @@ def DrawGraphAssociados(G):
     plt.axis("off")
     plt.show()
 
+
+
 # G = nx.Graph()
-# GraphAddEdges(careas.scm.ProcessStorage['832.547/2014'], G)
-# DrawGraphAssociados(G)
+# graphAddEdges(careas.scm.ProcessStorage['832.547/2014'], G)
+# plotGraphAssociados(G)
 
-from functools import cmp_to_key
 
-def DrawGraphAssociadosDirect(G):
+def plotDirectGraphAssociados(Gd):
     # compare process to get older to create node sizes?    
-    sortedNodes = sorted(list(G.nodes), key=cmp_to_key(comparePnames), reverse=True)
+    sortedNodes = sorted(list(Gd.nodes), key=cmp_to_key(comparePnames), reverse=True)
     sizes = np.geomspace(100, 600,num=len(sortedNodes), dtype=int) # better sizes than limspace
     node_sizes = { k:v for k,v in zip(sortedNodes, sizes) }
-    Gdg = nx.DiGraph(G)
-    # remove vertices that are not source = older -> target = younger 
-    Gd = Gdg.copy()
-    for sc, tg in Gdg.edges():
-        if comparePnames(sc, tg) > 0:
-            Gd.remove_edge(sc, tg)
-        else: # add_edge only adds a new attribute to it
-            Gd.add_edge(sc, tg, weight=1./len(Gdg.out_edges(sc))) # weight used by some plotting options
-    #pos = nx.shell_layout(Gd, cclists, rotate=np.pi/10, scale=0.1)
+    # uses custom plotting layout bellow 
     pos = hierarchy_pos(Gd,sortedNodes[-1]) 
     plt.figure(figsize=(9,9))
     nx.draw(Gd, pos,
@@ -75,12 +90,9 @@ def DrawGraphAssociadosDirect(G):
     plt.axis("off")
     plt.show()
 
-#plt.axis("off")
-#plt.show()
 
 
 # networkx custom plotting layout for tree-like graphs
-
 def hierarchy_pos(G, root=None, width=1., vert_gap = 0.2, vert_loc = 0, xcenter = 0.5):
     """
     From Joel's answer at https://stackoverflow.com/a/29597209/2966723.  

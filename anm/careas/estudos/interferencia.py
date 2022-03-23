@@ -198,8 +198,8 @@ class Interferencia:
                 assoc_items['Main'] = processo.name
                 assoc_items['Prior'] = processo['prioridadec'] if processo['prioridadec'] else processo['prioridade']
                 # number of direct sons/ ancestors
-                self.tabela_interf.loc[row[0], 'Sons'] = len(processo.sons)
-                self.tabela_interf.loc[row[0], 'Dads'] = len(processo.parents)
+                self.tabela_interf.loc[row[0], 'Sons'] = len(processo['sons'])
+                self.tabela_interf.loc[row[0], 'Dads'] = len(processo['parents'])
                 self.tabela_assoc = self.tabela_assoc.append(assoc_items, sort=False, ignore_index=True)
         return self.tabela_interf
 
