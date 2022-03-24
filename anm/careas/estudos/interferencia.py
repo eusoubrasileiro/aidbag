@@ -155,12 +155,10 @@ class Interferencia:
         self.tabela_interf['Dads'] = 0
         self.tabela_interf['Sons'] = 0
         self.tabela_interf['Ativo'] = 'Sim'
-        # POOL OF THREADS
-        # due many calls to python.requests taking much time
-        processos_interferentes = [fmtPname(row[1]['Processo'])
+        interferentes = [fmtPname(row[1]['Processo'])
                                     for row in self.tabela_interf.iterrows()]
         # Unique Process Only
-        processos_interferentes = list(set(processos_interferentes))
+        interferentes = list(set(interferentes))
         # cannot have this here for now ...
         # hack to workaround
         # create multiple python requests sessions
@@ -176,27 +174,25 @@ class Interferencia:
         # # create dict of key process name , value process objects
         # self.processes_interf = dict(zip(list(map(lambda p: p.name, self.processes_interf)),
         #                                 self.processes_interf))
-        self.processes_interf = {}
-        for process_name in processos_interferentes:
-            processo = Processo.Get(process_name, self.wpage, 3, self.verbose)
-            self.processes_interf[process_name] = processo
-
-        # self.processes_interf[processo_name] = processo # save on interf process object list
-        # tabela c/ processos associadoas # aos processos interferentes
-        self.tabela_assoc = pd.DataFrame(columns=['Main', 'Prior', 'Processo',  'Titular', 'Tipo',
-                'Assoc', 'DesAssoc', 'Original', 'Obs'])
+        self.Interferentes = {}
+        for name in interferentes:
+            processo = Processo.Get(name, self.wpage, 3, self.verbose)
+            self.Interferentes[name] = processo
+        # tabela c/ processos associadoas aos processos interferentes
+        self.tabela_assoc = pd.DataFrame()
         for row in self.tabela_interf.iterrows():
             # it seams excel writer needs every process name have same length string 000.000/xxxx (12)
             # so reformat process name
-            processo_name = fmtPname(row[1]['Processo'])
-            processo = self.processes_interf[processo_name]
-            self.tabela_interf.loc[row[0], 'Processo'] = processo_name
-            self.tabela_interf.loc[row[0], 'Ativo'] = processo.dados['ativo']
+            name = fmtPname(row[1]['Processo'])
+            processo = self.Interferentes[name]
+            self.tabela_interf.loc[row[0], 'Processo'] = name
+            self.tabela_interf.loc[row[0], 'Ativo'] = processo['ativo']
             if processo.Associados:
-                assoc_items = pd.DataFrame(processo.dados['associados'][1:],
-                        columns=self.tabela_assoc.columns[2:])
-                assoc_items['Main'] = processo.name
-                assoc_items['Prior'] = processo['prioridadec'] if processo['prioridadec'] else processo['prioridade']
+                assoc_items = pd.DataFrame({ "Main" : processo.name, "Target" : processo.Associados.keys() })
+                assoc_items = assoc_items.join(pd.DataFrame(processo.Associados.values()))
+                assoc_items.drop(columns='obj', inplace=True)
+                # not using prioridade of associados
+                # assoc_items['Prior'] = processo['prioridadec'] if processo['prioridadec'] else processo['prioridade']
                 # number of direct sons/ ancestors
                 self.tabela_interf.loc[row[0], 'Sons'] = len(processo['sons'])
                 self.tabela_interf.loc[row[0], 'Dads'] = len(processo['parents'])
@@ -223,7 +219,7 @@ class Interferencia:
             # dados basico scm data nao inclui hora! cant use only scm
             processo_events = getEventosSimples(self.wpage, row[1][1])
             # get columns 'Publicação D.O.U' & 'Observação' from dados_basicos
-            processo_dados = self.processes_interf[fmtPname(row[1][1])].dados
+            processo_dados = self.Interferentes[fmtPname(row[1][1])].dados
             dfbasicos = pd.DataFrame(processo_dados['eventos'][1:],
                         columns=processo_dados['eventos'][0])
             processo_events['EvSeq'] = len(processo_events)-processo_events.index.values.astype(int) # set correct order of events
@@ -239,7 +235,7 @@ class Interferencia:
                 lambda strdate: datetime.strptime(strdate, "%d/%m/%Y %H:%M:%S"))
             # to add an additional row caso a primeira data dos eventos diferente
             # da prioritária correta
-            processo_prioridadec = self.processes_interf[fmtPname(row[1][1])]['prioridadec']
+            processo_prioridadec = self.Interferentes[fmtPname(row[1][1])]['prioridadec']
             if processo_events['Data'].values[-1] > np.datetime64(processo_prioridadec):
                 processo_events = processo_events.append(processo_events.tail(1), ignore_index=True) # repeat the last/or first
                 processo_events.loc[processo_events.index[-1], 'Data'] = np.datetime64(processo_prioridadec)

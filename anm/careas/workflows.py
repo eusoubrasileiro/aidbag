@@ -304,9 +304,9 @@ def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False):
                 proc.salvaDadosBasicosHtml(constants.processPathSecor(proc))
         except Exception as e:  # too generic is masking errors that I don't care for??             
             print("Process {:} Exception: ".format(processo), traceback.format_exc(), file=sys.stderr)                       
-            failed_NUPS.append(scm.ProcessStorage[scm.fmtPname(processo)].NUP)            
+            failed_NUPS.append(scm.ProcessStorage[scm.fmtPname(processo)]['NUP'])            
         else:
-            succeed_NUPs.append(proc.NUP)  
+            succeed_NUPs.append(proc['NUP'])  
     # print all NUPS
     if verbose:
         print('SEI NUPs sucess:')

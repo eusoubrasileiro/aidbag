@@ -36,9 +36,11 @@ def createGraphAssociados(process):
     for sc, tg in Gdg.edges():
         if comparePnames(sc, tg) > 0:
             Gd.remove_edge(sc, tg)
-    sortedNodes = sorted(list(Gd.nodes), key=cmp_to_key(comparePnames), reverse=False)
-    # sortedNodes[0] is the root process oldest
-    return Gd, sortedNodes[0]
+    root = None 
+    if Gd.nodes:
+        sortedNodes = sorted(list(Gd.nodes), key=cmp_to_key(comparePnames), reverse=False)
+        root = sortedNodes[0] # is the root process oldest    
+    return Gd, root
 
 
 def plotGraphAssociados(G):
@@ -57,7 +59,7 @@ def plotGraphAssociados(G):
     ax = plt.gca()
     ax.margins(0.05)
     # instead of two labels merge them with a new line 
-    labels = { (na, nb) : attr['tipo']+'\n'+attr['data'].strftime('%d/%m/%Y')
+    labels = { (na, nb) : attr['tipo']+'\n'+attr['data-ass'].strftime('%d/%m/%Y')
         for na, nb, attr in G.edges(data=True) }
     nx.draw_networkx_edge_labels(G, pos, edge_labels=labels)
     plt.axis("off")
@@ -84,7 +86,7 @@ def plotDirectGraphAssociados(Gd):
     ax = plt.gca()
     ax.margins(0.05)
     #instead of two labels merge them with a new line 
-    labels = { (na, nb) : attr['tipo']+'\n'+attr['data'].strftime('%d/%m/%Y')
+    labels = { (na, nb) : attr['tipo']+'\n'+attr['data-ass'].strftime('%d/%m/%Y')
         for na, nb, attr in Gd.edges(data=True) }
     nx.draw_networkx_edge_labels(Gd, pos, edge_labels=labels, alpha=0.6)
     plt.axis("off")

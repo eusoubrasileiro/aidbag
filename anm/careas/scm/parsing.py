@@ -34,22 +34,22 @@ def parseNUP(dbasicos_page):
 def parseDadosBasicos(dbasicos_page, name, verbose, mutex, data_tags=scm_data_tags):    
     soup = BeautifulSoup(dbasicos_page, features="lxml")
     dados = htmlscrap.dictDataText(soup, data_tags)
+    dados_raw = dados.copy()
     if dados['data_protocolo'] == '': # might happen
         dados['data_protocolo'] = dados['prioridade']
         if verbose:
             with mutex:
-                print('parseDadosBasicos - missing <data_protocolo>: ', file=sys.stderr)
+                print('parseDadosBasicos - missing <data_protocolo>: ', file=sys.stderr)    
     # prioridade pode estar errada, por exemplo, quando uma cessão gera processos 300
     # a prioridade desses 300 acaba errada ao esquecer do avô
     # protocolo pode estar errado ou ausente também
-    dados['prioridade'] = datetime.strptime(dados['prioridade'], "%d/%m/%Y %H:%M:%S")
-    dados['prioridadec'] = dados['prioridade'] # just for start
+    dados['prioridade'] = datetime.strptime(dados['prioridade'], "%d/%m/%Y %H:%M:%S")    
     dados['data_protocolo'] = datetime.strptime(dados['data_protocolo'], "%d/%m/%Y %H:%M:%S")    
     # associados
     if dados['associados'][0][0] == "Nenhum processo associado.":
         dados['associados'] = {} # overwrite by an empty dictionary 
     else:
-        table_associados = copy.copy(dados['associados']) # copy because it will be overwritten
+        table_associados = dados['associados'] # it will be overwritten
         nrows = len(table_associados)   
         # 'processo original' & 'processo'  (many times wrong)
         # get all processes listed on processos associados
@@ -61,6 +61,12 @@ def parseDadosBasicos(dbasicos_page, name, verbose, mutex, data_tags=scm_data_ta
         associados = list(dict.fromkeys(associados)) # unique process mantaining order py3.7+
         associados = list(map(fmtPname, associados)) # formatted process names
         associados.remove(name) # remove SELF from list
+        # try convert to datetime 
+        for i in range(1, nrows):
+            if table_associados[i][3]: # not ''
+                table_associados[i][3] = datetime.strptime(table_associados[i][3], "%d/%m/%Y")
+            if table_associados[i][4]: # not ''
+                table_associados[i][4] = datetime.strptime(table_associados[i][4], "%d/%m/%Y")
         # create dictionary of associados with empty dict of properties
         # properties will be filled after
         # 'obj' property will be a class instance of scm.processo.Processo
@@ -70,13 +76,18 @@ def parseDadosBasicos(dbasicos_page, name, verbose, mutex, data_tags=scm_data_ta
         dados['associados'] = {  # overwrite by a dictionary of associados
                 associados[i-1] : # process name is the key 
                     { # properties
-                        'tipo'    : table_associados[i][2], 
-                        'titular' : table_associados[i][1], 
-                        'data'    : datetime.strptime(table_associados[i][3], "%d/%m/%Y"),
-                        'obj'     : None,
+                        'tipo'         : table_associados[i][2], 
+                        'titular'      : table_associados[i][1], 
+                        'data-ass'     : table_associados[i][3], # associacao
+                        'data-deass'   : table_associados[i][4], # deassociacao
+                        'notes'        : table_associados[i][6], # observação
+                        'obj'          : None,
                     }
                 for i in range(1, nrows) 
-            }
+            }        
+        # remove associados after deassociados = they are meaningless now
+        dados['associados'] = { name : attrs for name, attrs in dados['associados'].items() 
+                                if not attrs['data-deass'] }
         # from here we get direct sons and parents/anscestors
         # from process names only
         # 800.xxx/2005 -> 300.yyy/2005
@@ -87,8 +98,9 @@ def parseDadosBasicos(dbasicos_page, name, verbose, mutex, data_tags=scm_data_ta
             if code == -1: # before
                 dados['parents'].append(associado)
             elif code == 1: # after
-                dados['sons'].append(associado)        
-    return dados 
+                dados['sons'].append(associado)      
+    # parsed copy and unparsed copy  
+    return dados, dados_raw 
 
 
 

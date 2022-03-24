@@ -54,7 +54,9 @@ class Processo:
         self.isfree = threading.Event()
         self.isfree.set() # make it free right now so it can execute
         self.dados = {} 
-        """dados to be parsed uses `htmlscrap.dictDataText` """
+        """dados parsed and processed """
+        self.dados_raw = {}
+        """dados parsed only"""
         self.polydata = {}
         """dados da poligonal to be parsed"""
         # and python.requests responses to be-reused and to save page content
@@ -71,14 +73,10 @@ class Processo:
         self.Associados = {}  
         """key : value - processo name : {attributes}
         attributes {} keys 'tipo','data' de associação, 'obj' scm.processo.Processo etc..."""        
-        self.anscestorsprocesses = []
-
    
     def __getitem__(self, key):
-        """get an property from the dados dictionary after `dadosbasicos_run` is True"""
-        if self.dadosbasicos_run:
-            return self.dados[key]
-        return None 
+        """get an property from the dados dictionary after `dadosbasicos_run` is True"""        
+        return self.dados[key]        
 
     def runtask(self, task=None, cdados=0):
         """
@@ -225,7 +223,7 @@ class Processo:
                 print("ancestrySearch - building graph: ", self.name, file=sys.stderr)
         
         self.dados['prioridadec'] = self['prioridade']
-        if self.Associados:
+        if self.Associados: # not dealing with grupamento many parents yet
             graph, root = ancestry.createGraphAssociados(self)
             self.dados['prioridadec'] = ProcessStorage[root]['prioridade']
 
@@ -246,8 +244,9 @@ class Processo:
             with mutex:
                 print("dadosBasicosGet - parsing: ", self.name, file=sys.stderr)        
         # using class field directly       
-        new_dados = parseDadosBasicos(self.html_dbasicospage, self.name, self.verbose, mutex, data_tags)
-        self.dados.update(new_dados)
+        dados, dados_raw = parseDadosBasicos(self.html_dbasicospage, self.name, self.verbose, mutex, data_tags)
+        self.dados.update(dados)
+        self.dados_raw = dados_raw
         self.Associados = self.dados['associados']
         return len(self.dados) == len(data_tags) # return if got w. asked for
 
