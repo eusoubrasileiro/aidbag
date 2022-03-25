@@ -322,12 +322,12 @@ class Processo:
         if not processostr: # get process str name by file name
             processostr= fmtPname(glob.glob('*basicos*.html')[0])
 
-        with open(path_main_html, 'r') as f: # read html scm
+        with open(path_main_html, encoding="utf8") as f: # read html scm
             main_html = f.read()
 
         if path_poligon_html: # if present
             path_poligon_html = path_poligon_html[0]
-            with open(path_poligon_html, 'r') as f: # read html scm
+            with open(path_poligon_html, encoding="utf8") as f: # read html scm
                 poligon_html = f.read()
         else:
             print('Didnt find a poligonal page html saved', file=sys.stderr)

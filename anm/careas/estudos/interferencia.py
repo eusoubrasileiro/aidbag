@@ -140,7 +140,7 @@ class Interferencia:
         self.tabela_interf = None
         interf_html = 'sigareas_rinterferencia_'+self.processo.number+'_'+self.processo.year+'.html'
         interf_html = os.path.join(self.processo_path, interf_html)
-        with open(interf_html, 'r') as f:
+        with open(interf_html, encoding="utf8") as f:
             htmltxt = f.read()
         soup = BeautifulSoup(htmltxt, features="lxml")
         # check connection failure (this table must allways be here)
