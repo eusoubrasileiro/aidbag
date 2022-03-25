@@ -12,6 +12,9 @@ from . import estudos
 from . import scm
 from ...web import htmlscrap
 from .SEI import *
+from .scm.parsing import (
+    select_fields
+    )
 
 
 from .constants import (
@@ -400,10 +403,8 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
         html = response.text
     # get everything needed
     soup = BeautifulSoup(html, features="lxml")
-    data = htmlscrap.dictDataText(soup, scm.scm_data_tags)
-    NUP = data['NUP'].strip()
-    tipo = data['tipo'].strip()
-    fase = data['fase'].strip()
+    data = htmlscrap.dictDataText(soup, select_fields(['NUP', 'tipo', 'fase']))
+    NUP, tipo, fase = data['NUP'], data['tipo'], data['fase']
 
     if empty:
         pdf_adicional = None

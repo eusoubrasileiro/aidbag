@@ -7,7 +7,6 @@ from .util import (
     fmtPname
 )
 
-
 # HTML tags for SCM main page
 # static field
 scm_data_tags = { # "data name" ; soup.find fields( "tag", "attributes")
@@ -25,6 +24,9 @@ scm_data_tags = { # "data name" ; soup.find fields( "tag", "attributes")
     'ativo'                 : ['span',  { 'id' : 'ctl00_conteudo_lblAtivo'} ]
 }
 
+def select_fields(selected_fields):
+    """select specific fields to be parsed from `scm_data_tags`"""
+    return { key : scm_data_tags[key] for key in selected_fields }  
 
 def parseNUP(dbasicos_page):
     soup = BeautifulSoup(dbasicos_page, features="lxml")
@@ -125,6 +127,7 @@ def parseDadosPoligonal(poligonpage):
                     }
     return polydata
 
+
 def getMissingTagsBasicos(dados):
     missing = []
     if dados['UF'] == "":
@@ -132,7 +135,6 @@ def getMissingTagsBasicos(dados):
     if dados['substancias'][0][0] == 'Nenhuma substância.':
         missing.append('substancias')
     if dados['municipios'][0][0] == 'Nenhum município.':
-        missing.append('municipios')
-    miss_data_tags = { key : scm_data_tags[key] for key in missing }        
-    return miss_data_tags
+        missing.append('municipios')    
+    return select_fields(missing)
 
