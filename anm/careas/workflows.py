@@ -393,7 +393,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
     html = None
     try:
         html_file = glob.glob('*.html')[0] # first html file on folder
-        with open(html_file, 'r') as f: # get NUP by html scm
+        with open(html_file, encoding="utf8") as f: # get NUP by html scm
             html = f.read()
     except IndexError: # list index out of range
         if wpage is None:

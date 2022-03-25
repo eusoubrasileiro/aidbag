@@ -164,7 +164,7 @@ def formatMemorial(latlon, fmt='sigareas', close_poly=True, view=False,
     fmtlines = fmtlines[:-1]  
     if save:
         # newline='' force it not to change lineseparator chars
-        with open(filename.upper(), 'wt', newline='') as f: # 't' for text, must be CAPS otherwise can't upload
+        with open(filename.upper(), 'wt', newline='', encoding="utf-8") as f: # 't' for text, must be CAPS otherwise can't upload
             f.write(fmtlines)
         print("Output filename is: ", filename.upper())    
     if view: # only to see         
@@ -198,21 +198,32 @@ class forceverdFailed(Exception):
     """increase the tolerance distance to adjust to nsew"""
     pass
 
-def forceverdPoligonal(vertices, tolerancem=0.5, view=False, close_poly=True, debug=True):
-    """
-    Aproxima coordenadas para rumos verdadeiros.
-    Aproximate decimal coordinates (lat,lon) to previous (lat or lon).    
+# this poly is kinda troublesome it can't get
+# rectlinear even if tolerance is put too high 
+issue_poly = """-19°44'18''174 -44°17'41''703||
+-19;44;;18''174 -44°17'45''410
+xxxx -19°44'16''507 -44°17'45''410
+-19°44'16''507   -44°17'52''079
+-19°44'18''250 -44°17'52''079
+-19°44'18|295 -44°17'53''625
+"""
+# that one is an open polygon that cannot be easly 
+# made a rectilinear polygon (correct term by wikipedia)
+# https://en.wikipedia.org/wiki/Rectilinear_polygon
 
-    *close_poly : default True
-            close polygon (if needed) repeating first vertex at the end
-    *tolerancem: default 0.5 meter
-            distance to accept as same lat or lon as previous
-    
-    """
-    if not isinstance(vertices, np.ndarray):
-        raise NotImplemented()          
-    if np.alltrue(vertices[0] == vertices[-1]): # needed for calculations bellow
-        vertices = vertices[:-1]  # remove end (repeated vertex)  
+# the algo bellow works only for simple approximations to rectlinear polygons
+
+# it's a problem inherent from setting tolerance too high
+# what the algorithm bellow does is 'to trace straigth lines' 
+# from each y, x (lat, lon) coordinate and check if any
+# of the coordinates nearby y or x can be replaced 
+# without much loss given by tolerance (distance maximum acceptable)
+# but if you set a too high distance things will get weird 
+# because you can scramble coordinates througout the for loop
+# since you will adjuste and readjust more than once
+# doesn't make sense at all 
+
+def _forceverdAprox(vertices, tolerancem=0.5, debug=True):
     cvertices = np.copy(vertices)
     vertices_new = np.copy(cvertices)
     dists = []
@@ -233,11 +244,30 @@ def forceverdPoligonal(vertices, tolerancem=0.5, view=False, close_poly=True, de
                         lon, plon, dist), file=sys.stderr)
                 dists.append(dist)
                 vertices_new[i+1+j, 1] = plon    
-    if debug and dists: # not dists: no distances means all zero - already rumos verdadeiros            
+    return dists, vertices_new 
+
+def forceverdPoligonal(vertices, tolerancem=0.5, view=False, close_poly=True, debug=True):
+    """
+    Aproxima coordenadas para rumos verdadeiros.
+    Aproximate decimal coordinates (lat,lon) to previous (lat or lon).    
+
+    *close_poly : default True
+            close polygon (if needed) repeating first vertex at the end
+    *tolerancem: default 0.5 meter
+            distance to accept as same lat or lon as previous
+    
+    """
+    if not isinstance(vertices, np.ndarray):
+        raise NotImplemented()          
+    if np.alltrue(vertices[0] == vertices[-1]): # needed for calculations bellow
+        vertices = vertices[:-1]  # remove end (repeated vertex)      
+    dists, vertices_new = _forceverdAprox(vertices, tolerancem, debug)
+    if debug and dists: # not dists: means no statistics to report and nothing more            
         print("Changes statistics min (m) : {:2.2f}  p50: {:2.2f} max: {:2.2f}".format(
             *(np.percentile(dists, [0, 50, 100]))), file=sys.stderr)
     if check_nsew_memo(vertices_new, 0) == False:
-        raise forceverdFailed()  # 'rumos verdadeiros' NSEW check sigareas deviation 0
+        print(vertices_new)
+        raise forceverdFailed(str(vertices_new))  # 'rumos verdadeiros' NSEW check sigareas deviation 0
     if close_poly: # close polygon back
         vertices_new = np.append(vertices_new, vertices_new[0:1], axis=0)
     if view:

@@ -65,7 +65,7 @@ class wPage: # html  webpage scraping with soup and requests
                         # rename html ref so can move html and folder of files anywhere
                         res[inner] = os.path.join(os.path.basename(pagefolder), filename)
                         if not os.path.isfile(filepath): # was not downloaded
-                            with open(filepath, 'wb') as file:
+                            with open(filepath, 'wb', encoding='utf-8') as file:
                                 filebin = session.get(fileurl)
                                 file.write(filebin.content)
                     except Exception as exc:
@@ -79,7 +79,7 @@ class wPage: # html  webpage scraping with soup and requests
         tags_inner = {'img': 'src', 'link': 'href', 'script': 'src'} # tag&inner tags to grab
         for tag, inner in tags_inner.items():
             savenRename(soup, pagefolder, session, self.response.url, tag, inner)
-        with open(path+'.html', 'wb') as file:
+        with open(path+'.html', 'wb', encoding='utf-8') as file:
             file.write(soup.prettify('utf-8'))
 
     def post(self, arg, save=True, **kwargs):
