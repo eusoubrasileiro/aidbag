@@ -52,7 +52,7 @@ class wPage: # html  webpage scraping with soup and requests
         It will create a file  `'path-to-page'.html` and a folder `'path-to-page'_files`
         https://stackoverflow.com/a/62207356/1207193
         """        
-        def soupfindnSave(soup, pagefolder, session, url, tag, inner):
+        def savenRename(soup, pagefolder, session, url, tag, inner):
             if not os.path.exists(pagefolder): # create only once
                 os.mkdir(pagefolder)
             for res in soup.findAll(tag):   # images, css, etc..
@@ -78,7 +78,7 @@ class wPage: # html  webpage scraping with soup and requests
         pagefolder = path+'_files' # page contents folder
         tags_inner = {'img': 'src', 'link': 'href', 'script': 'src'} # tag&inner tags to grab
         for tag, inner in tags_inner.items():
-            soupfindnSave(soup, pagefolder, session, self.response.url, tag, inner)
+            savenRename(soup, pagefolder, session, self.response.url, tag, inner)
         with open(path+'.html', 'wb') as file:
             file.write(soup.prettify('utf-8'))
 
