@@ -1,5 +1,5 @@
 import sys, os, copy
-import glob, json
+import glob, json, traceback
 
 from . import ancestry
 from ....web.htmlscrap import wPageNtlm
@@ -47,10 +47,10 @@ class Processo:
         self.isdisp = True if str(self.number)[0] == 3 else False # if starts 3xx.xxx/xxx disponibilidade        
         self.wpage = wPageNtlm(wpagentlm.user, wpagentlm.passwd)
         self.verbose = verbose
-        # control to avoid running again
-        self.ancestry_run = False
+        # control to prevent from running again
         self.dadosbasicos_run = False
         self.associados_run = False
+        self.ancestry_run = False
         self.isfree = threading.Event()
         self.isfree.set() # make it free right now so it can execute
         self.dados = {} 
@@ -80,7 +80,8 @@ class Processo:
 
     def runtask(self, task=None, cdados=0):
         """
-        codedados :
+        run task safely due multiple threads running that can be owning the same process
+        * codedados : int 
         1. scm dados basicos parse   
         2. 1 + expand associados   
         3. 2 + correção prioridade (ancestors list)   
@@ -162,24 +163,43 @@ class Processo:
             return self.Associados       
 
         if self.Associados:
-            # local copy for object search -> removing circular reference
-            associados = copy.deepcopy(self.Associados)      
-            if ass_ignore: # equivalent to ass_ignore != ''
-                # if its going to be ignored it's because it already exists                   
-                self.Associados[ass_ignore].update({'obj' : ProcessStorage[ass_ignore]})  
-                # for outward search ignore this process
-                del associados[ass_ignore] # removing circular reference                
             if self.verbose:
                 with mutex:
                     print("expandAssociados - getting associados: ", self.name,
                     ' - ass_ignore: ', ass_ignore, file=sys.stderr)
+            # local copy for object search -> removing circular reference
+            associados = copy.copy(self.Associados)      
+            if ass_ignore: # equivalent to ass_ignore != ''
+                # if its going to be ignored it's because it already exists 
+                # being associated with someone 
+                # !inconsistency! bug situations identified where A -> B but B !-> A on 
+                # each of A and B SCM page -> SO check if ass_ignore exists on self.Associados
+                if ass_ignore in self.Associados:                                
+                    self.Associados[ass_ignore].update({'obj' : ProcessStorage[ass_ignore]})  
+                    # for outward search ignore this process
+                    del associados[ass_ignore] # removing circular reference    
+                else: # !inconsistency! bug situation identified where A -> B but B !-> A 
+                    # encontrada em grupamento mineiro 
+                    # processo em mais de um grupamento mineiro
+                    # sendo que um dos grupamentos havia sido cancelado mas a associação não removida                    
+                    inconsistency = ["Process {0} associado to this process but this is NOT associado to {0} on SCM".format(
+                        ass_ignore)]
+                    if 'inconsistencies' in self.dados:
+                        self.dados['inconsistencies'] = inconsistency + self.dados['inconsistencies']
+                    else: # first inconsistency
+                        self.dados['inconsistencies'] = inconsistency
+                    if self.verbose:
+                        with mutex:
+                            print("expandAssociados - inconsistency: ", self.name,
+                            ' : ', inconsistency, file=sys.stderr)
             # helper function to search outward only
             def _expandAssociados(name, wp, ignore, verbosity):
                 """ *ass_ignore : must be set to avoid being waiting for parent-source 
                     Also make the search spread outward only"""
-                proc = Processo.Get(name, wp, 0, verbosity, False)
-                proc.dadosBasicosGet()
-                proc.expandAssociados(ass_ignore=ignore)
+                proc = Processo.Get(name, wp, 0, verbosity, run=False)
+                # must use runtask due multiple threads running
+                proc.runtask(cdados=1)                 
+                proc.runtask((proc.expandAssociados, {'ass_ignore':ignore}))
                 return proc
             # ignoring empty lists 
             if associados:
@@ -198,9 +218,10 @@ class Processo:
                             # add to process name, property 'obj' process objects
                             self.Associados[process_name].update({'obj': future_process.result()})
                         except Exception as exc:
-                            print("Exception raised while running expandAssociados thread for process {:0}".format(
-                                process_name), file=sys.stderr)
-                            raise(exc)
+                            print("Exception raised while running expandAssociados thread for process",
+                                process_name, file=sys.stderr)     
+                            print(traceback.format_exc(), file=sys.stderr, flush=True)     
+                            raise(exc)                  
             if self.verbose:
                 with mutex:
                     print("expandAssociados - finished associados: ", self.name, file=sys.stderr)
@@ -236,10 +257,12 @@ class Processo:
         than parse all data_tags passed storing the resulting in `self.dados`
         return True if succeed on parsing every tag False ortherwise
         """
+        if self.dadosbasicos_run: # already done 
+            return len(self.dados) == len(data_tags) # return if got w. asked for
         if data_tags is None: # data tags to fill in 'dados' with
             data_tags = scm_data_tags.copy()
         if download: # download get with python.requests page html response            
-            self.dadosBasicosPageRetrieve()
+            self.dadosBasicosPageRetrieve()        
         if self.verbose:
             with mutex:
                 print("dadosBasicosGet - parsing: ", self.name, file=sys.stderr)        
@@ -247,7 +270,8 @@ class Processo:
         dados, dados_raw = parseDadosBasicos(self.html_dbasicospage, self.name, self.verbose, mutex, data_tags)
         self.dados.update(dados)
         self.dados_raw = dados_raw
-        self.Associados = self.dados['associados']
+        self.Associados = self.dados['associados']       
+        self.dadosbasicos_run = True 
         return len(self.dados) == len(data_tags) # return if got w. asked for
 
     def dadosPoligonalGet(self, download=True):
@@ -388,6 +412,7 @@ ProcessStorage = ProcessStorageClass()
 * key : unique `fmtPname` process string
 * value : `scm.Processo` object
 """
+
 
 
 

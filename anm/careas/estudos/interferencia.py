@@ -80,13 +80,15 @@ class Interferencia:
                 raise DownloadRetiradaInterferenciaFailed()
             else:
                 # only if retirada interferencia html is saved we can create spreadsheets
-                # sometimes we just don't need it                 
-                if estudo.getTabelaInterferencia() is not None: # sometimes there is no interferences 
-                    estudo.getTabelaInterferenciaTodos()
-                    estudo.excelInterferencia()
-                    estudo.excelInterferenciaAssociados()                
-                if not estudo.cancelaUltimoEstudo():
-                    raise CancelaUltimoEstudoFailed()
+                # sometimes we just don't need it   
+                try:               
+                    if estudo.getTabelaInterferencia(): # sometimes there is no interferences 
+                        estudo.getTabelaInterferenciaTodos()
+                        estudo.excelInterferencia()
+                        estudo.excelInterferenciaAssociados()                
+                finally: # if there was an exception cancela ultimo estudo
+                    if not estudo.cancelaUltimoEstudo():
+                        raise CancelaUltimoEstudoFailed()
         return estudo
 
     # THIS stays here
