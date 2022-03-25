@@ -41,44 +41,46 @@ class wPage: # html  webpage scraping with soup and requests
         self.session.mount('http://', adapters.HTTPAdapter(max_retries=retries))
         self.session.mount('https://', adapters.HTTPAdapter(max_retries=retries))        
 
-    def findAllnSave(self, pagefolder, tag2find='img', inner='src', verbose=False):
-        if not os.path.exists(pagefolder): # create only once
-            os.mkdir(pagefolder)
-        for res in self.soup.findAll(tag2find):   # images, css, etc..
-            try:
-                if not res.has_attr(inner): # check if inner tag (file object) exists
-                    continue # may not exist
-                # dealing with weird resource names (RENAME it to save as a file)
-                filename = re.sub('\W+', '', os.path.basename(res[inner])) # clean special chars
-                # fileurl = url.scheme + '://' + url.netloc + urljoin(url.path, res.get(inner))
-                fileurl = urljoin(self.url, res.get(inner))
-                # rename html ref so can move html and folder of files anywhere
-                res[inner] = os.path.join(os.path.basename(pagefolder), filename)
-                # like a '<script' tag where the script is inplace
-                filepath = os.path.join(pagefolder, filename)
-                if not os.path.isfile(filepath): # was not already saved
-                    with open(filepath, 'wb') as file:
-                        filebin = self.session.get(fileurl)
-                        file.write(filebin.content)
-            except Exception as exc:
-                if verbose:
-                    print(exc, '\n', file=sys.stderr)
-
-    def save(self, pagepath='page'):
+    # testing with 
+    # wp = wPage()
+    # wp.get("https://br.yahoo.com/")
+    # wp.save("yahoo", verbose=True)
+    def save(self, pagepath='page', verbose=False):
         """
         using last html page accessed save its html and supported contents        
         * pagepath : path-to-page   
         It will create a file  `'path-to-page'.html` and a folder `'path-to-page'_files`
-        """
-        self.url = self.response.url # needed above findAllnSave
-        self.soup = BeautifulSoup(self.response.text, features="lxml")
+        https://stackoverflow.com/a/62207356/1207193
+        """        
+        def soupfindnSave(soup, pagefolder, session, url, tag, inner):
+            if not os.path.exists(pagefolder): # create only once
+                os.mkdir(pagefolder)
+            for res in soup.findAll(tag):   # images, css, etc..
+                if res.has_attr(inner): # check inner tag (file object) MUST exists     
+                    try:                  
+                        filename, ext = os.path.splitext(os.path.basename(res[inner])) # get name and extension
+                        filename = re.sub('\W+', '', filename) + ext # clean special chars from name
+                        fileurl = urljoin(url, res.get(inner))
+                        filepath = os.path.join(pagefolder, filename)
+                        # rename html ref so can move html and folder of files anywhere
+                        res[inner] = os.path.join(os.path.basename(pagefolder), filename)
+                        if not os.path.isfile(filepath): # was not downloaded
+                            with open(filepath, 'wb') as file:
+                                filebin = session.get(fileurl)
+                                file.write(filebin.content)
+                    except Exception as exc:
+                        if verbose:
+                            print(exc, '\n', file=sys.stderr)
+        session = self.session
+        #... whatever other requests config you need here        
+        soup = BeautifulSoup(self.response.text, "html.parser")
         path, _ = os.path.splitext(pagepath)
-        pagefolder = path+'_files' # page contents
-        self.findAllnSave(pagefolder, 'img', inner='src')
-        self.findAllnSave(pagefolder, 'link', inner='href')
-        self.findAllnSave(pagefolder, 'script', inner='src')
-        with open(path+'.html', 'w') as file:
-            file.write(self.soup.prettify())
+        pagefolder = path+'_files' # page contents folder
+        tags_inner = {'img': 'src', 'link': 'href', 'script': 'src'} # tag&inner tags to grab
+        for tag, inner in tags_inner.items():
+            soupfindnSave(soup, pagefolder, session, self.response.url, tag, inner)
+        with open(path+'.html', 'wb') as file:
+            file.write(soup.prettify('utf-8'))
 
     def post(self, arg, save=True, **kwargs):
         """save : save response overwriting the last"""
@@ -171,7 +173,6 @@ def dictDataText(soup, data_tags, strip=True):
 
     Return:
         dictionary of data_names with parsed data including tables using `tableDataText`
-
     """
     dados = {}
     for data in data_tags:
