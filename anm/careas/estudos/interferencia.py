@@ -139,7 +139,6 @@ class Interferencia:
         return True
 
     def getTabelaInterferencia(self):
-        self.tabela_interf = None
         interf_html = 'sigareas_rinterferencia_'+self.processo.number+'_'+self.processo.year+'.html'
         interf_html = os.path.join(self.processo_path, interf_html)
         with open(interf_html, "r", encoding="utf-8") as f:
@@ -150,7 +149,7 @@ class Interferencia:
             raise ConnectionError('Did not connect to sigareas r-interferencia')
         interf_table = soup.find("table", {"id" : "ctl00_cphConteudo_gvLowerRight"})
         if interf_table is None: # possible! no interferencia at all
-            return self.tabela_interf # nenhuma interferencia SHOW!!
+            return False # nenhuma interferencia SHOW!!
         rows = htmlscrap.tableDataText(interf_table)
         self.tabela_interf = pd.DataFrame(rows[1:], columns=rows[0])
         # instert list of processos associados for each processo interferente
@@ -199,7 +198,7 @@ class Interferencia:
                 self.tabela_interf.loc[row[0], 'Sons'] = len(processo['sons'])
                 self.tabela_interf.loc[row[0], 'Dads'] = len(processo['parents'])
                 self.tabela_assoc = self.tabela_assoc.append(assoc_items, sort=False, ignore_index=True)
-        return self.tabela_interf
+        return True
 
     def getTabelaInterferenciaTodos(self):
         """
@@ -210,7 +209,7 @@ class Interferencia:
             - cria index ordem eventos para
         """
         if not hasattr(self, 'tabela_interf'):
-            if self.getTabelaInterferencia() is None: # there is no interference !
+            if self.getTabelaInterferencia(): # there is no interference !
                 return False
         if hasattr(self, 'tabela_interf_eventos'):
             return self.tabela_interf_eventos
