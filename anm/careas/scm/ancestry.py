@@ -43,16 +43,16 @@ def createGraphAssociados(process):
     return Gd, root
 
 
-def plotGraphAssociados(G):
-    """Plot undirected graph of associados
+def plotGraph(G, layout=nx.spring_layout, figsize=(9,9)):
+    """Plot graph of associados
     Node sizes are giving from older to younger
     Labels are 'tipo' e 'data' da associação"""
     # compare process to get older to create node sizes?    
     sortedNodes = sorted(list(G.nodes), key=cmp_to_key(comparePnames), reverse=True)
     sizes = np.geomspace(100, 600,num=len(sortedNodes), dtype=int) # better sizes than limspace
     node_sizes = { k:v for k,v in zip(sortedNodes, sizes) }
-    pos = nx.spring_layout(G)
-    plt.figure(figsize=(9,9))
+    pos = layout(G)
+    plt.figure(figsize=figsize)
     nx.draw(G, pos, 
         node_size=[node_sizes[node] for node in G.nodes], 
         with_labels=True)
@@ -71,14 +71,16 @@ def plotGraphAssociados(G):
 # graphAddEdges(careas.scm.ProcessStorage['832.547/2014'], G)
 # plotGraphAssociados(G)
 
-
-def plotDirectGraphAssociados(Gd):
+def plotDirectGraphAssociados(Gd, root=None):
+    """*root: process to use as source of the tree"""
     # compare process to get older to create node sizes?    
     sortedNodes = sorted(list(Gd.nodes), key=cmp_to_key(comparePnames), reverse=True)
     sizes = np.geomspace(100, 600,num=len(sortedNodes), dtype=int) # better sizes than limspace
     node_sizes = { k:v for k,v in zip(sortedNodes, sizes) }
     # uses custom plotting layout bellow 
-    pos = hierarchy_pos(Gd,sortedNodes[-1]) 
+    if not root:
+        root = sortedNodes[-1]
+    pos = hierarchy_pos(Gd, root) 
     plt.figure(figsize=(9,9))
     nx.draw(Gd, pos,
         node_size=[node_sizes[node] for node in Gd.nodes], 
