@@ -45,9 +45,10 @@ class wPage: # html  webpage scraping with soup and requests
     # wp = wPage()
     # wp.get("https://br.yahoo.com/")
     # wp.save("yahoo", verbose=True)
-    def save(self, pagepath='page', verbose=False):
+    def save(self, pagepath='page', html=None, verbose=False):
         """
-        using last html page accessed save its html and supported contents        
+        using last page accessed (or 'html' str passed)
+        save its html and supported contents        
         * pagepath : path-to-page   
         It will create a file  `'path-to-page'.html` and a folder `'path-to-page'_files`
         https://stackoverflow.com/a/62207356/1207193
@@ -73,7 +74,10 @@ class wPage: # html  webpage scraping with soup and requests
                             print(exc, '\n', file=sys.stderr)
         session = self.session
         #... whatever other requests config you need here        
-        soup = BeautifulSoup(self.response.text, "html.parser")
+        if not html: # if not passed must be in self.reponse.text
+            html = self.response.text
+        #... whatever other requests config you need here    
+        soup = BeautifulSoup(html, "html.parser")
         path, _ = os.path.splitext(pagepath)
         pagefolder = path+'_files' # page contents folder
         tags_inner = {'img': 'src', 'link': 'href', 'script': 'src'} # tag&inner tags to grab
@@ -85,13 +89,16 @@ class wPage: # html  webpage scraping with soup and requests
     def post(self, arg, save=True, **kwargs):
         """save : save response overwriting the last"""
         resp = self.session.post(arg, **kwargs)
+        resp.raise_for_status() # Raises HTTPError, if one occurred.
+        # https://stackoverflow.com/a/16511493/1207193 - like 401 Unauthorized
         if save:
-            self.response = resp
+            self.response = resp        
         return resp
 
     def get(self, arg, save=True, **kwargs):
         """save : save response overwrites the last"""
         resp = self.session.get(arg, **kwargs)
+        resp.raise_for_status()
         if save:
             self.response = resp
         return resp

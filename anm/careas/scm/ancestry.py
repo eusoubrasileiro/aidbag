@@ -12,7 +12,7 @@ def graphAddEdges(process, G, ignore=''):
     * ignore : to avoid infinit-loop also builds outward
     * G : `networkx` graph undirected
     """
-    associados = copy.copy(process.Associados)    
+    associados = copy.copy(process.associados)    
     if ignore in associados:
         del associados[ignore]
     # add edge source, target, edge attributes dict
@@ -25,7 +25,7 @@ def createGraphAssociados(process):
     """
     create graph of associados direct -> each edge has a direction 
     each node is a process, each edge (connection) has 
-    the attributes of `Processo.Associados[process.name]`
+    the attributes of `Processo.associados[process.name]`
     """
     G = nx.Graph()
     graphAddEdges(process, G)

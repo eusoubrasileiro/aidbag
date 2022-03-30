@@ -75,7 +75,7 @@ class Interferencia:
         estudo.processo.salvaDadosBasicosHtml(estudo.processo_path)
         estudo.processo.salvaDadosPoligonalHtml(estudo.processo_path)                    
         # if fase correct MUST have access to retirada de 
-        if inFaseRInterferencia(estudo.processo.dados['fase']):
+        if inFaseRInterferencia(estudo.processo['fase']):
             if not estudo.salvaRetiradaInterferenciaHtml(estudo.processo_path):
                 raise DownloadRetiradaInterferenciaFailed()
             else:
@@ -188,9 +188,9 @@ class Interferencia:
             processo = self.Interferentes[name]
             self.tabela_interf.loc[row[0], 'Processo'] = name
             self.tabela_interf.loc[row[0], 'Ativo'] = processo['ativo']
-            if processo.Associados:
-                assoc_items = pd.DataFrame({ "Main" : processo.name, "Target" : processo.Associados.keys() })
-                assoc_items = assoc_items.join(pd.DataFrame(processo.Associados.values()))
+            if processo.associados:
+                assoc_items = pd.DataFrame({ "Main" : processo.name, "Target" : processo.associados.keys() })
+                assoc_items = assoc_items.join(pd.DataFrame(processo.associados.values()))
                 assoc_items.drop(columns='obj', inplace=True)
                 # not using prioridade of associados
                 # assoc_items['Prior'] = processo['prioridadec'] if processo['prioridadec'] else processo['prioridade']
@@ -219,10 +219,10 @@ class Interferencia:
             # cannot remove getEventosSimples and extract everything from dados basicos
             # dados basico scm data nao inclui hora! cant use only scm
             processo_events = getEventosSimples(self.wpage, row[1][1])
-            # get columns 'Publicação D.O.U' & 'Observação' from dados_basicos
-            processo_dados = self.Interferentes[fmtPname(row[1][1])].dados
-            dfbasicos = pd.DataFrame(processo_dados['eventos'][1:],
-                        columns=processo_dados['eventos'][0])
+            # get columns 'Publicação D.O.U' & 'Observação' from dados basicos
+            eventos = self.Interferentes[fmtPname(row[1][1])]['eventos']
+            dfbasicos = pd.DataFrame(eventos[1:],
+                        columns=eventos[0])
             processo_events['EvSeq'] = len(processo_events)-processo_events.index.values.astype(int) # set correct order of events
             processo_events['Evento'] = processo_events['Evento'].astype(int)
             # put count of associados father and sons
@@ -382,37 +382,6 @@ class Interferencia:
                           + self.processo.year+'.xlsx')
         excelname = os.path.join(self.processo_path, excelname)
         self.tabela_assoc.to_excel(excelname, index=False)
-
-    def recebeSICOP(self):
-        """
-        1. Must be authenticated with a aspnet Session Id
-        2. Be aware that Fiddler causes problems with SSL authenthication making 1 impossible
-        """
-        self.wpage.get('https://sistemas.anm.gov.br/sicopii/SICOP.asp') # must be here to get Asp Cookie for SICOP
-        formdata = {
-            'CodProcessoAno': self.processo.year,
-            'CodProcessoOrgao': '',
-            'CodProcessoSeq': self.processo.number,
-            'Pesquisar.x': '31',
-            'Pesquisar.y': '9'
-        }
-        # consulta
-        self.wpage.post('https://sistemas.anm.gov.br/sicopii/P/Receber/ReceberProcesso.asp?go=S', data=formdata)
-
-        if not self.wpage.response.text.find(self.processo.number+'-'+self.processo.year):
-            print('Nao achou, provavelmente não autenticado em sistemas.anm.gov.br')
-            return False
-
-        formdata = { 'chk1': 'on',
-        'Botao.x': '37',
-        'Botao.y': '8'}
-
-        self.wpage.post('https://sistemas.anm.gov.br/sicopii/P/Receber/ReceberProcesso.asp?go=S', data=formdata)
-
-        if not self.wpage.response.text.find('NAME="CodProcessoAno"'):
-            return False
-        else:
-            return True
 
 
 # something else not sure will be usefull someday

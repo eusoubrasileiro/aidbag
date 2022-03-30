@@ -32,7 +32,6 @@ def fmtPname(pross_str):
 
 def numberyearPname(pross_str):
     "return process (number, year)"
-    # pross_str = fmtPname(pross_str) # to make sure
     pross_str = ''.join(re.findall('\d', pross_str))
     return pross_str[:6], pross_str[6:]
 
@@ -48,6 +47,14 @@ def findPnames(pross_str):
     Find all process names on `text` return list with strings as found
     """
     return regex_process.findall(pross_str)
+
+def yearNumber(pross_str):
+    """unique number for process that can be easily sorted
+    eg. 2537/1942 -> 1942002537
+    """
+    number, year = numberyearPname(pross_str)
+    return year+'{:06d}'.format(int(number))
+
 
 
 # fonte de informação da data de origem do processo 

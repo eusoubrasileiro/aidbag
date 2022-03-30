@@ -1,4 +1,4 @@
-import sys, copy
+import sys
 from datetime import datetime
 from bs4 import BeautifulSoup
 from ....web import htmlscrap
@@ -7,8 +7,7 @@ from .util import (
     fmtPname
 )
 
-# HTML tags for SCM main page
-# static field
+# HTML tags for SCM main page 
 scm_data_tags = { # "data name" ; soup.find fields( "tag", "attributes")
     'prioridade'            : ['span',  { 'id' : "ctl00_conteudo_lblDataPrioridade"} ], # pode estar errada
     'data_protocolo'        : ['span',  { 'id' : 'ctl00_conteudo_lblDataProtocolo'} ], # pode estar vazia
@@ -28,13 +27,13 @@ def select_fields(selected_fields):
     """select specific fields to be parsed from `scm_data_tags`"""
     return { key : scm_data_tags[key] for key in selected_fields }  
 
-def parseNUP(dbasicos_page):
-    soup = BeautifulSoup(dbasicos_page, features="lxml")
+def parseNUP(basicos_page):
+    soup = BeautifulSoup(basicos_page, "html.parser")
     return soup.select_one('[id=ctl00_conteudo_lblNup]').text   
 
 
-def parseDadosBasicos(dbasicos_page, name, verbose, mutex, data_tags=scm_data_tags):    
-    soup = BeautifulSoup(dbasicos_page, features="lxml")
+def parseDadosBasicos(basicos_page, name, verbose, mutex, data_tags=scm_data_tags):    
+    soup = BeautifulSoup(basicos_page, "html.parser")
     dados = htmlscrap.dictDataText(soup, data_tags)
     dados_raw = dados.copy()
     if dados['data_protocolo'] == '': # might happen
@@ -106,9 +105,9 @@ def parseDadosBasicos(dbasicos_page, name, verbose, mutex, data_tags=scm_data_ta
 
 
 
-def parseDadosPoligonal(poligonpage):
+def parseDadosPoligonal(poligonal_page):
     polydata = {}
-    soup = BeautifulSoup(poligonpage, features="lxml")
+    soup = BeautifulSoup(poligonal_page, "html.parser")
     htmltables = soup.findAll('table', { 'class' : 'BordaTabela' }) #table[class="BordaTabela"]
     if htmltables: 
         memorial = htmlscrap.tableDataText(htmltables[-1])
