@@ -1,4 +1,4 @@
-import sys
+import sys, copy
 from datetime import datetime
 from bs4 import BeautifulSoup
 from ....web import htmlscrap
@@ -35,7 +35,7 @@ def parseNUP(basicos_page):
 def parseDadosBasicos(basicos_page, name, verbose, mutex, data_tags=scm_data_tags):    
     soup = BeautifulSoup(basicos_page, "html.parser")
     dados = htmlscrap.dictDataText(soup, data_tags)
-    dados_raw = dados.copy()
+    dados_raw = copy.deepcopy(dados) # must be deep otherwise references will be kepts
     if dados['data_protocolo'] == '': # might happen
         dados['data_protocolo'] = dados['prioridade']
         if verbose:

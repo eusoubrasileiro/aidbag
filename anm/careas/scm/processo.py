@@ -1,4 +1,5 @@
 import sys, os, copy
+import datetime, zlib
 import glob, json, traceback
 import concurrent.futures
 import threading
@@ -6,6 +7,7 @@ import threading
 from ....web.htmlscrap import wPageNtlm
 from . import requests 
 from . import ancestry
+
 
 from .util import (
     fmtPname,
@@ -55,6 +57,7 @@ class Processo:
         self._dados = {} 
         """dados parsed and processed """
         # web pages are 'dadosbasicos' and 'poligonal'
+        # data_raw must be json serializable
         self._pages = { 'dadosbasicos'   : {'html' : None, 'data_raw' : {} },
                         'poligonal'      : {'html' : None, 'data_raw' : {} } 
                       } # 'html' is the request.response.text property : bytes unicode decoded or infered       
@@ -257,7 +260,7 @@ class Processo:
         if self._verbose:
             with mutex:
                 print("dadosPoligonalGet - parsing: ", self.name, file=sys.stderr)   
-        self._pages['poligonal']['data'] = parseDadosPoligonal(self._pages['poligonal']['html'])
+        self._pages['poligonal']['data_raw'] = parseDadosPoligonal(self._pages['poligonal']['html'])
 
     def _dadosBasicosFillMissing(self):
         """try fill dados faltantes pelo processo associado (pai) 1. UF 2. substancias
@@ -297,16 +300,18 @@ class Processo:
         saving the parsed, processed data that might change in the future.
         """
         # create a dict of the object and then to json 
+        # 'data_raw' must be json serializable 
         pdict = { 'name'   : self.name,                  
                   '_pages' : self._pages }
         return json.dumps(pdict)
 
-    def toJSONfile(self):
+    def toJSONfile(self, fname=None):
         """
         JSON serialize this process and saves to a file 
         name given by `yearNumber`
         """
-        fname = yearNumber(self.name)+'.JSON'
+        if not fname:
+            fname = yearNumber(self.name)+'.JSON'
         with open(fname, 'w', encoding='utf-8') as f:
             f.write(self.toJSON())
         return fname
@@ -421,13 +426,55 @@ class ProcessStorageClass(dict):
     * key : unique `fmtPname` process string
     * value : `scm.Processo` object
     """
-    @staticmethod
-    def saveStorageJson(self):
-        pass
+    def toJSON(self):
+        """Create dict of processes JSON serialized
+        after `.toJSON` for each process stored"""
+        processes = {}
+        for k, v in self.items():
+            processes.update({k : v.toJSON()})
+        return json.dumps(processes)
+
+    def toJSONfile(self, fname=None, zip=True):
+        """Create dict of processes JSON serialized 
+        than compress dict with `zlib`        
+        """
+        JSONstr = self.toJSON().encode('utf-8')
+        if not fname:            
+            ext = 'JSON.zip' if zip else '.JSON'
+            fname =  'ProcessStored'+datetime.datetime.now().strftime('_%Y_%m_%d_h%Hm%M_') + ext
+        if zip:
+            JSONstr = zlib.compress(JSONstr)            
+        with open(fname, 'wb') as f:
+            f.write(JSONstr)
+        return fname
 
     @staticmethod
-    def loadStorageJson(self):
-        pass
+    def fromJSONfile(fname, zip=True, verbose=True):
+        """Create a `ProcessStorageClass` from a JSON str create with `toJSONfile` method saved on file fname.
+        * zip : 
+            default assumed to be zipped
+        """
+        processesJSON = ''
+        with open(fname, 'rb') as f:
+            processesJSON = f.read()
+        if zip:
+            processesJSON = zlib.decompress(processesJSON)
+        else:
+            processesJSON = processesJSON.decode('utf-8')
+        processes = json.loads(processesJSON) # recreat dict { process-name : JSON-str } 
+        for keys in processes:
+            Processo.fromJSON(processes[keys], verbose)
+        return ProcessStorage
+
+
+# # from many saved JSON processes locally
+# import glob 
+
+# for k, v in scm.ProcessStorage.items():
+#     v.toJSONfile()
+# jsonprocesses = glob.glob("*.JSON")
+# for jsonprocess in jsonprocesses:
+#     scm.Processo.fromJSONfile(jsonprocess, True)        
 
 ProcessStorage = ProcessStorageClass()
 """Container of processes to avoid 
