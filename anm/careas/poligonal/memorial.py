@@ -1,7 +1,11 @@
 import copy, re
-from os import stat
 from dataclasses import dataclass, field
 import numpy as np
+
+from poligonal.shapes import (
+    savePointsWGS84, 
+    savePolygonWGS84
+    )
 
 from .util import (
     forceverdPoligonal,
@@ -32,7 +36,6 @@ class PA():
 
 @dataclass
 class Poligon():
-    area : float = field(default=-1)
     DATUM : str = field( default='')
     pa : PA = field(default=None)
     data : np.array = field(init=False, default_factory=lambda: np.array([]))
@@ -208,16 +211,34 @@ class Poligon():
         self.memo = memo.copy() # copy shallow works
         return memo
 
+    def forceverd(self, **kwargs):
+        """Aproxima coordenadas para rumos verdadeiros.  
+        Aproximate decimal coordinates (lat,lon) to previous (lat or lon).
+        calls `util.forceverdPoligonal`
+        any optional keyword argumento can be passed"""  
+        new_vertices = forceverdPoligonal(self.data, **kwargs)
+        self.data = new_vertices
+        return new_vertices 
+
+    def toShapePolygon(self, filename):
+        """create ESRI Polygon Shapefile from data vertices"""
+        savePolygonWGS84(self.data, filename)
+
+    def toShapePoints(self, filename):
+        """create ESRI Points Shapefile from data vertices"""
+        savePointsWGS84(self.data, filename)
+
     def copy(self):
         """return self copy"""
         return copy.deepcopy(self)
 
     @staticmethod
-    def from_points(points, round_angle=True, round_dist=True):
+    def from_points(points, **kwargs):
         """create new `PoligonSCM` by calling `.memo_from_points`
+        any optional keyword argumento can be passed
         """
         poli = Poligon()
-        poli.memo_from_points(points, round_angle, round_dist)
+        poli.memo_from_points(points, **kwargs)
         poli.attributes()
         return poli
 
@@ -241,6 +262,8 @@ class Poligon():
         poli.points_from_memo()
         poli.attributes()
         return poli     
+
+
 
 
 ### Calcula informatino of displacement between
