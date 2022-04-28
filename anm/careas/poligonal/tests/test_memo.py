@@ -10,9 +10,8 @@ from poligonal.util import (
     forceverdPoligonal
     )
 
-from poligonal.memowork import (
-    simple_memo_direct,
-    simple_memo_inverse
+from poligonal.memorial import (
+    PoligonSCM    
     )
 
 from poligonal.geographic import (
@@ -27,7 +26,7 @@ from poligonal.geographic import (
 # def test_memoPoligonPA():
 #     """Testa código
 #     Compara resultados Python Geographiclib vs CONVNAV.
-#     Exemplo de 1 quadrado abaixo
+#     Exemplo de 1 processo simples quadrado abaixo
 #     """
 
 #     # sample square
@@ -59,7 +58,7 @@ from poligonal.geographic import (
 
 
 # # test to be included
-def test_simple_memo():
+def test_memo_from_points():
     memorial_points = """-20°18'32''049	-43°24'42''792
     -20°18'46''682	-43°24'42''792
     -20°18'46''682	-43°24'59''338
@@ -69,13 +68,12 @@ def test_simple_memo():
     -20°18'43''428	-43°25'30''361
     -20°18'49''932	-43°25'30''361
     -20°18'49''931	-43°25'34''498
-    -20°18'32''046	-43°25'34''496
-    -20°18'32''049	-43°24'42''792"""
-    points = np.array(readMemorial(memorial_points, decimal=True))
-    smemo = simple_memo_inverse(points)
-    points_direct = simple_memo_direct(smemo)
-    
-    npt.assert_allclose(np.array(points_direct), np.array(points[:-1]))
+    -20°18'32''046	-43°25'34''496""" # don't needed to be closed. It will be closed.
+    points = readMemorial(memorial_points, decimal=True)
+    poligon = PoligonSCM()
+    poligon.memo_from_points(points)
+    poligon.points_from_memo()    
+    npt.assert_almost_equal(points, poligon.data, decimal=6)
 
 
 # parse xml and create test data samples 
