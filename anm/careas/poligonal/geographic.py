@@ -9,7 +9,7 @@ wGS84 = Geodesic(Constants.WGS84_a, Constants.WGS84_f)
 def wgs84PoligonArea():
     return polygonarea.PolygonArea(wGS84)
 
-def wgs84PolygonAtributes(cords):
+def wgs84PolygonAttributes(cords):
     """Calculate number of vertices, perimeter and area (hectares) for passed polygon as coordinates.
     *cords: list
         [[lat,lon]...] 

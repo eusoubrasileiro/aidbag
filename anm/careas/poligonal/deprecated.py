@@ -5,7 +5,7 @@ import re
 from .geographic import (
     wgs84Inverse, 
     wgs84Direct,
-    wgs84PolygonAtributes
+    wgs84PolygonAttributes
     )
 
 from .util import (
@@ -22,6 +22,11 @@ from .shapes import (
 ### Memorial descritivo através de PA e survey de estação total
 # might be useful https://github.com/totalopenstation
 
+# https://qgisbrasil.org/2015/02/25/qgis-e-transformacao-de-datum-parametros-oficiais-diagnostico/
+
+# sad69 rede classica - SAD69 BRAZIL 1989
+CRS_SAD69= "+proj=longlat +ellps=aust_SA +towgs84=-66.87,4.37,-38.52,0,0,0,0 +no_defs"
+# sad69-96 SAD69 BRAZIL 2005 - assumida para conversão de todos os processos na base do SCM para SIRGAS
 CRS_SAD69_96 = "+proj=longlat +ellps=aust_SA +towgs84=-67.35,3.88,-38.22,0,0,0,0 +no_defs" # sad69(96) lat lon
 CRS_SIRGAS2000 = "+proj=longlat +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs"
 
@@ -109,7 +114,7 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
     4836 NE 51 12
     286  NW 00 00
     302  SE 90 00
-    140  NW 00 00
+    140  NW 
 
     Aproximadamente 0.001 (1 mm) walk changes 8 casa ou 10-8 grau decimal.
     """
@@ -227,7 +232,7 @@ def memoPoligonPA(filestr, shpname='memopa', crs=None, geodesic=True,
         savePointsWGS84(vertices_dg, shpname+'p')
 
     if verbose:
-        nvertices, perimeter, area = wgs84PolygonAtributes(vertices_dg)
+        nvertices, perimeter, area = wgs84PolygonAttributes(vertices_dg)
         print("nvertices {:} area {:>9.8f} perimeter {:>9.8f}".format(
                 nvertices, area, perimeter))
 
