@@ -11,53 +11,52 @@ from poligonal.util import (
     )
 
 from poligonal.memorial import (
-    PoligonSCM    
+    Poligon    
     )
 
 from poligonal.geographic import (
-    wgs84PolygonAtributes
+    wgs84PolygonAttributes
     )
 
-# from poligonal.deprecated import (
-#   memoPoligonPA
-#   )
+
+# test to be included
+def test_memoPoligonPA():
+    """Compara resultados Python Geographiclib vs CONVNAV.
+    Exemplo de 1 processo simples retangular abaixo
+    This package has twice the precision of convnav for example bellow.
+    """
+
+    # sample square
+    filestr="""-21 19 20 0
+    -44 57 38 6
+
+    2153 SE 17 03
+    590 S
+    780 W
+    590 N
+    780 E"""
+    thruth_perimeter = 590*2+780*2
+    thruth_area = 590*780*0.0001
+
+    poligon = Poligon.from_old_memo(filestr)    
+    vertices = poligon.data
+
+    convnav_vertices = [[-21.34129611, -44.95506889],
+        [-21.34662472, -44.95506889],
+        [-21.34662444, -44.96258861],
+        [-21.34129583, -44.96258861]]
+
+    convnav_num, convnav_perim, convnav_area = wgs84PolygonAttributes(convnav_vertices)
+    py_num, py_perim, py_area = wgs84PolygonAttributes(vertices.tolist())
+
+    print("convnav errors - area {:>+9.8f} perimeter {:>+9.8f}".format(
+            thruth_area-convnav_area, thruth_perimeter-convnav_perim))
+
+    print("python  errors - area {:>+9.8f} perimeter {:>+9.8f}".format(
+            thruth_area-py_area, thruth_perimeter-py_perim))
 
 
-# def test_memoPoligonPA():
-#     """Testa código
-#     Compara resultados Python Geographiclib vs CONVNAV.
-#     Exemplo de 1 processo simples quadrado abaixo
-#     """
-
-#     # sample square
-#     filestr="""-21 19 20 0
-#     -44 57 38 6
-
-#     2153 SE 17 03
-#     590 S
-#     780 W
-#     590 N
-#     780 E"""
-#     thruth_perimeter = 590*2+780*2
-#     thruth_area = 46.02
-
-#     vertices, utm =  memoPoligonPA(filestr, geodesic=True, shpname='test_memo', verbose=True)
-#     convnav_vertices = [[-21.34129611, -44.95506889],
-#        [-21.34662472, -44.95506889],
-#        [-21.34662444, -44.96258861],
-#        [-21.34129583, -44.96258861]]
-
-#     convnav_num, convnav_perim, convnav_area = wgs84PolygonAtributes(convnav_vertices)
-#     py_num, py_perim, py_area = wgs84PolygonAtributes(vertices)
-
-#     print("convnav errors - area {:>+9.8f} perimeter {:>+9.8f}".format(
-#             thruth_area-convnav_area, thruth_perimeter-convnav_perim))
-
-#     print("python  errors - area {:>+9.8f} perimeter {:>+9.8f}".format(
-#             thruth_area-py_area, thruth_perimeter-py_perim))
-
-
-# # test to be included
+# test to be included
 def test_memo_from_points():
     memorial_points = """-20°18'32''049	-43°24'42''792
     -20°18'46''682	-43°24'42''792
@@ -69,11 +68,12 @@ def test_memo_from_points():
     -20°18'49''932	-43°25'30''361
     -20°18'49''931	-43°25'34''498
     -20°18'32''046	-43°25'34''496""" # don't needed to be closed. It will be closed.
-    points = readMemorial(memorial_points, decimal=True)
-    poligon = PoligonSCM()
-    poligon.memo_from_points(points)
+    points = readMemorial(memorial_points, decimal=True)    
+    poligon = Poligon.from_points(points)
     poligon.points_from_memo()    
-    npt.assert_almost_equal(points, poligon.data, decimal=6)
+    npt.assert_almost_equal(points, poligon.data[:-1], decimal=6)
+    # import numpy as np 
+    # np.abs(points-poligon.data[:-1])
 
 
 # parse xml and create test data samples 

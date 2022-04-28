@@ -1,4 +1,5 @@
-import copy
+import copy, re
+from os import stat
 from dataclasses import dataclass, field
 import numpy as np
 
@@ -6,10 +7,11 @@ from .util import (
     forceverdPoligonal,
     readMemorial, 
     formatMemorial,    
+    parse_coordinates,
     )
 
 from .geographic import (
-    wgs84PolygonAtributes,
+    wgs84PolygonAttributes,
     wgs84Inverse, 
     wgs84Direct,
     wgs84InverseAngle
@@ -29,18 +31,20 @@ class PA():
 
 
 @dataclass
-class PoligonSCM():
-    area : float = field(init=False)
-    DATUM : str = field(init=False)
-    pa : PA = field(init=False)
+class Poligon():
+    area : float = field(default=-1)
+    DATUM : str = field( default='')
+    pa : PA = field(default=None)
     data : np.array = field(init=False, default_factory=lambda: np.array([]))
     memo : list = field(init=False, default_factory=list)
+    attrs : dict = field(init=False, default_factory=dict)
 
-    def __post_init__(self):
-        """just to make a 'default dummy constructor'"""
-        self.area = -1
-        self.DATUM = ''
-        self.pa = PA(-1, -1, -1, -1)
+    def attributes(self):
+        """calculate num vertices, perimeters (meters) and area (hectares) if `self.data`"""
+        if self.data.size:
+            n, perimeter, area = wgs84PolygonAttributes(self.data.tolist())
+            self.attrs.update({'n': n, 'perimeter': perimeter, 'area': area})
+        return self.attrs
 
     # TODO implement same approach bellow two pathways
     # but no reason since round angles/distances already deals with inprecision
@@ -60,8 +64,10 @@ class PoligonSCM():
 
         Note: Uses Elipsoid WGS84 (SIRGAS 2000 equivalent)
         """
-        if (not np.alltrue(points[0] == points[-1])): # must be a closed poligon!
-            points = np.append(points, points[0:1], axis=0) # add first point to the end       
+        points = np.copy(points) # it will be set to data, must not hold references
+        if (not np.alltrue(points[0] == points[-1])): # must be a closed => poligon!
+            points = np.append(points, points[0:1], axis=0) # add first point to the end  
+        self.data = points
         dist_angle = [] # dist, angle pairs
         prev_point = points[0].tolist() # from numpy array
         dist_angle.append(prev_point)
@@ -87,11 +93,17 @@ class PoligonSCM():
             dist1 angle1
             dist2 angle2
             ...
-        
+
         output :
             numpy.array 
             [[lat0, lon0],[lat1, lon1]...]
             shape is [:, 2]
+
+
+        If comming from a very old process 
+        MUST set PA hence -> self.pa != None
+        first point is PA not a vertex  
+        and so it will not be included on `self.data`  
 
         Note: Uses Elipsoid WGS84 (SIRGAS 2000 equivalent)
 
@@ -103,8 +115,12 @@ class PoligonSCM():
                 prevpoint = wgs84Direct(*prevpoint, angle, dist*revert)
                 points.append(prevpoint)
             return np.array(points)
-        startpoint = self.memo[0] # start
-        directions = self.memo[1:]
+        if self.pa: # comming from very old memorial - hence PA used           
+            startpoint = wgs84Direct(self.pa.lat, self.pa.lon, self.pa.vec_angle, self.pa.vec_len)
+            directions = self.memo[2:] # PA and PA vec drop
+        else:
+            startpoint = self.memo[0] # start
+            directions = self.memo[1:] # drop start vertex
         # goind both sides - accuracy increases A LOT!
         half = int(len(directions))//2
         ohalf = len(directions) - half
@@ -113,9 +129,10 @@ class PoligonSCM():
         # mid point is the average of foward and backward pathways more precision
         midpoint = (points_bk[-1]+points_fw[-1])/2.
         points = np.concatenate(([startpoint], points_fw[:-1], [midpoint], points_bk[:-1][::-1]))
+        points = np.concatenate((points,[points[0]])) # must be a poligon, hence closed!
         self.data = np.copy(points)
-        if repeat_end:
-            points = np.concatenate((points,[points[0]]))
+        if not repeat_end:
+            points = points[:-1]
         return points
 
     def memo_newstart(self, index, start_point, inplace=False):
@@ -132,9 +149,99 @@ class PoligonSCM():
         memo = [start_point] + memo
         return memo
 
+    def memo_from_old_str(self, old_str):
+        """create `self.memo` 'memorial descritivo' from string for old processes
+        using PA 'ponto de amarração', distance angles ('quadrante' n 'rumo'). 
+
+        * old_str: str
+            multline string like example bellow
+
+        ```
+        -20 14 14 3  # latitude do Ponto de Amarração  
+        -43 52 50 2  # longitude do Ponto de Amarração  
+
+        1000 SW 75 15  # distancia (metros) direção grau-minutos para o primeiro vértice  
+        2200 E         # incremento direcional a partir do primeiro vértice  
+        1350 S  
+        2200 W  
+        1350 N  
+        ```
+        
+        Referência: Requerimento de Pesquisa Mineral Formulários 4 e 5 (old processes)    
+        """
+        memo = []
+        def to_azimuth(quad, ang):
+            """converte 'SE, 17.05' em azimute com relação ao norte clock-wise 
+            geographiclib convention - range [+180,-180]
+            """ # python switch : a dictionary      
+            az = { 'N': 0, 'S': 180, 'W': -90, 'E': 90,  # rumos verdadeiros    
+                        'SW': -180.+ang, 'SE': 180.-ang , 'NE': ang, 'NW': -ang # rumos diversos 
+                    }
+            return az[quad]
+        
+        lines = old_str.split('\n')
+        # two first lines are lat and lon pa 
+        array = parse_coordinates(' '.join([ s for s in lines[:2]]), decimal=True)
+        
+        memo.append([array[0,0], array[0,1]]) # PA 
+
+        for line in lines[2:]:
+            if line.strip(): # avoiding empty lines
+                result = re.findall('(\d+\.*\d*)\W*([NSEW]+)\W*(\d{1,2})\D+(\d{1,2})*', line) # rumos diversos
+                if not result: # rumos verdadeiros
+                    # an azimuth is defined as a horizontal angle measured clockwise
+                    # from a north base line or meridian
+                    result = re.findall('(\d+\.*\d*)\W*([NSEW]+)', line)
+                if not result:
+                    raise Exception("Cant parse line for dist/azimuth! line bellow \n {:}".format(line))
+                result = result[0] # list of 1 item
+                dist, quad = float(result[0]), result[1] # distance and quadrant
+                angle = 0.0 # angle may or may not be present
+                if len(result) > 2:
+                    angle = float(result[2])
+                    if len(result) == 4:
+                        angle += float(result[3])/60.
+                memo.append([dist, to_azimuth(quad, angle)])
+
+        # fill self 
+        self.pa = PA(array[0,0], array[0,1], memo[1][1], memo[1][0])
+        self.memo = memo.copy() # copy shallow works
+        return memo
+
     def copy(self):
         """return self copy"""
         return copy.deepcopy(self)
+
+    @staticmethod
+    def from_points(points, round_angle=True, round_dist=True):
+        """create new `PoligonSCM` by calling `.memo_from_points`
+        """
+        poli = Poligon()
+        poli.memo_from_points(points, round_angle, round_dist)
+        poli.attributes()
+        return poli
+
+    @staticmethod
+    def from_memo(memo):
+        """create new `PoligonSCM` by calling `.points_from_memo`
+        """
+        poli = Poligon()
+        poli.memo = memo
+        poli.points_from_memo()
+        poli.attributes()
+        return poli
+
+    @staticmethod
+    def from_old_memo(str_old_memo):
+        """create new `PoligonSCM` by calling `.memo_from_old_str` and then `points_from_memo`
+        to generate vertices
+        """
+        poli = Poligon()
+        poli.memo_from_old_str(str_old_memo)
+        poli.points_from_memo()
+        poli.attributes()
+        return poli     
+
 
 ### Calcula informatino of displacement between
 def translate_info(coords, ref_coords, displace_dist=1.5):
@@ -219,7 +326,7 @@ def memorial_acostar(memorial, memorial_ref, reference_dist=50, mtolerance=0.5):
         print("memorial : unknown format")
 
     ref_point, rep_index = translate_info(points, ref_points, displace_dist=reference_dist)
-    poligon = PoligonSCM()
+    poligon = Poligon()
     memo = poligon.memo_from_points(points)
     print("simple inverse memorial")
     for line in memo:
@@ -230,7 +337,7 @@ def memorial_acostar(memorial, memorial_ref, reference_dist=50, mtolerance=0.5):
     print(u"Ajustando para rumos verdadeiros, tolerância :", mtolerance, " metro")
     # make 'rumos verdadeiros' acceptable by sigareas
     smemo_restarted_points_verd = forceverdPoligonal(memo_restarted_points, tolerancem=mtolerance)
-    print("Area is ", wgs84PolygonAtributes(smemo_restarted_points_verd.tolist())[-1], " ha")
+    print("Area is ", wgs84PolygonAttributes(smemo_restarted_points_verd.tolist())[-1], " ha")
     formatMemorial(smemo_restarted_points_verd)
     print("Pronto para carregar no SIGAREAS -> corrigir poligonal")
     return smemo_restarted_points_verd
