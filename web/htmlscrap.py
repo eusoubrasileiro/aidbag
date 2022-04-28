@@ -114,7 +114,13 @@ class wPageNtlm(wPage): # overwrites original class for ntlm authentication
         super().__init__(nretries, ssl)
         self.user = user
         self.passwd = passwd
-        self.session.auth = HttpNtlmAuth(user, passwd)         
+        self.session.auth = HttpNtlmAuth(user, passwd)      
+
+    @classmethod
+    def dummy(cls):
+        """wPage without password or username"""
+        return cls('', '')
+
 
 
 def formdataPostAspNet(response, formcontrols):
