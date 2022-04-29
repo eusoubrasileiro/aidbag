@@ -4,6 +4,7 @@ import glob, json, traceback
 import concurrent.futures
 import threading
 
+from ....general import progressbar 
 from ....web.htmlscrap import wPageNtlm
 from . import requests 
 from . import ancestry
@@ -79,10 +80,14 @@ class Processo:
     def runTask(self, task=None, cdados=0):
         """
         Run task thread safely. Due multiple threads only one can be running on a process.
-        * codedados : int 
-        1. scm dados basicos parse   
-        2. 1 + expand associados   
-        3. 2 + correção prioridade (ancestors list)   
+        
+        * task : tupple (optional)  
+            (function, dict of keyword args) 
+
+        * cdados : int 
+            1. scm dados basicos parse   
+            2. additonally expand associados   
+            3. additonally correção prioridade (ancestors list) 
         """
         # check if some thread is running. Only ONE can have this process at time
         if not self._thev_isfree.wait(60.*2):
@@ -426,6 +431,21 @@ class ProcessStorageClass(dict):
     * key : unique `fmtPname` process string
     * value : `scm.Processo` object
     """
+    def runTask(self, wp, **kwargs):
+        """run `runTask` on every process on storage 
+        * wp : wPageNtlm
+            must be provided   
+
+        Any aditional keywork arg for `runTask` can be passed.  
+
+        Like cdados=1 or any tuple (function, args) pair
+        """
+
+        for pname in progressbar(ProcessStorage):
+        #must be one independent requests.Session for each process otherwise mess
+            ProcessStorage[pname]._wpage = wPageNtlm(wp.user, wp.passwd, ssl=True) 
+            ProcessStorage[pname].runTask(**kwargs)
+
     def toJSON(self):
         """Create dict of processes JSON serialized
         after `.toJSON` for each process stored"""
@@ -466,6 +486,8 @@ class ProcessStorageClass(dict):
             Processo.fromJSON(processes[keys], verbose)
         return ProcessStorage
 
+    
+
 
 # # from many saved JSON processes locally
 # import glob 
@@ -475,6 +497,15 @@ class ProcessStorageClass(dict):
 # jsonprocesses = glob.glob("*.JSON")
 # for jsonprocess in jsonprocesses:
 #     scm.Processo.fromJSONfile(jsonprocess, True)        
+
+# running runTask on all process on storage
+# import tqdm 
+
+
+
+# for k in scm.ProcessStorage:
+#     if scm.ProcessStorage[k].associados:
+#         print(scm.ProcessStorage[k].associados)
 
 ProcessStorage = ProcessStorageClass()
 """Container of processes to avoid 
