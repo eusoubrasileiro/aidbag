@@ -1,0 +1,22 @@
+import sys
+
+def progressbar(it, prefix="", size=60, file=sys.stdout):
+    """
+    progressbar wrapper
+    ```
+    for i in progressbar(range(15), "Computing: ", 40, file=sys.stderr):
+        time.sleep(0.1) # any calculation you need
+    ```
+    """
+    count = len(it)
+    def show(j):
+        x = int(size*j/count)
+        file.write("%s[%s%s] %i/%i\r" % (prefix, u"█"*x, "."*(size-x), j, count))
+        file.flush()        
+    show(0)
+    for i, item in enumerate(it):
+        yield item
+        show(i+1)
+    file.write("\n")
+    file.flush()
+    
