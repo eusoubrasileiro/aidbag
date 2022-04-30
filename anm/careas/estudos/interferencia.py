@@ -56,7 +56,7 @@ class Interferencia:
         self.processo_path = processPathSecor(self.processo)
 
     @staticmethod
-    def make(wpage, processostr, verbose=False):
+    def make(wpage, processostr, verbose=False, download=True):
         """
         make folders and spreadsheets for specified process
         to aid on priority analysis
@@ -65,6 +65,9 @@ class Interferencia:
             numero processo format xxx.xxx/ano
         * wpage : wPage html 
             webpage scraping class com login e passwd preenchidos
+        * download: bool
+            default to allways download instead of using files saved on folder  
+            Only works for retirada interferencia html
 
         * returns: instance `Interferencia`
 
@@ -76,7 +79,7 @@ class Interferencia:
         estudo.processo.salvaDadosPoligonalHtml(estudo.processo_path)                    
         # if fase correct MUST have access to retirada de 
         if inFaseRInterferencia(estudo.processo['fase']):
-            if not estudo.salvaRetiradaInterferenciaHtml(estudo.processo_path):
+            if not estudo.salvaRetiradaInterferenciaHtml(estudo.processo_path, download):
                 raise DownloadRetiradaInterferenciaFailed()
             else:
                 # only if retirada interferencia html is saved we can create spreadsheets
@@ -90,23 +93,23 @@ class Interferencia:
                     if not estudo.cancelaUltimoEstudo():
                         raise CancelaUltimoEstudoFailed()
         return estudo
-
-    # THIS stays here
-    def salvaRetiradaInterferenciaHtml(self, html_path):
-        self.wpage.get('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1')
-        formcontrols = {
-            'ctl00$cphConteudo$txtNumProc': self.processo.number,
-            'ctl00$cphConteudo$txtAnoProc': self.processo.year,
-            'ctl00$cphConteudo$btnEnviarUmProcesso': 'Processar'
-        }
-        formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
-        # must be timout 2 minutes
-        self.wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1',
-                data=formdata, timeout=__secor_timeout__)
-        if not ( self.wpage.response.url == r'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'):
-            return False             # Falhou salvar Retirada de Interferencia # provavelmente estudo aberto
+    
+    def salvaRetiradaInterferenciaHtml(self, html_path, download=True):
         fname = 'sigareas_rinterferencia_'+self.processo.number+'_'+self.processo.year
-        self.wpage.save(os.path.join(html_path, fname))
+        if not os.path.exists(os.path.join(html_path, fname)) or download:
+            self.wpage.get('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1')
+            formcontrols = {
+                'ctl00$cphConteudo$txtNumProc': self.processo.number,
+                'ctl00$cphConteudo$txtAnoProc': self.processo.year,
+                'ctl00$cphConteudo$btnEnviarUmProcesso': 'Processar'
+            }
+            formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
+            # must be timout 2 minutes
+            self.wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1',
+                    data=formdata, timeout=__secor_timeout__)
+            if not ( self.wpage.response.url == r'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'):
+                return False             # Falhou salvar Retirada de Interferencia # provavelmente estudo aberto            
+            self.wpage.save(os.path.join(html_path, fname))
         return True
 
     def cancelaUltimoEstudo(self):
