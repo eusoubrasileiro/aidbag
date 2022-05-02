@@ -164,10 +164,7 @@ class Processo:
                     # sendo que um dos grupamentos havia sido cancelado mas a associação não removida                    
                     inconsistency = ["Process {0} associado to this process but this is NOT associado to {0} on SCM".format(
                         ass_ignore)]
-                    if 'inconsistencies' in self._dados:
-                        self._dados['inconsistencies'] = inconsistency + self._dados['inconsistencies']
-                    else: # first inconsistency
-                        self._dados['inconsistencies'] = inconsistency
+                    self._dados['inconsistencies'] = self._dados['inconsistencies'] + inconsistency 
                     if self._verbose:
                         with mutex:
                             print("expandAssociados - inconsistency: ", self.name,
@@ -482,7 +479,8 @@ class ProcessStorageClass(dict):
         else:
             processesJSON = processesJSON.decode('utf-8')
         processes = json.loads(processesJSON) # recreat dict { process-name : JSON-str } 
-        for keys in processes:
+        iterator = processes if not verbose else progressbar(processes, "Loading: ")
+        for keys in iterator:
             Processo.fromJSON(processes[keys], verbose)
         return ProcessStorage
 

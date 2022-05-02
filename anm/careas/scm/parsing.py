@@ -46,6 +46,7 @@ def parseDadosBasicos(basicos_page, name, verbose, mutex, data_tags=scm_data_tag
     # protocolo pode estar errado ou ausente também
     dados['prioridade'] = datetime.strptime(dados['prioridade'], "%d/%m/%Y %H:%M:%S")    
     dados['data_protocolo'] = datetime.strptime(dados['data_protocolo'], "%d/%m/%Y %H:%M:%S")    
+    dados['inconsistencies'] = [] # tuple of inconsistencies found (tupple to be able to be hashed)
     # associados
     if dados['associados'][0][0] == "Nenhum processo associado.":
         dados['associados'] = {} # overwrite by an empty dictionary 
@@ -56,41 +57,44 @@ def parseDadosBasicos(basicos_page, name, verbose, mutex, data_tags=scm_data_tag
         # get all processes listed on processos associados
         # table_associados[0][:] header line
         # table_associados[1][5] # coluna 5 'processo original'
-        # table_associados[1][0] # coluna 0 'processo'            
-        associados = ([table_associados[i][0] for i in range(1, nrows) ] +
-                            [table_associados[i][5] for i in range(1, nrows) ])            
-        associados = list(dict.fromkeys(associados)) # unique process mantaining order py3.7+
-        associados = list(map(fmtPname, associados)) # formatted process names
-        associados.remove(name) # remove SELF from list
-        # try convert to datetime 
-        for i in range(1, nrows):
-            if table_associados[i][3]: # not ''
-                table_associados[i][3] = datetime.strptime(table_associados[i][3], "%d/%m/%Y")
-            if table_associados[i][4]: # not ''
-                table_associados[i][4] = datetime.strptime(table_associados[i][4], "%d/%m/%Y")
-        # create dictionary of associados with empty dict of properties
-        # properties will be filled after
-        # 'obj' property will be a class instance of scm.processo.Processo
-        # dados['associados'] = { name : {} for name in associados } 
-        # properties 'tipo' e 'data de associação'
-        # ordem é mantida key : process name                  #   
-        dados['associados'] = {  # overwrite by a dictionary of associados
-                associados[i-1] : # process name is the key 
+        # table_associados[1][0] # coluna 0 'processo'                      
+        associados = {}
+        for i in range(1, nrows): # A -> B due all kinds of mess is same as B -> A
+            associado = [fmtPname(table_associados[i][j]) for j in [0, 5]] # a A->B pair first
+            associado.remove(name) # remove self 
+            associado = associado[0]
+            # check for duplicated process associations - drop and anotate inconsistency
+            if associado in associados: # already there duplicate
+                dados['inconsistencies'] = dados['inconsistencies'] + ["Process {:} associado to this process more than once on SCM. Ignored.".format(
+                    associado)]
+                continue 
+            # try convert to datetime - associação 3, deassociação 4 if not ''
+            fparse_date = lambda x: datetime.strptime(x, "%d/%m/%Y")         
+            date_assoc = fparse_date(table_associados[i][3]) if table_associados[i][3] else ''
+            date_deassoc = fparse_date(table_associados[i][4]) if table_associados[i][4] else ''
+            # create dictionary of associados with properties
+            # some properties will be filled after
+            # 'obj' property will be a class instance of scm.processo.Processo
+            # dados['associados'] = { name : {} for name in associados }             
+            # ordem é mantida key : process name Python 3.6+         
+            associados.update(
+                { 
+                associado : # process name is the key                    
                     { # properties
                         'tipo'         : table_associados[i][2], 
                         'titular'      : table_associados[i][1], 
-                        'data-ass'     : table_associados[i][3], # associacao
-                        'data-deass'   : table_associados[i][4], # deassociacao
+                        'data-ass'     : date_assoc, # associacao
+                        'data-deass'   : date_deassoc, # deassociacao
                         'notes'        : table_associados[i][6], # observação
                         'obj'          : None,
                     }
-                for i in range(1, nrows) 
-            }        
+                }
+            )
+        dados['associados'] = associados
         # remove associados after deassociados = they are meaningless now
         dados['associados'] = { name : attrs for name, attrs in dados['associados'].items() 
                                 if not attrs['data-deass'] }
-        # from here we get direct sons and parents/anscestors
-        # from process names only
+        # from here we get direct sons and parents/anscestors - from process names only
         # 800.xxx/2005 -> 300.yyy/2005
         dados['sons'] = []
         dados['parents'] = []
