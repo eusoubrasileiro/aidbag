@@ -1,6 +1,6 @@
 import sys
 
-def progressbar(it, prefix="", size=60, file=sys.stdout):
+def progressbar(it, prefix="", size=60, out=sys.stdout): # Python3.3+
     """
     progressbar wrapper
     ```
@@ -11,12 +11,11 @@ def progressbar(it, prefix="", size=60, file=sys.stdout):
     count = len(it)
     def show(j):
         x = int(size*j/count)
-        file.write("%s[%s%s] %i/%i\r" % (prefix, u"█"*x, "."*(size-x), j, count))
-        file.flush()        
+        print("{}[{}{}] {}/{}".format(prefix, u"█"*x, "."*(size-x), j, count), 
+                end='\r', file=out, flush=True)
     show(0)
     for i, item in enumerate(it):
         yield item
         show(i+1)
-    file.write("\n")
-    file.flush()
+    print("\n", flush=True, file=out)
     
