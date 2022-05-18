@@ -20,7 +20,7 @@ from .scm.parsing import (
 from .constants import (
     mcodigos,
     docs_externos,
-    __secor_path__,    
+    config,    
     SEI_DOCS
     )
 
@@ -34,7 +34,7 @@ from aidbag.anm.careas import constants
 # with this being another .py 
 
 ProcessPathStorage = {} # stores paths for current process being worked on 
-processpath_json = os.path.join(os.path.join(__secor_path__,"Processos","processes_path.json"))
+processpath_json = os.path.join(os.path.join(config['secor_path'],"Processos","processes_path.json"))
 
 try: # Read paths for current process being worked on from file 
     with open(processpath_json, "r") as f:
@@ -46,7 +46,7 @@ def currentProcessGet(path='Processos', clear=False):
     """update `ProcessPathStorage` dict with process names and paths
     * clear : clear `ProcessPathStorage` before updating (ignore json file)"""
     cwd = os.getcwd() # save path state
-    process_path = os.path.join(__secor_path__, path) 
+    process_path = os.path.join(config['secor_path'], path) 
     os.chdir(process_path)
     if clear: # ignore json file 
         ProcessPathStorage.clear()
@@ -62,7 +62,7 @@ def currentProcessGet(path='Processos', clear=False):
 def currentProcessFromHtml(path='Processos', clear=True):
     """load `scm.ProcessStorage` using `Processo.fromHtml` from paths in `ProcessPathStorage`"""
     cwd = os.getcwd() # save path state
-    process_path = os.path.join(__secor_path__, path) 
+    process_path = os.path.join(config['secor_path'], path) 
     if clear:
         scm.ProcessStorage.clear()
     for _, process_path in tqdm.tqdm(ProcessPathStorage.items()):    
@@ -77,7 +77,7 @@ def folder_process(process_str):
 
 ### can be used to move process folders to Concluidos
 def currentProcessMove(process_str, dest_folder='Concluidos', 
-    rootpath=os.path.join(__secor_path__, "Processos"), delpath=False):
+    rootpath=os.path.join(config['secor_path'], "Processos"), delpath=False):
     """
     move process folder path to `dest_folder` (this can create a new folder)
     * process_str : process name to move folder
@@ -360,7 +360,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
 
     """
     cur_path = os.getcwd() # for restoring after
-    main_path = os.path.join(__secor_path__, path)
+    main_path = os.path.join(config['secor_path'], path)
     if verbose and __debugging__:
         print("Main path: ", main_path)
     process_path = os.path.join(main_path, process_folder)
@@ -469,7 +469,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
             IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)  # minuta alvará
             IncluiDespacho(sei, NUP, 13)  # despacho  análise de plano alvará
 
-    sei.ProcessoAtribuir() # default chefe
+    # sei.ProcessoAtribuir() # default chefe - better do by hand
     os.chdir(cur_path) # restore original path , to not lock the folder-path
     # should also close the openned text window - going to previous state
     sei.closeOtherWindows()
@@ -500,7 +500,7 @@ def IncluiDocumentosSEIFoldersFirstN(sei, nfirst=1, path='Processos', **kwargs):
     
     Aditional args should be passed as keyword arguments
     """
-    os.chdir(os.path.join(__secor_path__, path))
+    os.chdir(os.path.join(config['secor_path'], path))
     files_folders = glob.glob('*')
     process_folders = []
     for cur_path in files_folders: # remove what is NOT a process folder

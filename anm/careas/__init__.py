@@ -10,9 +10,7 @@ from .scm import (
 )
 
 from .constants import (
-    __secor_path__,
-    __eventos_scm__,
-    __secor_timeout__
+    config
 )
 
 from .util import ContaPrazo

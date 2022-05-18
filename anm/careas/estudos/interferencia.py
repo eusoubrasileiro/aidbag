@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 
-from ..constants import __secor_timeout__, __eventos_scm__, processPathSecor
+from ..constants import config, processPathSecor
 from ..scm import *
 from ....web import htmlscrap 
 from ..SEI import *
@@ -106,7 +106,7 @@ class Interferencia:
             formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
             # must be timout 2 minutes
             self.wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1',
-                    data=formdata, timeout=__secor_timeout__)
+                    data=formdata, timeout=config['secor_timeout'])
             if not ( self.wpage.response.url == r'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'):
                 return False             # Falhou salvar Retirada de Interferencia # provavelmente estudo aberto            
             self.wpage.save(os.path.join(html_path, fname))
@@ -263,7 +263,7 @@ class Interferencia:
             lambda row: 1 if row['Data'] <= self.processo['prioridadec'] else 0, axis=1)
         ### fill-in column with inativam or ativam processo for each event
         ### using excel 'eventos_scm_09102019.xls'
-        eventos = pd.read_excel(__eventos_scm__)
+        eventos = pd.read_excel(config['eventos_scm'])
         eventos.drop(columns=['nome'],inplace=True)
         eventos.columns = ['Evento', 'Inativ'] # rename columns
         # join Inativ column -1/1 inativam or ativam processo
