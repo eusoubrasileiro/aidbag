@@ -64,6 +64,7 @@ def parseDadosBasicos(basicos_page, name, verbose, mutex, data_tags=scm_data_tag
             associado.remove(name) # remove self 
             associado = associado[0]
             # check for duplicated process associations - drop and anotate inconsistency
+            # cyclic removal -cyclic graph is not suposed to exist! For while my undertanding.
             if associado in associados: # already there duplicate
                 dados['inconsistencies'] = dados['inconsistencies'] + ["Process {:} associado to this process more than once on SCM. Ignored.".format(
                     associado)]
@@ -95,7 +96,7 @@ def parseDadosBasicos(basicos_page, name, verbose, mutex, data_tags=scm_data_tag
         dados['associados'] = { name : attrs for name, attrs in dados['associados'].items() 
                                 if not attrs['data-deass'] }
         # from here we get direct sons and parents/anscestors - from process names only
-        # 800.xxx/2005 -> 300.yyy/2005
+        # 800.xxx/2005 -> 300.yyy/2005 - Not the full picture tough!
         dados['sons'] = []
         dados['parents'] = []
         for associado in dados['associados']:

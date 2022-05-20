@@ -23,24 +23,24 @@ def graphAddEdges(process, G, ignore=''):
 
 def createGraphAssociados(process):
     """
-    create graph of associados direct -> each edge has a direction 
+    Create graph of associados direct -> each edge has a direction 
     each node is a process, each edge (connection) has 
     the attributes of `Processo.associados[process.name]`
+    It's a tree. Otherwise crash.
     """
     G = nx.Graph()
     graphAddEdges(process, G)
-    Gdg = nx.DiGraph(G)
-    del G
-    # remove vertices that are not source = older -> target = younger 
-    Gd = Gdg.copy()
-    for sc, tg in Gdg.edges():
-        if comparePnames(sc, tg) > 0:
-            Gd.remove_edge(sc, tg)
-    root = None 
-    if Gd.nodes:
-        sortedNodes = sorted(list(Gd.nodes), key=cmp_to_key(comparePnames), reverse=False)
-        root = sortedNodes[0] # is the root process oldest    
-    return Gd, root
+    # Returns oriented tree constructed from a depth-first-search from source (optional)
+    # Root process may not necessarily be older (grupamento mineiro)
+    # O que é certo é que é um graph acyclic 
+    # (inconsistencias removidas no parsing dos associados)
+    Gdtree = nx.dfs_tree(G)    
+    # dfs_tree dont preserve edge data at it back now
+    Gd = nx.DiGraph(G) # preserves the data, tough nx.dfs_tree(G) will not
+    data = { (u, v) : d for u, v, d in Gd.edges.data() }  # create a dict of { edge : data ...}
+    nx.set_edge_attributes(Gdtree, data) # inexistent edges are ignored per networkx docs
+    root = list(nx.topological_sort(Gdtree))[0] # assuming only one root
+    return Gdtree, root
 
 
 def plotGraph(G, layout=nx.spring_layout, figsize=(9,9)):

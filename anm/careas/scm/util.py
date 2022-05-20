@@ -115,8 +115,8 @@ def comparePnames(process, other, check=False):
     if check: 
         process = fmtPname(process)
         other = fmtPname(other)
-    pnumber, pyear = numberyearPname(process)
-    onumber, oyear = numberyearPname(other)
+    pnumber, pyear = map(int, numberyearPname(process))
+    onumber, oyear = map(int, numberyearPname(other))
     if pyear < oyear:
         return -1 
     if pyear > oyear:
