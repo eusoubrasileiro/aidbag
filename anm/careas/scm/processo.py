@@ -95,7 +95,7 @@ class Processo:
         * dados : enum
             SCM_SEARCH
         """
-        # check if some thread is running. Only ONE can have this process at time
+        # check if some thread is running. Only ONE can have this process at time        
         if not self._thev_isfree.wait(60.*2):
             raise Exception("runtask - wait time-out for process: ", self.name)
         self._thev_isfree.clear() # make it busy
@@ -107,7 +107,7 @@ class Processo:
             elif SCM_SEARCH.PRIORIDADE in dados and not self._ancestry_run:
                 task = (self._ancestry, {})
             elif SCM_SEARCH.POLIGONAL in dados and not self._dadospoly_run:
-                taks = (self._dadosPoligonalGet, {})
+                task = (self._dadosPoligonalGet, {})
         if task:
             task, params = task
             if self._verbose:
@@ -125,10 +125,6 @@ class Processo:
             response = requests.pageRequest(name, self.name, self._wpage, False)
             self._pages[name]['html'] = response.text # str unicode page             
             return self._pages[name]['html']
-        if not self._pages[name]['html']:            
-            response = requests.pageRequest(name, self.name, self._wpage, False)
-            self._pages[name]['html'] = response.text # str unicode page         
-        return self._pages[name]['html']
 
     def _expandAssociados(self, ass_ignore=''):
         """
@@ -271,7 +267,10 @@ class Processo:
             if self._verbose:
                 with mutex:
                     print("dadosPoligonalGet - parsing: ", self.name, file=sys.stderr)   
-            self._pages['poligonal']['data_raw'] = parseDadosPoligonal(self._pages['poligonal']['html'])
+            dados = parseDadosPoligonal(self._pages['poligonal']['html'])
+            self._dados.update({'poligonal' : dados })
+            self._pages['poligonal']['data_raw'] = dados             
+            self._dadospoly_run = True
 
     def _dadosBasicosFillMissing(self):
         """try fill dados faltantes pelo processo associado (pai) 1. UF 2. substancias
@@ -449,8 +448,8 @@ class ProcessStorageClass(dict):
         """
 
         for pname in progressbar(ProcessStorage):
-        #must be one independent requests.Session for each process otherwise mess
-            ProcessStorage[pname]._wpage = wPageNtlm(wp.user, wp.passwd, ssl=True) 
+            #must be one independent requests.Session for each process otherwise mess            
+            ProcessStorage[pname]._wpage = wPageNtlm(wp.user, wp.passwd, ssl=True)             
             ProcessStorage[pname].runTask(*args, **kwargs)
 
     def toJSON(self):

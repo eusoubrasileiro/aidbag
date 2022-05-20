@@ -7,7 +7,7 @@ from .util import (
 # SCM URL LIST
 # TODO complete the list of links
 #'https://sistemas.anm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx' # might change again
-scm_dados_processo_main_url='https://sistemas.anm.gov.br/scm/intra/site/admin/dadosprocesso.aspx'
+scm_dados_processo_main_url='https://sistemas.anm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx'
 scm_timeout=(2*60)
 
 urls = { 'dadosbasicos' : scm_dados_processo_main_url,
@@ -39,6 +39,7 @@ def pageRequest(pagename, processostr, wpage, fmtName=True):
                     data=formdata, timeout=scm_timeout)
         return wpage.response
     if pagename == 'poligonal': # first connection to 'dadosbasicos' above MUST have been made before
+        pageRequest('dadosbasicos', processostr, wpage) # ask basicos first
         formcontrols = {
             'ctl00$conteudo$btnPoligonal': 'Poligonal',
             'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnPoligonal'}
