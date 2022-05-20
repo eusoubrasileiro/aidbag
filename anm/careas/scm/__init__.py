@@ -8,5 +8,6 @@ from .util import (
 
 from .processo import (
     Processo, 
-    ProcessStorage
+    ProcessStorage,
+    SCM_SEARCH
 )

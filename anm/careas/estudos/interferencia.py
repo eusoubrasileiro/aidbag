@@ -45,7 +45,7 @@ class DownloadRetiradaInterferenciaFailed(Exception):
 
 class Interferencia:
     """Estudo de Retirada de Interferência SIGAREAS"""
-    def __init__(self, wpage, processostr, dados=3, verbose=True):
+    def __init__(self, wpage, processostr, dados=SCM_SEARCH.PRIORIDADE, verbose=True):
         """        
         wpage : wPage html webpage scraping class com login e passwd preenchidos
         processostr : numero processo format xxx.xxx/ano
@@ -74,7 +74,7 @@ class Interferencia:
         * exceptions: 
             `DownloadRetiradaInterferenciaFailed`, `CancelaUltimoEstudoFailed`
         """
-        estudo = Interferencia(wpage, processostr, dados=3, verbose=verbose)
+        estudo = Interferencia(wpage, processostr, dados=SCM_SEARCH.PRIORIDADE, verbose=verbose)
         estudo.processo.salvaDadosBasicosHtml(estudo.processo_path)
         estudo.processo.salvaDadosPoligonalHtml(estudo.processo_path)                    
         # if fase correct MUST have access to retirada de 
@@ -180,7 +180,7 @@ class Interferencia:
         #                                 self.processes_interf))
         self.Interferentes = {}
         for name in interferentes:
-            processo = Processo.Get(name, self.wpage, 3, self.verbose)
+            processo = Processo.Get(name, self.wpage, SCM_SEARCH.PRIORIDADE, self.verbose)
             self.Interferentes[name] = processo
         # tabela c/ processos associadoas aos processos interferentes
         self.tabela_assoc = pd.DataFrame()

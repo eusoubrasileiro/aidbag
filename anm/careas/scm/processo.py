@@ -1,8 +1,10 @@
+from ctypes.wintypes import SC_HANDLE
 import sys, os, copy
 import datetime, zlib
 import glob, json, traceback
 import concurrent.futures
 import threading
+import enum
 
 from ....general import progressbar 
 from ....web.htmlscrap import wPageNtlm
@@ -24,8 +26,18 @@ from .parsing import (
     getMissingTagsBasicos
 )
 
+
 mutex = threading.Lock()
 """`threading.Lock` exists due 'associados' search with multiple threads"""
+
+class SCM_SEARCH(enum.Flag):
+    """what to search to fill in a `Processo` class"""
+    NONE = enum.auto()
+    BASICOS = enum.auto()
+    ASSOCIADOS = enum.auto()
+    PRIORIDADE = enum.auto()
+    POLIGONAL = enum.auto()    
+    ALL = BASICOS | ASSOCIADOS | PRIORIDADE | POLIGONAL
 
 
 """
@@ -35,11 +47,6 @@ class Processo:
     def __init__(self, processostr, wpagentlm, verbose=True):
         """
         Hint: Use `Processo.Get` to avoid creating duplicate Processo's
-
-        dados :
-        1. scm dados basicos parse   
-        2. 1 + expand associados   
-        3. 2 + correção prioridade (ancestors list)   
         """        
         self.name = fmtPname(processostr) # `fmtPname` unique string process number/year
         self.number, self.year = numberyearPname(self.name)
@@ -53,6 +60,7 @@ class Processo:
         self._dadosbasicos_run = False
         self._associados_run = False
         self._ancestry_run = False
+        self._dadospoly_run = False
         self._thev_isfree = threading.Event()
         self._thev_isfree.set() # make it free right now so it can execute
         self._dados = {} 
@@ -77,29 +85,29 @@ class Processo:
     def pages(self):
         return self._pages
 
-    def runTask(self, task=None, cdados=0):
+    def runTask(self, dados=SCM_SEARCH.BASICOS, task=None):
         """
         Run task thread safely. Due multiple threads only one can be running on a process.
         
         * task : tupple (optional)  
             (function, dict of keyword args) 
 
-        * cdados : int 
-            1. scm dados basicos parse   
-            2. additonally expand associados   
-            3. additonally correção prioridade (ancestors list) 
+        * dados : enum
+            SCM_SEARCH
         """
         # check if some thread is running. Only ONE can have this process at time
         if not self._thev_isfree.wait(60.*2):
             raise Exception("runtask - wait time-out for process: ", self.name)
         self._thev_isfree.clear() # make it busy
-        if cdados: # passed argument to perform a default call without args
-            if (cdados == 1) and not self._dadosbasicos_run:
+        if dados in SCM_SEARCH: # passed argument to perform a default call without args
+            if SCM_SEARCH.BASICOS in dados and not self._dadosbasicos_run:
                 task = (self._dadosBasicosGet, {})
-            elif (cdados == 2) and not self._associados_run:
+            elif SCM_SEARCH.ASSOCIADOS in dados and not self._associados_run:
                 task = (self._expandAssociados, {})
-            elif (cdados == 3) and not self._ancestry_run:
+            elif SCM_SEARCH.PRIORIDADE in dados and not self._ancestry_run:
                 task = (self._ancestry, {})
+            elif SCM_SEARCH.POLIGONAL in dados and not self._dadospoly_run:
+                taks = (self._dadosPoligonalGet, {})
         if task:
             task, params = task
             if self._verbose:
@@ -173,10 +181,10 @@ class Processo:
             def _expandAssociados(name, wp, ignore, verbosity):
                 """ *ass_ignore : must be set to avoid being waiting for parent-source 
                     Also make the search spread outward only"""
-                proc = Processo.Get(name, wp, 0, verbosity, run=False)
+                proc = Processo.Get(name, wp, SCM_SEARCH.NONE, verbosity, run=False)
                 # must use runtask due multiple threads running
-                proc.runTask(cdados=1)                 
-                proc.runTask((proc._expandAssociados, {'ass_ignore':ignore}))
+                proc.runTask(SCM_SEARCH.BASICOS)                 
+                proc.runTask(task=(proc._expandAssociados, {'ass_ignore':ignore}))
                 return proc
             # ignoring empty lists 
             if associados:
@@ -256,13 +264,14 @@ class Processo:
         return True           
           * note: not used by self.run!
         """
-        if download: # download get with python.requests page html response  
-            self._pageRequest('poligonal')
-        # dont need to retrieve anything
-        if self._verbose:
-            with mutex:
-                print("dadosPoligonalGet - parsing: ", self.name, file=sys.stderr)   
-        self._pages['poligonal']['data_raw'] = parseDadosPoligonal(self._pages['poligonal']['html'])
+        if not self._dadospoly_run: 
+            if download: # download get with python.requests page html response  
+                self._pageRequest('poligonal')
+            # dont need to retrieve anything
+            if self._verbose:
+                with mutex:
+                    print("dadosPoligonalGet - parsing: ", self.name, file=sys.stderr)   
+            self._pages['poligonal']['data_raw'] = parseDadosPoligonal(self._pages['poligonal']['html'])
 
     def _dadosBasicosFillMissing(self):
         """try fill dados faltantes pelo processo associado (pai) 1. UF 2. substancias
@@ -324,7 +333,7 @@ class Processo:
            only 'dados basicos' are parsed associados, ancestry need to be run
         """
         jsondict = json.loads(strJSON)
-        process = Processo.Get(jsondict['name'], None, 0, False, False)
+        process = Processo.Get(jsondict['name'], None, SCM_SEARCH.NONE, False, False)
         for k in jsondict['_pages']:
             process._pages.update({k : jsondict['_pages'][k]})        
         process._dadosBasicosGet(download=False)
@@ -355,7 +364,7 @@ class Processo:
                 directly from a request.response.content string previouly saved  
                 `processostr` must be set
         """
-        processo = Processo.Get(processostr, None, verbose=verbose, run=False)
+        processo = Processo.Get(processostr, None, verbose=verbose, dados=SCM_SEARCH.NONE, run=False)
         processo._pages['dadosbasicos']['html'] = html_basicos
         processo._dadosBasicosGet(download=False) 
         if html_poligonal:
@@ -392,7 +401,7 @@ class Processo:
         return Processo.fromStrHtml(processostr, main_html, poligon_html, verbose=verbose)
 
     @staticmethod
-    def Get(processostr, wpagentlm, dados=3, verbose=True, run=True):
+    def Get(processostr, wpagentlm, dados=SCM_SEARCH.ALL, verbose=True, run=True):
         """
         Create a new or get a Processo from ProcessStorage
 
@@ -413,7 +422,7 @@ class Processo:
         processo = Processo(processostr, wpagentlm,  verbose)
         ProcessStorage[processostr] = processo   # store this new guy
         if run: # wether run the task, dont run when loading from file/str
-            processo.runTask(cdados=dados)
+            processo.runTask(dados)
         return processo
 
 
@@ -428,20 +437,21 @@ class ProcessStorageClass(dict):
     * key : unique `fmtPname` process string
     * value : `scm.Processo` object
     """
-    def runTask(self, wp, **kwargs):
+    def runTask(self, wp, *args, **kwargs):
         """run `runTask` on every process on storage 
+
         * wp : wPageNtlm
             must be provided   
 
-        Any aditional keywork arg for `runTask` can be passed.  
+        Any aditional args or keywork args for `runTask` can be passed.  
 
-        Like cdados=1 or any tuple (function, args) pair
+        Like dados=Processo.SCM_SEARCH.BASICOS or any tuple (function, args) pair
         """
 
         for pname in progressbar(ProcessStorage):
         #must be one independent requests.Session for each process otherwise mess
             ProcessStorage[pname]._wpage = wPageNtlm(wp.user, wp.passwd, ssl=True) 
-            ProcessStorage[pname].runTask(**kwargs)
+            ProcessStorage[pname].runTask(*args, **kwargs)
 
     def toJSON(self):
         """Create dict of processes JSON serialized

@@ -114,21 +114,24 @@ def parseDadosPoligonal(poligonal_page):
     polydata = {}
     soup = BeautifulSoup(poligonal_page, "html.parser")
     htmltables = soup.findAll('table', { 'class' : 'BordaTabela' }) #table[class="BordaTabela"]
-    if htmltables: 
-        memorial = htmlscrap.tableDataText(htmltables[-1])
-        data = htmlscrap.tableDataText(htmltables[1])
-        data = data[0:5] # informações memo descritivo
-        polydata = {'area'     : float(data[0][1].replace(',', '.')), 
-                    'datum'     : data[0][3],
-                    'cmin'      : float(data[1][1]), 
-                    'cmax'      : float(data[1][3]),
-                    'amarr_lat' : data[2][1],
-                    'amarr_lon' : data[2][3],
-                    'amarr_cum' : data[3][3],
-                    'amarr_ang' : data[4][1],
-                    'amarr_rum' : data[4][3],
-                    'memo'      : memorial
-                    }
+    try: # need to cover multiple poligons etc..
+        if htmltables: 
+            memorial = htmlscrap.tableDataText(htmltables[-1])
+            data = htmlscrap.tableDataText(htmltables[1])
+            data = data[0:5] # informações memo descritivo
+            polydata = {'area'     : float(data[0][1].replace(',', '.')), 
+                        'datum'     : data[0][3],
+                        'cmin'      : float(data[1][1]), 
+                        'cmax'      : float(data[1][3]),
+                        'amarr_lat' : data[2][1],
+                        'amarr_lon' : data[2][3],
+                        'amarr_cum' : data[3][3],
+                        'amarr_ang' : data[4][1],
+                        'amarr_rum' : data[4][3],
+                        'memo'      : memorial
+                        }
+    except:
+        return {}
     return polydata
 
 

@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 from datetime import datetime
 from bs4 import BeautifulSoup
+
 from . import estudos
 from . import scm
 from ...web import htmlscrap
@@ -303,7 +304,7 @@ def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False):
                 estudo = estudos.Interferencia.make(wpage, processo, verbose=verbose)   
                 proc = estudo.processo              
             elif tipo == 'opção':
-                proc = scm.Processo.Get(processo, wpage, dados=1,verbose=False)
+                proc = scm.Processo.Get(processo, wpage, dados=scm.SCM_SEARCH.BASICOS,verbose=False)
                 proc.salvaDadosBasicosHtml(constants.processPathSecor(proc))
         except Exception as e:  # too generic is masking errors that I don't care for??             
             print("Process {:} Exception: ".format(processo), traceback.format_exc(), file=sys.stderr)                       
