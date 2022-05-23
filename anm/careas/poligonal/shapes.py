@@ -14,17 +14,28 @@ def savePolygonWGS84(vertices, shpname):
     vertices[:, 0] = vertices[:, 1]
     vertices[:, 1] = temp
     gdfvs = gp.GeoSeries(Polygon(vertices))
-    gdfvs.set_crs(pyproj.CRS(CRS_SIRGAS2000)) 
-    gdfvs.to_file(shpname+'.shp')
+    gdfvs.set_crs(pyproj.CRS.from_epsg(4326)) 
+    gdfvs.to_file(shpname+'_poly')
 
 def savePointsWGS84(vertices, shpname):
-    gdfvs = gp.GeoSeries(list(map(Point, vertices)), index=np.arange(len(vertices)))
-    gdfvs.set_crs(pyproj.CRS(CRS_SIRGAS2000)) 
-    gdfvs.to_file(shpname+'points.shp')
+    gdfvs = gp.GeoSeries(list(map(Point, vertices)), index=np.arange(len(vertices)), 
+        crs=pyproj.CRS.from_epsg(4326)) 
+    gdfvs.to_file(shpname+'_points')
 
-def readPolygonWGS84(shpname):
+def readPolygon(shpname):
+    """read a esri shape file and get its coordinates"""
     gdf = gp.read_file(shpname)
     lon = gdf.geometry.exterior.xs(0).coords.xy[0]
     lat = gdf.geometry.exterior.xs(0).coords.xy[1]
     points = np.array(list(zip(lat, lon)))
     return points
+
+def readPolygonQuery(fname, column_name='PROCESSO', value='654/1938'):
+    """read a esri shape file and get its coordinates 
+    after filtering by collumn_name == value"""
+    shp = gp.read_file(fname)
+    selected = shp[ shp[column_name] == value]
+    coordinates = selected.geometry.apply(lambda x: np.array(x.exterior.coords)).values
+    del shp 
+    coordinates = np.vstack(coordinates) # turn nested list or arrays to multidim array
+    return coordinates[:, :2][:, ::-1]

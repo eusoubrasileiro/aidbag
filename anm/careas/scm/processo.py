@@ -85,7 +85,7 @@ class Processo:
     def pages(self):
         return self._pages
 
-    def runTask(self, dados=SCM_SEARCH.BASICOS, task=None):
+    def runTask(self, dados=SCM_SEARCH.BASICOS, task=None, wpage=None):
         """
         Run task thread safely. Due multiple threads only one can be running on a process.
         
@@ -95,6 +95,9 @@ class Processo:
         * dados : enum
             SCM_SEARCH
         """
+        if self._wpage is None: # to support being called without wp set 
+            self._wpage = wpage
+
         # check if some thread is running. Only ONE can have this process at time        
         if not self._thev_isfree.wait(60.*2):
             raise Exception("runtask - wait time-out for process: ", self.name)

@@ -1,8 +1,9 @@
+from ast import Raise
 import copy, re
 from dataclasses import dataclass, field
 import numpy as np
 
-from poligonal.shapes import (
+from .shapes import (
     savePointsWGS84, 
     savePolygonWGS84
     )
@@ -135,21 +136,22 @@ class Poligon():
         points = np.concatenate((points,[points[0]])) # must be a poligon, hence closed!
         self.data = np.copy(points)
         if not repeat_end:
-            points = points[:-1]
+            points = points[:-1]        
         return points
 
-    def memo_newstart(self, index, start_point, inplace=False):
+    def memo_newstart(self, index, start_coordinates, inplace=False):
         """break walk way 'path memo' `self.memo` at index-1
         and set new start coordinate point from there"""
-        if not inplace:            
-            memo = self.memo.copy()
-        else:
-            memo = self.memo
+        memo = copy.deepcopy(self.memo)
         memo = memo[1:] # discard original start
         # split at index since it's a walk way circular
         memo = memo[index-1:] + memo[:index-1]
         # add new start point
-        memo = [start_point] + memo
+        memo = [start_coordinates] + memo
+        if inplace:            
+            self.memo = memo
+            self.points_from_memo()
+            self.attributes()
         return memo
 
     def memo_from_old_str(self, old_str):
@@ -309,14 +311,15 @@ def translate_info(coords, ref_coords, displace_dist=1.5):
             #print(distance)
             if(distance < displace_dist):
                 angle, _ = wgs84InverseAngle(*ref_point, *point)
-                print("{:>3d} - distance is {:>+5.3f} m az. angle (degs) is {:>+4.3f} " "from ref-vertex {:>3d} : Lat {:>4.9f} Lon {:>4.9f} to "
+                print("{:>3d} | d is {:>+5.3f} (m) | az. is {:>+4.3f} (degs) |" " from ref {:>3d} : Lat {:>4.9f} Lon {:>4.9f} to "
                 "vertex {:>3d} : Lat {:>4.9f} Lon {:>4.9f} ".format(k+1, distance, angle,
                      j+1, *ref_point, i+1, *point))
                 k += 1 # another vertex possible to be used as reference for translation
                 refs.append([ref_point, i+1])
     print("Choose which to use as a reference vertex")
     index = -1
-    index = int(input())-1
+    index = int(input())-1    
+    print("Choosen vertex ", index+1)
     return refs[index][0], refs[index][1]
 
 
@@ -324,43 +327,40 @@ def translate_info(coords, ref_coords, displace_dist=1.5):
 
 # draft version
 # TODO make it better with new uses
-def memorial_acostar(memorial, memorial_ref, reference_dist=50, mtolerance=0.5):
+def memorial_acostar(memoref, memo, reference_dist=50, round_angle=True, round_dist=True, 
+        verd=True, verd_tol=0.5, save_file=True):
     """
     Acosta `memorial` à algum ponto escolhido da `memorial_ref`
 
-    memorial_ref : str
-        deve ser copiado da aba-poligonal
-
+    memorial_ref : str/list/np.ndarray
+        reference (static - snapping to )
     memorial: str/list/np.ndarray
+        points to move 
 
+    Where get it:
+        aba poligonal or
+        shape scm-sigareas
     """
-    if isinstance(memorial_ref, str):
-        ref_points = readMemorial(memorial_ref, decimal=True, verbose=False)
-    else:
-        print('memorial_ref : deve ser copiado da aba-poligonal (string)')
-        return
-    if isinstance(memorial, list):
-        points = np.array(memorial)
-    elif isinstance(memorial, str):
-        points = np.array(readMemorial(memorial, decimal=True, verbose=False))
-    elif isinstance(memorial, np.ndarray):
-        points = memorial
-    else:
-        print("memorial : unknown format")
-
-    ref_point, rep_index = translate_info(points, ref_points, displace_dist=reference_dist)
-    poligon = Poligon()
-    memo = poligon.memo_from_points(points)
-    print("simple inverse memorial")
-    for line in memo:
-        print(line)
-    newpoligon = poligon.copy()
-    newpoligon.memo_newstart(memo, rep_index, ref_point, inplace=True)
-    memo_restarted_points = newpoligon.points_from_memo(repeat_end=True)
-    print(u"Ajustando para rumos verdadeiros, tolerância :", mtolerance, " metro")
-    # make 'rumos verdadeiros' acceptable by sigareas
-    smemo_restarted_points_verd = forceverdPoligonal(memo_restarted_points, tolerancem=mtolerance)
-    print("Area is ", wgs84PolygonAttributes(smemo_restarted_points_verd.tolist())[-1], " ha")
-    formatMemorial(smemo_restarted_points_verd)
-    print("Pronto para carregar no SIGAREAS -> corrigir poligonal")
-    return smemo_restarted_points_verd
+    def fmt_memo(memo):
+        if isinstance(memoref, str):
+            return readMemorial(memoref, decimal=True, verbose=False)
+        if isinstance(memo, list):
+            return np.array(memo)
+        if isinstance(memo, np.ndarray):
+            return memo
+        else:
+            raise Exception('Memorial must be (string) or (list) or (ndarray)')
+    ref_points = fmt_memo(memoref) 
+    points = fmt_memo(memo) 
+    ref_point, rep_index = translate_info(points, ref_points, displace_dist=reference_dist)     
+    #poligon = Poligon.from_points(points, round_angle=round_angle, round_dist=round_dist)
+    newpoligon = Poligon.from_points(points, round_angle=round_angle, round_dist=round_dist)
+    newpoligon.memo_newstart(rep_index, ref_point, inplace=True)
+    new_points = newpoligon.data # already generated new points
+    if verd:
+        print(u"Ajustando para rumos verdadeiros, tolerância :", verd_tol, " metro")
+        # make 'rumos verdadeiros' acceptable by sigareas
+        new_points = forceverdPoligonal(new_points, tolerancem=verd_tol)            
+    formatMemorial(new_points, save=save_file)
+    print("Ready for SIGAREAS -> Corrigir Poligonal")
+    return new_points, newpoligon
