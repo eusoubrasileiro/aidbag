@@ -322,20 +322,15 @@ def translate_info(coords, ref_coords, displace_dist=1.5):
     print("Choosen vertex ", index+1)
     return refs[index][0], refs[index][1]
 
-
-
-
-# draft version
-# TODO make it better with new uses
 def memorial_acostar(memoref, memo, reference_dist=50, round_angle=True, round_dist=True, 
-        verd=True, verd_tol=0.5, save_file=True):
+        verd=True, verd_tol=0.5, save_file=True, proc_name=None):
     """
-    Acosta `memorial` à algum ponto escolhido da `memorial_ref`
+    Acosta `memo` à algum ponto escolhido do `memoref`
 
     memorial_ref : str/list/np.ndarray
-        reference (static - snapping to )
+        memorial reference (static - snapping to )
     memorial: str/list/np.ndarray
-        points to move 
+        memorial with points to move 
 
     Where get it:
         aba poligonal or
@@ -360,7 +355,9 @@ def memorial_acostar(memoref, memo, reference_dist=50, round_angle=True, round_d
     if verd:
         print(u"Ajustando para rumos verdadeiros, tolerância :", verd_tol, " metro")
         # make 'rumos verdadeiros' acceptable by sigareas
-        new_points = forceverdPoligonal(new_points, tolerancem=verd_tol)            
-    formatMemorial(new_points, save=save_file)
-    print("Ready for SIGAREAS -> Corrigir Poligonal")
-    return new_points, newpoligon
+        new_points = forceverdPoligonal(new_points, tolerancem=verd_tol)           
+    if save_file: 
+        proc_name = proc_name.upper() + 'MEMO.txt' if proc_name else 'MEMO.txt'
+        formatMemorial(new_points, save=save_file, filename=proc_name)
+        print("Ready for SIGAREAS -> Corrigir Poligonal")
+    return newpoligon
