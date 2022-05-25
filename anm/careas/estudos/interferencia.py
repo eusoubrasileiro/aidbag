@@ -200,7 +200,7 @@ class Interferencia:
                 # number of direct sons/ ancestors
                 self.tabela_interf.loc[row[0], 'Sons'] = len(processo['sons'])
                 self.tabela_interf.loc[row[0], 'Dads'] = len(processo['parents'])
-                self.tabela_assoc = self.tabela_assoc.append(assoc_items, sort=False, ignore_index=True)
+                self.tabela_assoc = pd.concat([self.tabela_assoc, assoc_items], sort=False, ignore_index=True, axis=0, join='outer')                
         return True
 
     def getTabelaInterferenciaTodos(self):
@@ -241,7 +241,8 @@ class Interferencia:
             # da prioritária correta
             processo_prioridadec = self.Interferentes[fmtPname(row[1][1])]['prioridadec']
             if processo_events['Data'].values[-1] > np.datetime64(processo_prioridadec):
-                processo_events = processo_events.append(processo_events.tail(1), ignore_index=True) # repeat the last/or first
+                #processo_events = processo_events.append(processo_events.tail(1), ignore_index=True) # repeat the last/or first
+                processo_events = pd.concat([processo_events, processo_events.tail(1)], ignore_index=True, axis=0, join='outer')
                 processo_events.loc[processo_events.index[-1], 'Data'] = np.datetime64(processo_prioridadec)
                 processo_events.loc[processo_events.index[-1], 'EvSeq'] = -3 # represents added by here
             # SICOP parte if fisico main available
@@ -249,7 +250,8 @@ class Interferencia:
             # use only what we have rest will be empty
             #processo_events['SICOP FISICO PRINCIPAL MOVIMENTACAO']
             # DATA:HORA	SITUAÇÃO	UF	ÓRGÃO	PRIORIDADE	MOVIMENTADO	RECEBIDO	DATA REC.	REC. POR	GUIA
-            self.tabela_interf_eventos = self.tabela_interf_eventos.append(processo_events)
+            self.tabela_interf_eventos = pd.concat([self.tabela_interf_eventos, processo_events], axis=0, join='outer')
+            #self.tabela_interf_eventos = self.tabela_interf_eventos.append(processo_events)
 
         self.tabela_interf_eventos.reset_index(inplace=True,drop=True)
         # rearrange collumns in more meaningfully viewing
