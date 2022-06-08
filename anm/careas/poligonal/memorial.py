@@ -22,6 +22,9 @@ from .geographic import (
     wgs84InverseAngle
     )
 
+
+round_angle_verd = lambda x: round(x/90)*90 # round number to 90's rumos verdadeiros
+
 ## TODO create a class to store poligonal information like SCM page poligonal
 # fields
 
@@ -52,13 +55,21 @@ class Poligon():
 
     # TODO implement same approach bellow two pathways
     # but no reason since round angles/distances already deals with inprecision
-    def memo_from_points(self, points, round_angle=True, round_dist=True):
+    def memo_from_points(self, points, round_angle=True, round_dist=True, round=None,
+        parse=False, fmt='scm'):
         """
         Gera 'memorial descritivo simples' a partir de coordenadas lat, lon
 
-        * points: numpy.array 
+        * points: numpy.array or multine str
             [[lat0, lon0],[lat1, lon1]...]
             shape is [:, 2]
+
+        * parse: False
+            if True treat points as str and parse it with `util.readMemorial`
+            argument `fmt` is used in this case
+
+        * round: None | True | False
+            sets round_angle = round_dist = round 
 
         output : list
             lat, lon (primeiro vertice)
@@ -68,6 +79,10 @@ class Poligon():
 
         Note: Uses Elipsoid WGS84 (SIRGAS 2000 equivalent)
         """
+        if round is not None:
+            round_angle = round_dist = round
+        if parse:
+            points = readMemorial(points, decimal=True, fmt=fmt)
         points = np.copy(points) # it will be set to data, must not hold references
         if (not np.alltrue(points[0] == points[-1])): # must be a closed => poligon!
             points = np.append(points, points[0:1], axis=0) # add first point to the end  
@@ -80,9 +95,9 @@ class Poligon():
             angle, _ = wgs84InverseAngle(prev_point[0], prev_point[1], point[0],point[1])
             prev_point = point
             if round_angle:
-                angle = round(angle)
+                angle = round_angle_verd(angle)
             if round_dist:
-                dist = round(dist)
+                dist = np.round(dist)
             dist_angle.append([dist, angle])
         self.memo = dist_angle
         return self.memo.copy()
@@ -138,6 +153,15 @@ class Poligon():
         if not repeat_end:
             points = points[:-1]        
         return points
+
+    def clean_memo(self):
+        """remove from memo directions where distance is 0"""
+        memo = [self.memo[0]] 
+        for dist, angle in self.memo[1:]:
+            if dist != 0:
+                memo.append([dist, angle])
+        self.memo = memo 
+        self.attributes()
 
     def memo_newstart(self, index, start_coordinates, inplace=False):
         """break walk way 'path memo' `self.memo` at index-1
@@ -323,7 +347,7 @@ def translate_info(coords, ref_coords, displace_dist=1.5):
     return refs[index][0], refs[index][1]
 
 def memorial_acostar(memoref, memo, reference_dist=50, round_angle=True, round_dist=True, 
-        verd=True, verd_tol=0.5, save_file=True, proc_name=None):
+        verd=True, verd_tol=0.5, save_file=True, proc_name=None, save_shape=True):
     """
     Acosta `memo` à algum ponto escolhido do `memoref`
 
@@ -356,8 +380,10 @@ def memorial_acostar(memoref, memo, reference_dist=50, round_angle=True, round_d
         print(u"Ajustando para rumos verdadeiros, tolerância :", verd_tol, " metro")
         # make 'rumos verdadeiros' acceptable by sigareas
         new_points = forceverdPoligonal(new_points, tolerancem=verd_tol)           
-    if save_file: 
-        proc_name = proc_name.upper() + 'MEMO.txt' if proc_name else 'MEMO.txt'
+    proc_name = proc_name.upper() + 'MEMO.txt' if proc_name else 'MEMO.txt'
+    if save_file:
         formatMemorial(new_points, save=save_file, filename=proc_name)
         print("Ready for SIGAREAS -> Corrigir Poligonal")
+    if save_shape:
+        newpoligon.toShapePolygon(proc_name)
     return newpoligon
