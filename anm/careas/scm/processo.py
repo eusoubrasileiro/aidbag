@@ -478,11 +478,14 @@ class ProcessStorageClass(dict):
         return fname
 
     @staticmethod
-    def fromJSONfile(fname, zip=True, verbose=True):
+    def fromJSONfile(fname=None, zip=True, verbose=True):
         """Create a `ProcessStorageClass` from a JSON str create with `toJSONfile` method saved on file fname.
         * zip : 
             default assumed to be zipped
         """
+        if not fname: # use default storage file first found
+            fname = glob.glob('ProcessStored_*_JSON.zip')[0]
+
         processesJSON = ''
         with open(fname, 'rb') as f:
             processesJSON = f.read()
