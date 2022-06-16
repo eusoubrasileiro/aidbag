@@ -478,7 +478,7 @@ class ProcessStorageClass(dict):
         return fname
 
     @staticmethod
-    def fromJSONfile(fname=None, zip=True, verbose=True):
+    def fromJSONfile(fname=None, zip=True, verbose=False):
         """Create a `ProcessStorageClass` from a JSON str create with `toJSONfile` method saved on file fname.
         * zip : 
             default assumed to be zipped
@@ -497,7 +497,6 @@ class ProcessStorageClass(dict):
         iterator = processes if not verbose else progressbar(processes, "Loading: ")
         for keys in iterator:
             Processo.fromJSON(processes[keys], verbose)
-        return ProcessStorage
 
     
 
