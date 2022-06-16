@@ -55,7 +55,7 @@ class Poligon():
 
     # TODO implement same approach bellow two pathways
     # but no reason since round angles/distances already deals with inprecision
-    def memo_from_points(self, points, round_angle=True, round_dist=True, round=None,
+    def memo_from_points(self, points, round_verd=True, round_dist=2, 
         parse=False, fmt='scm'):
         """
         Gera 'memorial descritivo simples' a partir de coordenadas lat, lon
@@ -68,8 +68,11 @@ class Poligon():
             if True treat points as str and parse it with `util.readMemorial`
             argument `fmt` is used in this case
 
-        * round: None | True | False
-            sets round_angle = round_dist = round 
+        * round_verd: False (default)
+            round angles to 0, 90, 180, 270 etc.. 'rumos verdadeiros'
+
+        * round_dist: int (default 2)
+            number of decimal places to round distance to
 
         output : list
             lat, lon (primeiro vertice)
@@ -78,9 +81,7 @@ class Poligon():
             ...
 
         Note: Uses Elipsoid WGS84 (SIRGAS 2000 equivalent)
-        """
-        if round is not None:
-            round_angle = round_dist = round
+        """  
         if parse:
             points = readMemorial(points, decimal=True, fmt=fmt)
         points = np.copy(points) # it will be set to data, must not hold references
@@ -94,10 +95,9 @@ class Poligon():
             dist = wgs84Inverse(prev_point[0], prev_point[1], point[0],point[1])
             angle, _ = wgs84InverseAngle(prev_point[0], prev_point[1], point[0],point[1])
             prev_point = point
-            if round_angle:
-                angle = round_angle_verd(angle)
-            if round_dist:
-                dist = np.round(dist)
+            if round_verd:
+                angle = round_angle_verd(angle)            
+            dist = round(dist, round_dist)
             dist_angle.append([dist, angle])
         self.memo = dist_angle
         return self.memo.copy()
@@ -140,7 +140,7 @@ class Poligon():
         else:
             startpoint = self.memo[0] # start
             directions = self.memo[1:] # drop start vertex
-        # goind both sides - accuracy increases A LOT!
+        # going both sides - accuracy increases A LOT!
         half = int(len(directions))//2
         ohalf = len(directions) - half
         points_fw = direct(startpoint, directions[:half]) # forward
@@ -346,7 +346,7 @@ def translate_info(coords, ref_coords, displace_dist=1.5):
     print("Choosen vertex ", index+1)
     return refs[index][0], refs[index][1]
 
-def memorial_acostar(memoref, memo, reference_dist=50, round_angle=True, round_dist=True, 
+def memorial_acostar(memoref, memo, reference_dist=50, round_verd=False, round_dist=2, 
         verd=True, verd_tol=0.5, save_file=True, proc_name=None, save_shape=True):
     """
     Acosta `memo` à algum ponto escolhido do `memoref`
@@ -372,8 +372,8 @@ def memorial_acostar(memoref, memo, reference_dist=50, round_angle=True, round_d
     ref_points = fmt_memo(memoref) 
     points = fmt_memo(memo) 
     ref_point, rep_index = translate_info(points, ref_points, displace_dist=reference_dist)     
-    #poligon = Poligon.from_points(points, round_angle=round_angle, round_dist=round_dist)
-    newpoligon = Poligon.from_points(points, round_angle=round_angle, round_dist=round_dist)
+    #poligon = Poligon.from_points(points, round_verd=round_verd, round_dist=round_dist)
+    newpoligon = Poligon.from_points(points, round_verd=round_verd, round_dist=round_dist)
     newpoligon.memo_newstart(rep_index, ref_point, inplace=True)
     new_points = newpoligon.data # already generated new points
     if verd:
