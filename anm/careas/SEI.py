@@ -30,13 +30,13 @@ class SEI:
         driver = Chrome(options=options)
         driver.implicitly_wait(implicit_wait) # seconds
         driver.get("https://sei.anm.gov.br/")
-        username = driver.find_element_by_id("txtUsuario")
-        password = driver.find_element_by_id("pwdSenha")
-        orgao = driver.find_element_by_id("selOrgao")
+        username = driver.find_element(By.ID,"txtUsuario")
+        password = driver.find_element(By.ID,"pwdSenha")
+        orgao = driver.find_element(By.ID,"selOrgao")
         username.send_keys(user)
         password.send_keys(passwd)
         orgao.send_keys("ANM")
-        driver.find_element_by_name("sbmLogin").click()
+        driver.find_element(By.NAME,"sbmLogin").click()
         self.driver = driver
         # to avoid problems start saving main window handle
         self.mainwindow = self.driver.current_window_handle
@@ -127,7 +127,7 @@ class SEI:
         None if such button doesn't exist"""
         bts = self.processBarCmdsGet()
         try : 
-            if bts[4].find_element_by_tag_name('img').get_property('title') == 'Reabrir Processo':
+            if bts[4].find_element(By.TAG_NAME, 'img').get_property('title') == 'Reabrir Processo':
                 return bts[4]
         except:
             return None    
@@ -188,7 +188,7 @@ class SEI:
         # a ordem dos elementos está mudando
         # melhor usar xpath by value
         # items[code].click() # Externo / Analise / Declaracao etc....
-        element = self.driver.find_element_by_xpath("//a[.='"+texts[code]+"']")
+        element = self.driver.find_element(By.XPATH, "//a[.='"+texts[code]+"']")
         element.click()
 
     def ProcessoIncluiAEspecial(self, option=1, obs=None):

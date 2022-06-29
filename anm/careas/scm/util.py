@@ -32,7 +32,7 @@ def fmtPname(pross_str):
 
 def numberyearPname(pross_str):
     "return process (number, year)"
-    pross_str = ''.join(re.findall('\d', pross_str))
+    pross_str = ''.join(re.findall('\d', fmtPname(pross_str)))
     return pross_str[:6], pross_str[6:]
 
 def findfmtPnames(text):

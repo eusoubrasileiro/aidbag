@@ -122,16 +122,16 @@ def IncluiDocumentoExternoSEI(sei, ProcessoNUP, doc=0, pdf_path=None):
     sei.Pesquisa(ProcessoNUP) # Entra neste processo
     sei.ProcessoIncluiDoc(0) # Inclui Externo
     # Preenchendo
-    sei.driver.find_element_by_id('selSerie').send_keys(docs_externos[doc]['tipo']) # Tipo de Documento
+    sei.driver.find_element(By.ID,'selSerie').send_keys(docs_externos[doc]['tipo']) # Tipo de Documento
     # Data do Documento
-    sei.driver.find_element_by_id('txtDataElaboracao').send_keys(datetime.today().strftime('%d/%m/%Y')) # put TODAY
-    sei.driver.find_element_by_id('txtNumero').send_keys(docs_externos[doc]['desc']) # Nome na Arvore
-    sei.driver.find_element_by_id('optNato').click() #   Nato-digital
-    sei.driver.find_element_by_id('lblPublico').click() # Publico
+    sei.driver.find_element(By.ID,'txtDataElaboracao').send_keys(datetime.today().strftime('%d/%m/%Y')) # put TODAY
+    sei.driver.find_element(By.ID,'txtNumero').send_keys(docs_externos[doc]['desc']) # Nome na Arvore
+    sei.driver.find_element(By.ID,'optNato').click() #   Nato-digital
+    sei.driver.find_element(By.ID,'lblPublico').click() # Publico
     if pdf_path is not None: # existe documento para anexar
-        file = sei.driver.find_element_by_id('filArquivo') # Upload PDF
+        file = sei.driver.find_element(By.ID,'filArquivo') # Upload PDF
         file.send_keys(pdf_path)
-    # save = sei.driver.find_element_by_id('btnSalvar')
+    # save = sei.driver.find_element(By.ID,'btnSalvar')
     save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'btnSalvar')))
     save.click()
     try :
@@ -149,9 +149,9 @@ def IncluiInforme(sei, ProcessoNUP, idxcodigo):
     mcodigo = mcodigos[idxcodigo]
     sei.Pesquisa(ProcessoNUP) # Entra neste processo
     sei.ProcessoIncluiDoc(4) # Informe
-    sei.driver.find_element_by_id('lblProtocoloDocumentoTextoBase').click() # Documento Modelo
-    sei.driver.find_element_by_id('txtProtocoloDocumentoTextoBase').send_keys(mcodigo)
-    sei.driver.find_element_by_id('lblPublico').click() # Publico
+    sei.driver.find_element(By.ID,'lblProtocoloDocumentoTextoBase').click() # Documento Modelo
+    sei.driver.find_element(By.ID,'txtProtocoloDocumentoTextoBase').send_keys(mcodigo)
+    sei.driver.find_element(By.ID,'lblPublico').click() # Publico
     save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'btnSalvar')))
     save.click()
     try :
@@ -172,13 +172,13 @@ def IncluiDespacho(sei, ProcessoNUP, idxcodigo,
     mcodigo = mcodigos[idxcodigo]
     sei.Pesquisa(ProcessoNUP) # Entra neste processo
     sei.ProcessoIncluiDoc(1) # Despacho
-    sei.driver.find_element_by_id('lblProtocoloDocumentoTextoBase').click() # Documento Modelo
-    sei.driver.find_element_by_id('txtProtocoloDocumentoTextoBase').send_keys(mcodigo)
-    sei.driver.find_element_by_id('txtDestinatario').send_keys(setor)
+    sei.driver.find_element(By.ID,'lblProtocoloDocumentoTextoBase').click() # Documento Modelo
+    sei.driver.find_element(By.ID,'txtProtocoloDocumentoTextoBase').send_keys(mcodigo)
+    sei.driver.find_element(By.ID,'txtDestinatario').send_keys(setor)
     destinatario_set = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'divInfraAjaxtxtDestinatario')))
     destinatario_set.click() # wait a little pop-up show up to click or send ENTER
-    # sei.driver.find_element_by_id('txtDestinatario').send_keys(Keys.ENTER) #ENTER
-    sei.driver.find_element_by_id('lblPublico').click() # Publico
+    # sei.driver.find_element(By.ID,'txtDestinatario').send_keys(Keys.ENTER) #ENTER
+    sei.driver.find_element(By.ID,'lblPublico').click() # Publico
     save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'btnSalvar')))
     save.click()
     try :
@@ -195,11 +195,11 @@ def EscreveDespacho(sei, ProcessoNUP, texto):
     """
     sei.Pesquisa(ProcessoNUP) # Entra neste processo
     sei.ProcessoIncluiDoc(1) # Despacho
-    sei.driver.find_element_by_id('txtDestinatario').send_keys(u"Setor de Controle e Registro (SECOR-MG)")
+    sei.driver.find_element(By.ID,'txtDestinatario').send_keys(u"Setor de Controle e Registro (SECOR-MG)")
     destinatario_set = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'divInfraAjaxtxtDestinatario')))
     destinatario_set.click() # wait a little pop-up show up to click or send ENTER
-    # sei.driver.find_element_by_id('txtDestinatario').send_keys(Keys.ENTER) #ENTER
-    sei.driver.find_element_by_id('lblPublico').click() # Publico
+    # sei.driver.find_element(By.ID,'txtDestinatario').send_keys(Keys.ENTER) #ENTER
+    sei.driver.find_element(By.ID,'lblPublico').click() # Publico
     save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'btnSalvar')))
     save.click()
     try : # may take a long time to lood the pop up
@@ -220,7 +220,7 @@ def EscreveDespacho(sei, ProcessoNUP, texto):
         expected_conditions.frame_to_be_available_and_switch_to_it(
         (By.CSS_SELECTOR,"iframe[aria-describedby='cke_244']")))
 
-    inputtext = sei.driver.find_element_by_css_selector('body[contenteditable="true"]')
+    inputtext = sei.driver.find_element(By.CSS_SELECTOR, 'body[contenteditable="true"]')
 
     inputtext.clear()
     for line in texto.split('\n'):  # split by lines
@@ -256,9 +256,9 @@ def IncluiParecer(sei, ProcessoNUP, idxcodigo=0):
     mcodigo = mcodigos[idxcodigo]
     sei.Pesquisa(ProcessoNUP) # Entra neste processo
     sei.ProcessoIncluiDoc(2) # Parecer
-    sei.driver.find_element_by_id('lblProtocoloDocumentoTextoBase').click() # Documento Modelo
-    sei.driver.find_element_by_id('txtProtocoloDocumentoTextoBase').send_keys(mcodigo)
-    sei.driver.find_element_by_id('lblPublico').click() # Publico
+    sei.driver.find_element(By.ID,'lblProtocoloDocumentoTextoBase').click() # Documento Modelo
+    sei.driver.find_element(By.ID,'txtProtocoloDocumentoTextoBase').send_keys(mcodigo)
+    sei.driver.find_element(By.ID,'lblPublico').click() # Publico
     save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'btnSalvar')))
     save.click()
     try :
@@ -275,7 +275,7 @@ def IncluiTermoAberturaPE(sei, ProcessoNUP):
     """
     sei.Pesquisa(ProcessoNUP) # Entra neste processo
     sei.ProcessoIncluiDoc(3) # Termo de Abertura
-    sei.driver.find_element_by_id('lblPublico').click() # Publico
+    sei.driver.find_element(By.ID,'lblPublico').click() # Publico
     save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'btnSalvar')))
     save.click()
     try :
