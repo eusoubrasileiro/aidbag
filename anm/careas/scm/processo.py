@@ -396,7 +396,7 @@ class Processo:
             path_poligon_html = path_poligon_html[0]
             with open(path_poligon_html, 'r', encoding='utf-8') as f: # read html scm
                 poligon_html = f.read()
-        else:
+        elif verbose:            
             print('Didnt find a poligonal page html saved', file=sys.stderr)
         os.chdir(curdir) # go back
         

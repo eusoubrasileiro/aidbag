@@ -203,7 +203,7 @@ class SEI:
             (By.CLASS_NAME, "infraButton")))
         botoes[0].click() # Salvar
 
-    def ProcessoAtribuir(self, pessoa='leandro.carvalho - Leandro César Ferreira de Carvalho'):
+    def ProcessoAtribuir(self, pessoa='elaine.marques - Elaine Cristina Pimenta Marques'):
         self.processBarCmdsClick(7) # botao[7] atribuir
         drop_down = wait(self.driver, 10).until(
             expected_conditions.element_to_be_clickable((By.ID, 'selAtribuicao')))

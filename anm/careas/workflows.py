@@ -165,7 +165,8 @@ def IncluiInforme(sei, ProcessoNUP, idxcodigo):
 #Divisão de Fiscalização da Mineração de Não Metálicos (DFMNM-MG)
 #Setor de Controle e Registro (SECOR-MG)
 def IncluiDespacho(sei, ProcessoNUP, idxcodigo, 
-    setor=u"Setor de Controle e Registro (SECOR-MG)"):
+    setor=u"Setor de Controle e Registro (SECOR-MG)", 
+    assinar=False):
     """
     Inclui Despacho - por index código
     """
@@ -392,34 +393,18 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
             print('Nao encontrou pdf Imprimir*.pdf', file=sys.stderr)
 
     html = None
-    try:
-        html_file = glob.glob('*.html')[0] # first html file on folder
-        with open(html_file, encoding="utf8") as f: # get NUP by html scm
-            html = f.read()
-    except IndexError: # list index out of range
-        if wpage is None:
-            raise Exception("Não há página html, please set wpage parameter")
-        processostr = scm.fmtPname(process_folder) # from folder name
-        response = scm.dadosBasicosPageRetrieve(processostr, wpage)
-        html = response.text
+    process = scm.Processo.fromHtml(verbose=False) # default from current folder
     # get everything needed
-    soup = BeautifulSoup(html, features="lxml")
-    data = htmlscrap.dictDataText(soup, select_fields(['NUP', 'tipo', 'fase']))
-    NUP, tipo, fase = data['NUP'], data['tipo'], data['fase']
-
+    NUP, tipo, fase = process['NUP'], process['tipo'], process['fase']
+    data_protocolo = process['data_protocolo']
+    
     if empty:
         pdf_adicional = None
         pdf_interferencia = None
-
     # inclui vários documentos, se desnecessário é só apagar
     # Inclui termo de abertura de processo eletronico se data < 2020 (protocolo digital nov/2019)
-
-    try : # to avoid placing IncluiTermoAberturaPE on processos puro digitais 
-        data_protocolo = datetime.strptime(data['data_protocolo'].strip(), 
-            "%d/%m/%Y %H:%M:%S")
-        if data_protocolo.year < 2020:  
-            IncluiTermoAberturaPE(sei, NUP)
-    except Exception as e:
+    # to avoid placing IncluiTermoAberturaPE on processos puro digitais 
+    if data_protocolo.year < 2020:  
         IncluiTermoAberturaPE(sei, NUP)
 
     if infer: # infer from tipo, fase 
@@ -458,11 +443,11 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
                 IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
                 IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)
                 if pdf_adicional is None:
-                    IncluiDespacho(sei, NUP, 4) # - 4 - Recomenda opção
-                    IncluiDespacho(sei, NUP, 5) # - 5 - Recomenda interferencia total
+                    IncluiDespacho(sei, NUP, 2) # - 4 - Recomenda opção
+                    IncluiDespacho(sei, NUP, 2) # - 5 - Recomenda interferencia total
                 else:
-                    #IncluiDespacho(sei, NUP, 3) # - Recomenda análise de plano c/ notificação titular
-                    IncluiDespacho(sei, NUP, 12) # - Recomenda Só análise de plano s/ notificação titular (mais comum)
+                    IncluiDespacho(sei, NUP, 0) # - Recomenda análise de plano c/ notificação titular
+                    IncluiDespacho(sei, NUP, 1) # - Recomenda Só análise de plano s/ notificação titular (mais comum)
         #     pass
     else: # dont infer, especify explicitly        
         if sei_doc == SEI_DOCS.REQUERIMENTO_OPCAO_ALVARA: # opção de área na fase de requerimento                
@@ -470,7 +455,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
             IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)  # minuta alvará
             IncluiDespacho(sei, NUP, 13)  # despacho  análise de plano alvará
 
-    # sei.ProcessoAtribuir() # default chefe - better do by hand
+    sei.ProcessoAtribuir() # default elaine - better do by hand
     os.chdir(cur_path) # restore original path , to not lock the folder-path
     # should also close the openned text window - going to previous state
     sei.closeOtherWindows()
@@ -505,7 +490,7 @@ def IncluiDocumentosSEIFoldersFirstN(sei, nfirst=1, path='Processos', **kwargs):
     files_folders = glob.glob('*')
     process_folders = []
     for cur_path in files_folders: # remove what is NOT a process folder
-        if scm.regex_process.search(cur_path) and os.path.isdir(cur_path):
+        if scm.util.regex_process.search(cur_path) and os.path.isdir(cur_path):
             process_folders.append(cur_path)
     process_folders = process_folders[:nfirst]
     IncluiDocumentosSEIFolders(sei, process_folders, path, **kwargs)
