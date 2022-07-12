@@ -22,26 +22,11 @@ def SetHomeCareasPath(Home):
 
 # Workflows 
 # Deve ser atualizado o código se o modelo favarito for modificado
-# 0 -  1537881	Retificação Resumida Alvará e Aprovo do RFP
-# 1 - 1947449	Parecer Técnico - Correção áreas e deslocamentos
-# 2 - 1618347	Formulário 1 - Lavra - Pré-Prenchido
-# 3 - 2725631	Chefe SECOR Requerimento: Recomendo Analise de Plano
-# 4 - 1133380	Chefe SECOR Requerimento: Recomenda publicar exigência opção
-# 5 - 2725639	Chefe SECOR Requerimento: Recomenda publicar indeferimento por Interferência Total
-# 6 - 1206693	Chefe SECOR Requerimento: Recomendo Analise de Cessão Parcial
-# 7 - 1243175	Chefe SECOR Requerimento: Recomendo Analise de Plano (híbrido)
-# 8 - 1453503	Chefe SECOR Requerimento de Lavra: Recomendo aguardar cumprimento de exigências
-# 9 - 1995116	Chefe SECOR Requerimento de Lavra: com Retificação de Alvará
-# 10 - 1995741	Chefe SECOR Requerimento de Lavra: Recomendo encaminhar para preenchimento de check-list
-# 11 - 2052065	Chefe SECOR Requerimento de Lavra: Encaminhar avaliar necessidade de reavaliar reservas - redução de área
-# 12 - 3044089  Chefe SECOR Requerimento: Recomendo Só Análise de Plano 100%
-# 13 - 3369278  Chefe SECOR Requerimento: Opção Executada Recomendo Analise de Plano	
-# 14 - 3680185  Informe: Requerimento de Lavra Formulario 1 realizado
-# 15 - 3645367  Para DFMNM: Requerimento de Lavra para análise de cumprimento de exigências
-# 16 - 3656770  Para SECOR-MG Expedição: Requerimento de Lavra para análise
-mcodigos = ['1537881', '1947449', '1618347', '2725631', '1133380', '2725639', 
-'1206693', '1243175', '1453503', '1995116', '1995741', '2052065', '3044089', 
-'3369278', '3680185', '3645367', '3656770']
+# 0 - 4397674  Para analise de plano e notificar redução de área(Generico)
+# 1 - 4398259  Para analise de plano sem redução de area
+# 2 - 4398010  Para notificar e publicar interferencia total 
+# 3 - 4481305  Para notificar e publicar interferência parcial opção
+mcodigos = ['4397674', '4398259', '4398010', '4481305']
 
 docs_externos = {
     0: {'tipo': 'Estudo', 'desc': 'de Retirada de Interferência'},

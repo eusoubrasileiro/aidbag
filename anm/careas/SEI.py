@@ -179,6 +179,7 @@ class SEI:
             2  - 'Parecer'
             3  - 'Termo de Abertura de Processo Eletrônico'
             4  - 'Informe'
+            x  - 'Declaração'
         """
         texts = [ ' Externo', 'Despacho', 'Parecer', 'Termo de Abertura de Processo Eletrônico', 'Informe']
         self.processBarCmdsClick(0)  # botao[0] incluir doc

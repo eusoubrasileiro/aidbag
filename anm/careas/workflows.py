@@ -5,6 +5,7 @@ import sys
 import traceback
 import shutil
 import json
+import re 
 from pathlib import Path
 from datetime import datetime
 from bs4 import BeautifulSoup
@@ -28,7 +29,6 @@ from .constants import (
 from .scm.util import regex_process
 
 from aidbag.anm.careas import constants
-
 
 # Current Processes being worked on - features
 # tha means that workflows.py probably should be a package 
@@ -99,8 +99,16 @@ def currentProcessMove(process_str, dest_folder='Concluidos',
 
 
 
-
-
+from PyPDF2 import PdfReader
+    
+def readPdfText(filename):
+    reader = PdfReader(filename)   
+    text = ''
+    for page in reader.pages:
+        text += page.extract_text()
+    return text  
+    
+    
 __debugging__ = False
 
 def IncluiDocumentoExternoSEI(sei, ProcessoNUP, doc=0, pdf_path=None):
@@ -142,13 +150,13 @@ def IncluiDocumentoExternoSEI(sei, ProcessoNUP, doc=0, pdf_path=None):
         pass
     sei.driver.switch_to.default_content() # go back to main document
 
-def IncluiInforme(sei, ProcessoNUP, idxcodigo):
+def IncluiDeclaracao(sei, ProcessoNUP, idxcodigo):
     """
-    Inclui Informe - por index código
+    Inclui Declaração - por index código modelo favorito
     """
     mcodigo = mcodigos[idxcodigo]
     sei.Pesquisa(ProcessoNUP) # Entra neste processo
-    sei.ProcessoIncluiDoc(4) # Informe
+    sei.ProcessoIncluiDoc(4) # modelo favorito
     sei.driver.find_element(By.ID,'lblProtocoloDocumentoTextoBase').click() # Documento Modelo
     sei.driver.find_element(By.ID,'txtProtocoloDocumentoTextoBase').send_keys(mcodigo)
     sei.driver.find_element(By.ID,'lblPublico').click() # Publico
@@ -379,8 +387,15 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
         pdf_interferencia = pdf_interferencia[0] if pdf_interferencia else None
         if not pdf_interferencia is None:
             pdf_interferencia = os.path.join(process_path, pdf_interferencia)
+            pdf_interferencia_text = readPdfText(pdf_interferencia)
+            pct_text="PORCENTAGEM ENTRE ESTA ÁREA E A ÁREA ORIGINAL DO PROCESSO:"
+            if pdf_interferencia_text.find(pct_text):
+                p_area = re.findall(f"(?<={pct_text}:) +([\d,]+)", pdf_interferencia_text)
+                p_area = float(p_area)
+            else: # interferência total 
+                p_area = -1                
         elif verbose:
-            print('Nao encontrou pdf R*.pdf', file=sys.stderr)
+            print('Nao encontrou pdf R*.pdf', file=sys.stderr)            
         # pdf adicional Minuta de Licenciamento ou Pré Minuta de Alvará
         # deve chamar 'Imprimir.pdf'
         # ou qualquer coisa que glob.glob("Imprimir*.pdf")[0] seja o primeiro
@@ -389,6 +404,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
         pdf_adicional = pdf_adicional[0] if pdf_adicional else None
         if not pdf_adicional is None:
             pdf_adicional = os.path.join(process_path, pdf_adicional)
+            pdf_adicional_text = readPdfText(pdf_adicional)    
         elif verbose:
             print('Nao encontrou pdf Imprimir*.pdf', file=sys.stderr)
 
@@ -396,8 +412,8 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
     process = scm.Processo.fromHtml(verbose=False) # default from current folder
     # get everything needed
     NUP, tipo, fase = process['NUP'], process['tipo'], process['fase']
-    data_protocolo = process['data_protocolo']
-    
+    data_protocolo = process['data_protocolo']    
+       
     if empty:
         pdf_adicional = None
         pdf_interferencia = None
@@ -431,7 +447,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
                 # Adicionado manualmente depois o PDF gerado
                 # com links p/ SEI
                 IncluiDocumentoExternoSEI(sei, NUP, 6, None)
-                IncluiInforme(sei, NUP, 14) # 14 Informe: Requerimento de Lavra Formulario 1 realizado
+                IncluiDeclaracao(sei, NUP, 14) # 14 Informe: Requerimento de Lavra Formulario 1 realizado
                 # 15 - Para DFMNM: Requerimento aguardar cunprimento de exigências
                 IncluiDespacho(sei, NUP, 15, 
                     setor=u"Divisão de Fiscalização da Mineração de Não Metálicos (DFMNM-MG)") 
@@ -443,11 +459,15 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
                 IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
                 IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)
                 if pdf_adicional is None:
-                    IncluiDespacho(sei, NUP, 2) # - 4 - Recomenda opção
-                    IncluiDespacho(sei, NUP, 2) # - 5 - Recomenda interferencia total
+                    if p_area == -1:                    
+                        IncluiDespacho(sei, NUP, 2) # - Recomenda interferencia total
+                    else:
+                        IncluiDespacho(sei, NUP, 3) # - Recomenda opção
                 else:
-                    IncluiDespacho(sei, NUP, 0) # - Recomenda análise de plano c/ notificação titular
-                    IncluiDespacho(sei, NUP, 1) # - Recomenda Só análise de plano s/ notificação titular (mais comum)
+                    if p_area < 96.0: # > 4% change notificar 
+                        IncluiDespacho(sei, NUP, 0) # - Recomenda análise de plano c/ notificação titular
+                    else:
+                        IncluiDespacho(sei, NUP, 1) # - Recomenda Só análise de plano s/ notificação titular (mais comum)
         #     pass
     else: # dont infer, especify explicitly        
         if sei_doc == SEI_DOCS.REQUERIMENTO_OPCAO_ALVARA: # opção de área na fase de requerimento                
