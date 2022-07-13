@@ -390,8 +390,8 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
             pdf_interferencia_text = readPdfText(pdf_interferencia)
             pct_text="PORCENTAGEM ENTRE ESTA ÁREA E A ÁREA ORIGINAL DO PROCESSO:"
             if pdf_interferencia_text.find(pct_text):
-                p_area = re.findall(f"(?<={pct_text}:) +([\d,]+)", pdf_interferencia_text)
-                p_area = float(p_area)
+                p_area = re.findall(f"(?<={pct_text}) +([\d,]+)", pdf_interferencia_text)
+                p_area = float(p_area[0].replace(',','.'))
             else: # interferência total 
                 p_area = -1                
         elif verbose:
