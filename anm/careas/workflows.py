@@ -456,14 +456,14 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
                 # IncluiDespacho(sei, NUP, 9) # - Recomenda c/ retificação de alvará
             elif 'pesquisa' in tipo.lower(): # Requerimento de Pesquisa - 1 - Minuta - 'Pré de Alvará'
                 # Inclui Estudo pdf como Doc Externo no SEI
-                IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
-                IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)
+                IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)                
                 if pdf_adicional is None:
                     if p_area == -1:                    
                         IncluiDespacho(sei, NUP, 2) # - Recomenda interferencia total
                     else:
                         IncluiDespacho(sei, NUP, 3) # - Recomenda opção
                 else:
+                    IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)
                     if p_area < 96.0: # > 4% change notificar 
                         IncluiDespacho(sei, NUP, 0) # - Recomenda análise de plano c/ notificação titular
                     else:
