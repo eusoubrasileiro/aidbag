@@ -1,4 +1,5 @@
 from ....web import htmlscrap
+import sys 
 
 from .util import (
     fmtPname
@@ -12,6 +13,10 @@ scm_timeout=(2*60)
 
 urls = { 'dadosbasicos' : scm_dados_processo_main_url,
          'poligonal' : scm_dados_processo_main_url } 
+
+class ErrorProcessSCM(Exception):
+    """Object reference not set to an instance of an object. 
+    Could not fetch process from SCM. Probably missing or corrupted on the database."""
 
 def pageRequest(pagename, processostr, wpage, fmtName=True):
     """   Get & Post na página dados do Processo do Cadastro  Mineiro (SCM)
@@ -35,8 +40,14 @@ def pageRequest(pagename, processostr, wpage, fmtName=True):
             'ctl00$conteudo$btnConsultarProcesso': 'Consultar',
             '__VIEWSTATEENCRYPTED': ''}
         formdata = htmlscrap.formdataPostAspNet(wpage.response, formcontrols)
-        wpage.post(scm_dados_processo_main_url,
+        try:
+            wpage.post(scm_dados_processo_main_url,
                     data=formdata, timeout=scm_timeout)
+        except htmlscrap.requests.exceptions.HTTPError as http_error:
+            if "Object reference not set to an instance of an object" in wpage.response.text:                
+                raise ErrorProcessSCM(f"Processo {processostr} corrupted on SCM database. Couldn't download.")
+            else: # connection, authentication errors or others... must re-raise
+                raise
         return wpage.response
     if pagename == 'poligonal': # first connection to 'dadosbasicos' above MUST have been made before
         pageRequest('dadosbasicos', processostr, wpage) # ask basicos first

@@ -182,7 +182,7 @@ class Processo:
                     Also make the search spread outward only"""
                 proc = Processo.Get(name, wp, SCM_SEARCH.NONE, verbosity, run=False)
                 # must use runtask due multiple threads running
-                proc.runTask(SCM_SEARCH.BASICOS)                 
+                proc.runTask(SCM_SEARCH.BASICOS)
                 proc.runTask(task=(proc._expandAssociados, {'ass_ignore':ignore}))
                 return proc
             # ignoring empty lists 
@@ -199,13 +199,21 @@ class Processo:
                     #for future in concurrent.futures.as_completed(future_processes):         
                     for process_name, future_process in future_processes.items():               
                         try:
-                            # add to process name, property 'obj' process objects
+                            # add to process name, property 'obj' process objects                            
                             self.associados[process_name].update({'obj': future_process.result()})
-                        except Exception as exc:
-                            print("Exception raised while running expandAssociados thread for process",
-                                process_name, file=sys.stderr)     
-                            print(traceback.format_exc(), file=sys.stderr, flush=True)     
-                            raise(exc)                  
+                        except Exception as e:                            
+                            print(f"Exception raised while running expandAssociados thread for process {process_name}",
+                                file=sys.stderr)     
+                            if type(e) is requests.ErrorProcessSCM:
+                                # MUST delete process if did not get scm page
+                                # since basic data wont be on it, will break ancestry search etc... 
+                                del ProcessStorage[process_name]
+                                del self.associados[process_name]
+                                print(str(e) + f" Removed from associados. Exception ignored!",
+                                    file=sys.stderr)
+                            else:
+                                print(traceback.format_exc(), file=sys.stderr, flush=True)     
+                                raise # re-raise                  
             if self._verbose:
                 with mutex:
                     print("expandAssociados - finished associados: ", self.name, file=sys.stderr)
@@ -413,16 +421,16 @@ class Processo:
         processo = None
         processostr = fmtPname(processostr)
         if processostr in ProcessStorage:
-            if verbose: # only for pretty orinting
+            if verbose: # only for pretty printing
                 with mutex:
                     print("Processo __new___ getting from storage ", processostr, file=sys.stderr)
             processo = ProcessStorage[processostr]
         else:
-            if verbose: # only for pretty orinting
+            if verbose: # only for pretty printing
                 with mutex:
                     print("Processo __new___ placing on storage ", processostr, file=sys.stderr)
         processo = Processo(processostr, wpagentlm,  verbose)
-        ProcessStorage[processostr] = processo   # store this new guy
+        ProcessStorage[processostr] = processo   # store this new guy 
         if run: # wether run the task, dont run when loading from file/str
             processo.runTask(dados)
         return processo

@@ -88,11 +88,11 @@ class wPage: # html  webpage scraping with soup and requests
 
     def post(self, arg, save=True, **kwargs):
         """save : save response overwriting the last"""
-        resp = self.session.post(arg, **kwargs)
-        resp.raise_for_status() # Raises HTTPError, if one occurred.
-        # https://stackoverflow.com/a/16511493/1207193 - like 401 Unauthorized
+        resp = self.session.post(arg, **kwargs)        
         if save:
             self.response = resp        
+        resp.raise_for_status() # Raises HTTPError, if one occurred.
+        # https://stackoverflow.com/a/16511493/1207193 - like 401 Unauthorized
         return resp
 
     def get(self, arg, save=True, **kwargs):
