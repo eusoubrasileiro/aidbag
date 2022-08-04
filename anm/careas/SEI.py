@@ -7,6 +7,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select # drop down select
 from selenium.common import exceptions
 import time, sys
+from bs4 import BeautifulSoup
+import re 
 
 
 class SEI:
@@ -119,6 +121,44 @@ class SEI:
         # of refreshing delay
         time.sleep(3)
         self.driver.switch_to.default_content()
+
+
+    def processAbrirPastas(self):
+        """abrir pastas documentos on processo"""
+        
+        self.driver.switch_to.default_content()
+        
+        wait(self.driver, 10).until( # then go to frame panel left
+            expected_conditions.frame_to_be_available_and_switch_to_it(
+            (By.CSS_SELECTOR,'iframe#ifrArvore')))
+        
+        webe = self.driver.find_element(By.CSS_SELECTOR, "a[href*='fechar_pastas'")
+        
+        if not webe.is_displayed(): # if not openned already
+            abrir_pastas = wait(self.driver, 10).until(
+                expected_conditions.presence_of_element_located(
+                (By.CSS_SELECTOR,"a[href*='abrir_pastas'")))
+            # since it is in a permanent overlay by other elements of the page
+            # https://stackoverflow.com/a/46601444/1207193
+            # no other option then click in it using javascript
+            id = abrir_pastas.get_attribute('id')
+            self.driver.execute_script(f"document.getElementById('{id}').click()")
+        
+    def processListDocs(self):
+        """return a list of pairs
+            [ doc title, doc protocol number ...]
+            for each doc on documents tree
+        """        
+        self.processAbrirPastas()
+        soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+        edocs = soup.select("a.clipboard + a span:first-child") # getting all docs on process
+        # len(docs)
+        docs = []
+        for edoc in edocs[1:]: #ignore first that's the process NUP
+            nup = re.search('(\d{6,})', edoc['title']).group() 
+            name = re.sub("[()]", "", edoc['title'].replace(nup, '')).strip() # anything except ( )            
+            docs.append([name, nup])
+        return docs 
 
     def processBarCmdsReopen(self):
         """Return reopen button from `processBarCmds`
