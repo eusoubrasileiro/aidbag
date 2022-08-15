@@ -1,4 +1,3 @@
-import tqdm
 import glob
 import os
 import sys
@@ -6,24 +5,29 @@ import traceback
 import shutil
 import json
 import re 
+import tqdm
 from pathlib import Path
 from datetime import datetime
-from bs4 import BeautifulSoup
+from PyPDF2 import PdfReader
 
 from . import estudos
 from . import scm
 from ...web import htmlscrap
-from .SEI import *
+
+from .sei import *
+from .sei.docs import *
+from .sei.config import (
+    mcodigos,
+    docs_externos,
+    SEI_DOCS
+)
+
 from .scm.parsing import (
     select_fields
     )
 
-
 from .constants import (
-    mcodigos,
-    docs_externos,
-    config,    
-    SEI_DOCS
+    config
     )
 
 from .scm.util import regex_process
@@ -97,9 +101,6 @@ def currentProcessMove(process_str, dest_folder='Concluidos',
     with open(processpath_json, "w") as f: # Serialize 
         json.dump(ProcessPathStorage, f)
 
-
-
-from PyPDF2 import PdfReader
     
 def readPdfText(filename):
     reader = PdfReader(filename)   
@@ -111,189 +112,6 @@ def readPdfText(filename):
     
 __debugging__ = False
 
-def IncluiDocumentoExternoSEI(sei, ProcessoNUP, doc=0, pdf_path=None):
-    """
-    Inclui pdf como documento externo no SEI
-
-    doc :
-        0  - Estudo      - 'de Retirada de Interferência'
-        1  - Minuta      - 'Pré de Alvará'
-        2  - Minuta      - 'de Licenciamento'
-        3  - Estudo      - 'de Opção'
-        4  - Minuta      - 'de Portaria de Lavra'
-        5  - Minuta      - 'de Permissão de Lavra Garimpeira'
-        6  - Formulario  - '1 Análise de Requerimento de Lavra'
-
-    pdf_path :
-        if None cria sem anexo
-    """
-    sei.Pesquisa(ProcessoNUP) # Entra neste processo
-    sei.ProcessoIncluiDoc(0) # Inclui Externo
-    # Preenchendo
-    sei.driver.find_element(By.ID,'selSerie').send_keys(docs_externos[doc]['tipo']) # Tipo de Documento
-    # Data do Documento
-    sei.driver.find_element(By.ID,'txtDataElaboracao').send_keys(datetime.today().strftime('%d/%m/%Y')) # put TODAY
-    sei.driver.find_element(By.ID,'txtNumero').send_keys(docs_externos[doc]['desc']) # Nome na Arvore
-    sei.driver.find_element(By.ID,'optNato').click() #   Nato-digital
-    sei.driver.find_element(By.ID,'lblPublico').click() # Publico
-    if pdf_path is not None: # existe documento para anexar
-        file = sei.driver.find_element(By.ID,'filArquivo') # Upload PDF
-        file.send_keys(pdf_path)
-    # save = sei.driver.find_element(By.ID,'btnSalvar')
-    save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'btnSalvar')))
-    save.click()
-    try :
-        # wait 5 seconds
-        alert = wait(sei.driver, 5).until(expected_conditions.alert_is_present()) # may sometimes show
-        alert.accept()
-    except:
-        pass
-    sei.driver.switch_to.default_content() # go back to main document
-
-def IncluiDeclaracao(sei, ProcessoNUP, idxcodigo):
-    """
-    Inclui Declaração - por index código modelo favorito
-    """
-    mcodigo = mcodigos[idxcodigo]
-    sei.Pesquisa(ProcessoNUP) # Entra neste processo
-    sei.ProcessoIncluiDoc(4) # modelo favorito
-    sei.driver.find_element(By.ID,'lblProtocoloDocumentoTextoBase').click() # Documento Modelo
-    sei.driver.find_element(By.ID,'txtProtocoloDocumentoTextoBase').send_keys(mcodigo)
-    sei.driver.find_element(By.ID,'lblPublico').click() # Publico
-    save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'btnSalvar')))
-    save.click()
-    try :
-        # wait 5 seconds
-        alert = wait(sei.driver, 5).until(expected_conditions.alert_is_present()) # may sometimes show
-        alert.accept()
-    except:
-        pass
-    sei.driver.switch_to.default_content() # go back to main document
-
-#Divisão de Fiscalização da Mineração de Não Metálicos (DFMNM-MG)
-#Setor de Controle e Registro (SECOR-MG)
-def IncluiDespacho(sei, ProcessoNUP, idxcodigo, 
-    setor=u"Setor de Controle e Registro (SECOR-MG)", 
-    assinar=False):
-    """
-    Inclui Despacho - por index código
-    """
-    mcodigo = mcodigos[idxcodigo]
-    sei.Pesquisa(ProcessoNUP) # Entra neste processo
-    sei.ProcessoIncluiDoc(1) # Despacho
-    sei.driver.find_element(By.ID,'lblProtocoloDocumentoTextoBase').click() # Documento Modelo
-    sei.driver.find_element(By.ID,'txtProtocoloDocumentoTextoBase').send_keys(mcodigo)
-    sei.driver.find_element(By.ID,'txtDestinatario').send_keys(setor)
-    destinatario_set = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'divInfraAjaxtxtDestinatario')))
-    destinatario_set.click() # wait a little pop-up show up to click or send ENTER
-    # sei.driver.find_element(By.ID,'txtDestinatario').send_keys(Keys.ENTER) #ENTER
-    sei.driver.find_element(By.ID,'lblPublico').click() # Publico
-    save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'btnSalvar')))
-    save.click()
-    try :
-        # wait 5 seconds
-        alert = wait(sei.driver, 5).until(expected_conditions.alert_is_present()) # may sometimes show
-        alert.accept()
-    except:
-        pass
-    sei.driver.switch_to.default_content() # go back to main document
-
-def EscreveDespacho(sei, ProcessoNUP, texto):
-    """
-    Escreve Despacho no `ProcessoNUP` usando string `texto`
-    """
-    sei.Pesquisa(ProcessoNUP) # Entra neste processo
-    sei.ProcessoIncluiDoc(1) # Despacho
-    sei.driver.find_element(By.ID,'txtDestinatario').send_keys(u"Setor de Controle e Registro (SECOR-MG)")
-    destinatario_set = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'divInfraAjaxtxtDestinatario')))
-    destinatario_set.click() # wait a little pop-up show up to click or send ENTER
-    # sei.driver.find_element(By.ID,'txtDestinatario').send_keys(Keys.ENTER) #ENTER
-    sei.driver.find_element(By.ID,'lblPublico').click() # Publico
-    save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'btnSalvar')))
-    save.click()
-    try : # may take a long time to lood the pop up
-        # wait 10 seconds
-        alert = wait(sei.driver, 10).until(expected_conditions.alert_is_present()) # may sometimes show
-        alert.accept()
-    except:
-        pass
-
-    wait(sei.driver, 10).until(expected_conditions.number_of_windows_to_be(2))
-    # text window now open, but list of handles is not ordered
-    textwindow = [hnd for hnd in sei.driver.window_handles if hnd != sei.mainwindow ][0]
-    sei.driver.switch_to.window(textwindow) # go to text pop up window
-    sei.driver.switch_to.default_content() # go to parent main document
-    
-    # this is the one that can take the longest time of ALL
-    wait(sei.driver, 20).until( # then go to frame of input text 
-        expected_conditions.frame_to_be_available_and_switch_to_it(
-        (By.CSS_SELECTOR,"iframe[aria-describedby='cke_244']")))
-
-    inputtext = sei.driver.find_element(By.CSS_SELECTOR, 'body[contenteditable="true"]')
-
-    inputtext.clear()
-    for line in texto.split('\n'):  # split by lines
-        inputtext.send_keys(line) # type in each line - must use keys like bellow
-        inputtext.send_keys(Keys.ENTER) # create a new line
-        #inputtext.send_keys(Keys.BACKSPACE) # go back to its beginning
-
-    sei.driver.switch_to.default_content() # go to parent main iframe document    
-    save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'cke_202')))
-    save.click() 
-    # to make sure it has finnished saving we have to wait until 
-    # 1. save button becames visible inactive and 
-    wait(sei.driver, 10).until(expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, 
-        "#cke_202[class='cke_button cke_button__save cke_button_disabled']")))    
-    # 2. any other button becomes clickable again (like button assinar)
-    wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.CSS_SELECTOR, 
-        "#cke_204[class='cke_button cke_button__assinatura cke_button_off']")))    
-    # than we can close
-    sei.driver.close() # close text window
-
-    wait(sei.driver, 10).until(expected_conditions.number_of_windows_to_be(1))
-    sei.driver.switch_to.window(sei.mainwindow) # go back to main window
-    sei.driver.switch_to.default_content() # go to parent main document
-    # to not stale the window have to go to it again to the following task
-    sei.Pesquisa(ProcessoNUP) 
-
-def IncluiParecer(sei, ProcessoNUP, idxcodigo=0):
-    """
-    Inclui Parecer
-    idxcodigo : int index
-        default retificaçaõ de alvará = 0
-    """
-    mcodigo = mcodigos[idxcodigo]
-    sei.Pesquisa(ProcessoNUP) # Entra neste processo
-    sei.ProcessoIncluiDoc(2) # Parecer
-    sei.driver.find_element(By.ID,'lblProtocoloDocumentoTextoBase').click() # Documento Modelo
-    sei.driver.find_element(By.ID,'txtProtocoloDocumentoTextoBase').send_keys(mcodigo)
-    sei.driver.find_element(By.ID,'lblPublico').click() # Publico
-    save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'btnSalvar')))
-    save.click()
-    try :
-        # wait 5 seconds
-        alert = wait(sei.driver, 5).until(expected_conditions.alert_is_present()) # may sometimes show
-        alert.accept()
-    except:
-        pass
-    sei.driver.switch_to.default_content() # go back to main document
-
-def IncluiTermoAberturaPE(sei, ProcessoNUP):
-    """
-    Inclui Termo de Abertura de Processo Eletronico
-    """
-    sei.Pesquisa(ProcessoNUP) # Entra neste processo
-    sei.ProcessoIncluiDoc(3) # Termo de Abertura
-    sei.driver.find_element(By.ID,'lblPublico').click() # Publico
-    save = wait(sei.driver, 10).until(expected_conditions.element_to_be_clickable((By.ID, 'btnSalvar')))
-    save.click()
-    try :
-        # wait 5 seconds
-        alert = wait(sei.driver, 5).until(expected_conditions.alert_is_present()) # may sometimes show
-        alert.accept()
-    except:
-        pass
-    sei.driver.switch_to.default_content() # go back to main document
 
 def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False):
     """
@@ -426,15 +244,15 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
     if infer: # infer from tipo, fase 
         if 'licen' in tipo.lower():
             # Inclui Estudo pdf como Doc Externo no SEI
-            IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
+            InsereDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
             # 2 - Minuta - 'de Licenciamento'
-            IncluiDocumentoExternoSEI(sei, NUP, 2, pdf_adicional)
+            InsereDocumentoExternoSEI(sei, NUP, 2, pdf_adicional)
             IncluiDespacho(sei, NUP, 3) # - Recomenda análise de plano
         elif 'garimpeira' in tipo.lower():
             if 'requerimento' in fase.lower(): # Minuta de P. de Lavra Garimpeira
                 # Inclui Estudo pdf como Doc Externo no SEI
-                IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
-                IncluiDocumentoExternoSEI(sei, NUP, 5, pdf_adicional)
+                InsereDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
+                InsereDocumentoExternoSEI(sei, NUP, 5, pdf_adicional)
                 IncluiDespacho(sei, NUP, 3) # - Recomenda análise de plano
         else:
             # tipo - requerimento de cessão parcial ou outros
@@ -442,12 +260,12 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
                 # parecer de retificação de alvará
                 IncluiParecer(sei, NUP, 0)
                 # Inclui Estudo pdf como Doc Externo no SEI
-                IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
-                IncluiDocumentoExternoSEI(sei, NUP, 4, pdf_adicional)
+                InsereDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
+                InsereDocumentoExternoSEI(sei, NUP, 4, pdf_adicional)
                 # Adicionado manualmente depois o PDF gerado
                 # com links p/ SEI
-                IncluiDocumentoExternoSEI(sei, NUP, 6, None)
-                IncluiDeclaracao(sei, NUP, 14) # 14 Informe: Requerimento de Lavra Formulario 1 realizado
+                InsereDocumentoExternoSEI(sei, NUP, 6, None)
+                InsereDeclaracao(sei, NUP, 14) # 14 Informe: Requerimento de Lavra Formulario 1 realizado
                 # 15 - Para DFMNM: Requerimento aguardar cunprimento de exigências
                 IncluiDespacho(sei, NUP, 15, 
                     setor=u"Divisão de Fiscalização da Mineração de Não Metálicos (DFMNM-MG)") 
@@ -456,14 +274,14 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
                 # IncluiDespacho(sei, NUP, 9) # - Recomenda c/ retificação de alvará
             elif 'pesquisa' in tipo.lower(): # Requerimento de Pesquisa - 1 - Minuta - 'Pré de Alvará'
                 # Inclui Estudo pdf como Doc Externo no SEI
-                IncluiDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)                
+                InsereDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)                
                 if pdf_adicional is None:
                     if p_area == -1:                    
                         IncluiDespacho(sei, NUP, 2) # - Recomenda interferencia total
                     else:
                         IncluiDespacho(sei, NUP, 3) # - Recomenda opção
                 else:
-                    IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)
+                    InsereDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)
                     if p_area < 96.0: # > 4% change notificar 
                         IncluiDespacho(sei, NUP, 0) # - Recomenda análise de plano c/ notificação titular
                     else:
@@ -471,8 +289,8 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
         #     pass
     else: # dont infer, especify explicitly        
         if sei_doc == SEI_DOCS.REQUERIMENTO_OPCAO_ALVARA: # opção de área na fase de requerimento                
-            IncluiDocumentoExternoSEI(sei, NUP, 3, pdf_interferencia) # estudo opção
-            IncluiDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)  # minuta alvará
+            InsereDocumentoExternoSEI(sei, NUP, 3, pdf_interferencia) # estudo opção
+            InsereDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)  # minuta alvará
             IncluiDespacho(sei, NUP, 13)  # despacho  análise de plano alvará
 
     sei.ProcessoAtribuir() # default elaine - better do by hand
@@ -481,6 +299,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
     sei.closeOtherWindows()
     if verbose:
         print(NUP)
+
 
 
 def IncluiDocumentosSEIFolders(sei, process_folders, path='Processos', **kwargs):
@@ -497,6 +316,8 @@ def IncluiDocumentosSEIFolders(sei, process_folders, path='Processos', **kwargs)
         except Exception:
             print("Process {:} Exception: ".format(folder_name), traceback.format_exc(), file=sys.stderr)           
             continue
+        
+
 
 def IncluiDocumentosSEIFoldersFirstN(sei, nfirst=1, path='Processos', **kwargs):
     """
