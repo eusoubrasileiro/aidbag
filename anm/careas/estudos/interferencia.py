@@ -7,7 +7,7 @@ from datetime import datetime
 from ..constants import config, processPathSecor
 from ..scm import *
 from ....web import htmlscrap 
-from ..SEI import *
+
 
 # fases necessarias e obrigatorias para retirada de interferencia 
 interferencia_fases = ['Requerimento de Pesquisa', 'Direito de Requerer a Lavra', 
