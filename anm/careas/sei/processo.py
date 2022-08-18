@@ -1,7 +1,15 @@
-from .cls import Sei
-from ....web.selenium import *
-from . import *
 from datetime import datetime
+from enum import auto, Enum
+
+from ....web.selenium import *
+from .cls import Sei
+from .config import *
+
+class BARRACOMANDOS_STATE(Enum):
+    MAIN_OPEN = 1 # it's the main barra comandos and the process is open
+    MAIN_CLOSED_CAN_OPEN = 2
+    MAIN_CLOSED_CANT_OPEN = 3 # it's the main barra comandos and the process is closed
+    DOC = 4 # it's and documents bar 
 
 class Processo(Sei):
     def __init__(self, processnup, user, passwd, headless=True, login=False, webdriver=None):
@@ -35,7 +43,7 @@ class Processo(Sei):
         return processo 
     
     def mainMenu(self):
-        """back to main menu processo"""
+        """back to main menu processo"""            
         wait_for_ready_state_complete(self.driver)
         self.driver.switch_to.default_content() # go to default frame  
         switch_to_frame(self.driver, "iframe#ifrArvore") # frame panel left
@@ -44,52 +52,53 @@ class Processo(Sei):
         self.driver.switch_to.default_content()        
         
     def _barraComandos(self):
-        self.mainMenu()
-        switch_to_frame(self.driver, 'iframe#ifrVisualizacao')
-        # wait for infraBarraComandos botoes available       
-        wait_until(self.driver, 'div#divArvoreAcoes.infraBarraComandos', 
-            expected_conditions.presence_of_all_elements_located)
-        botoes = find_elements(self.driver, ".botaoSEI")   
-        return botoes 
+        try:
+            # if div#detalhes is present barra commands is alredy openned
+            find_element(self.driver,'div#divArvoreHtml div#detalhes')
+        except NoSuchElementException:
+            self.mainMenu()
+            switch_to_frame(self.driver, 'iframe#ifrVisualizacao')
+            # wait for infraBarraComandos botoes available       
+            wait_until(self.driver, 'div#divArvoreAcoes.infraBarraComandos', 
+                expected_conditions.presence_of_all_elements_located)    
+    
+    def barraComandosState(self):
+        self._barraComandos()
+        nbuttons = len(find_elements(self.driver, ".botaoSEI"))
+        if nbuttons == 22:
+            return BARRACOMANDOS_STATE.MAIN_OPEN
+        elif nbuttons == 9:
+            try : 
+                find_element(self.driver, "div#divArvoreAcoes.infraBarraComandos a[onclick*='reabrir']")                
+            except NoSuchElementException:
+                return BARRACOMANDOS_STATE.MAIN_CLOSED_CANT_OPEN   
+            return  BARRACOMANDOS_STATE.MAIN_CLOSED_CAN_OPEN       
 
     def barraComandos(self, index):           
         """
         barra comandos list of by index
-            0 - incluir documento
-            3 - acompanhamento especial
+            1 - incluir documento
+            20 - gerenciar marcador
         """
-        botoes = self._barraComandos()
-        if len(botoes) <= 9:            
-            print(f"Processo {self.ProcessoNUP} não aberto nesta unidade.")
-            print(f"Tentando reabrir.")
-            try : 
-                click(self.driver, "img[title='Reabrir Processo']")
-            except:
-                raise Exception(f"Processo {self.nup} nunca aberto nesta unidade")             
+        state = self.barraComandosState()
+        if BARRACOMANDOS_STATE.MAIN_CLOSED_CAN_OPEN in state:            
+            click(self.driver, "img[title='Reabrir Processo']")
+        elif BARRACOMANDOS_STATE.MAIN_CLOSED_CANT_OPEN:
+            raise Exception(f"Processo {self.nup} nunca aberto nesta unidade")  
         # safer and more efficient to use click
         click(self.driver, f'div.infraBarraComandos a:nth-of-type({index+1})')   
                  
     def isOpen(self):
-        """return True if `processBarCmds` len is 22"""
-        try : 
-            lenbarcmds = len(self._barraComandos())
-        except: # if not open may not even show the processbar buttons
-            return False 
-        else:
-            return lenbarcmds == 22
-        # 4 reabrir processo if len <=9     
+        """processo aberto nesta unidade"""
+        return self.barraComandosState() == BARRACOMANDOS_STATE.MAIN_OPEN
 
-    def atribuir(self, pessoa='elaine.marques - Elaine Cristina Pimenta Marques'):
-        self.barCmdsClick(7) # botao[7] atribuir
-        drop_down = wait(self.driver, 10).until(
-            expected_conditions.element_to_be_clickable((By.ID, 'selAtribuicao')))
-        select = Select(drop_down)
+    def atribuir(self, pessoa=config['sei']['atribuir_default']):
+        self.barraComandos(8)         
+        dropdown = wait_for_element_visible(self.driver,'select#selAtribuicao')
+        select = Select(dropdown)
         select.select_by_visible_text(pessoa)
         select.first_selected_option.click()
-        botoes = wait(self.driver, 10).until(
-            expected_conditions.presence_of_all_elements_located(
-            (By.CLASS_NAME, "infraButton")))
-        botoes[0].click() # Salvar
+        click(self.driver, "button#sbmSalvar")
         
     def _abrirPastas(self):
         """abrir pastas documentos on processo
@@ -111,7 +120,7 @@ class Processo(Sei):
         """        
         self._abrirPastas()
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-        self.driver.switch_to.default_content()
+        self.driver.switch_to.default_content() # was focused on frame left!
         edocs = soup.select("a.clipboard + a span:first-child") # getting all docs on process
         # len(docs)
         docs = {}
@@ -209,7 +218,7 @@ class Processo(Sei):
         try_accept_alert(self.driver)   
         self.driver.switch_to.default_content() # go back to main document        
         
-    def insereNotaTecnicaRequerimento(self, template_name, **kwargs):
+    def insereNotaTecnicaRequerimento(self, template_name, assinar=True, **kwargs):
         """analisa documentos e cria nota técnica sobre análise de interferência
         based on jinja2 template
         'area_porcentagem' must be passed as kwargs"""
@@ -237,6 +246,13 @@ class Processo(Sei):
                                         **kwargs)  # area_porcentagem must be passed as kwargs  
         elif 'sem_redução' in template_name:
             template = templateEnv.get_template("req_pesquisa_sem_redução.html")                
-            html_text = template.render(interferencia_sei=interferencia_np, minuta_sei=minuta_np)
-                                       
+            html_text = template.render(interferencia_sei=interferencia_np, minuta_sei=minuta_np)                                       
         self.insereNotaTecnica(html_text)
+        
+    def insirerMarcador(self, marcador=config['sei']['marcador_default']):
+        self.barraComandos(20)         
+        dropdown = wait_for_element_visible(self.driver,'div.dd-select')
+        select = Select(dropdown)
+        select.select_by_visible_text(marcador)
+        select.first_selected_option.click()
+        click(self.driver, "button[type=submit]")

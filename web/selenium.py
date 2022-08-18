@@ -41,7 +41,8 @@ def switch_to_frame(driver, selector, by=By.CSS_SELECTOR, timeout=10):
     * frame - the frame element, name, id, index, or selector
     * timeout - the time to wait for the alert in seconds
     """
-    wait_until(driver, selector, expected_conditions.frame_to_be_available_and_switch_to_it, by, timeout)
+    frame = wait_for_element_visible(driver, selector)
+    driver.switch_to.frame(frame)    
         
 
 def send_keys(driver, selector, text, by=By.CSS_SELECTOR, timeout=10, 

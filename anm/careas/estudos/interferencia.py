@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 
-from ..constants import config, processPathSecor
+from ..config import config, processPathSecor
 from ..scm import *
 from ....web import htmlscrap 
 
