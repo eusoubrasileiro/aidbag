@@ -143,7 +143,7 @@ class Processo(Sei):
         click(self.driver, f"tr[data-desc*='{texts[code].lower()}'] td a:last-child")    
                       
     
-    def insereDocumentoExternoSEI(self, doc=0, pdf_path=None):
+    def insereDocumentoExterno(self, doc=0, pdf_path=None):
         """
         Inclui pdf como documento externo no SEI
         doc :

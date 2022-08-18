@@ -11,28 +11,24 @@ from datetime import datetime
 from PyPDF2 import PdfReader
 
 from . import estudos
-from . import scm
+from .config import config
 from ...web import htmlscrap
-
-from .sei import *
-from .sei.docs import *
-from .sei.config import (
-    mcodigos,
-    docs_externos,
-    SEI_DOCS
-)
+from . import scm
+from .scm.util import regex_process
 
 from .scm.parsing import (
     select_fields
     )
 
-from .constants import (
-    config
+from .sei import (
+        Sei,
+        Processo,
+        docs_externos,
+        SEI_DOCS
     )
 
-from .scm.util import regex_process
 
-from aidbag.anm.careas import constants
+
 
 # Current Processes being worked on - features
 # tha means that workflows.py probably should be a package 
@@ -132,7 +128,7 @@ def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False):
                 proc = estudo.processo              
             elif tipo == 'opção':
                 proc = scm.Processo.Get(processo, wpage, dados=scm.SCM_SEARCH.BASICOS,verbose=False)
-                proc.salvaDadosBasicosHtml(constants.processPathSecor(proc))
+                proc.salvaDadosBasicosHtml(config.processPathSecor(proc))
         except Exception as e:  # too generic is masking errors that I don't care for??             
             print("Process {:} Exception: ".format(processo), traceback.format_exc(), file=sys.stderr)                       
             failed_NUPS.append(scm.ProcessStorage[scm.fmtPname(processo)]['NUP'])            
@@ -229,8 +225,10 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
     html = None
     process = scm.Processo.fromHtml(verbose=False) # default from current folder
     # get everything needed
-    NUP, tipo, fase = process['NUP'], process['tipo'], process['fase']
+    nup, tipo, fase = process['NUP'], process['tipo'], process['fase']
     data_protocolo = process['data_protocolo']    
+    
+    psei = Processo.fromSei(sei, nup)
        
     if empty:
         pdf_adicional = None
@@ -239,66 +237,73 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
     # Inclui termo de abertura de processo eletronico se data < 2020 (protocolo digital nov/2019)
     # to avoid placing IncluiTermoAberturaPE on processos puro digitais 
     if data_protocolo.year < 2020:  
-        IncluiTermoAberturaPE(sei, NUP)
+        psei.InsereTermoAberturaProcessoEletronico(nup)
 
     if infer: # infer from tipo, fase 
         if 'licen' in tipo.lower():
             # Inclui Estudo pdf como Doc Externo no SEI
-            InsereDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
+            psei.insereDocumentoExterno(0, pdf_interferencia)
             # 2 - Minuta - 'de Licenciamento'
-            InsereDocumentoExternoSEI(sei, NUP, 2, pdf_adicional)
-            IncluiDespacho(sei, NUP, 3) # - Recomenda análise de plano
+            psei.insereDocumentoExterno(2, pdf_adicional)
+            raise NotImplementedError()
+            # IncluiDespacho(sei, nup, 3) # - Recomenda análise de plano
         elif 'garimpeira' in tipo.lower():
             if 'requerimento' in fase.lower(): # Minuta de P. de Lavra Garimpeira
                 # Inclui Estudo pdf como Doc Externo no SEI
-                InsereDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
-                InsereDocumentoExternoSEI(sei, NUP, 5, pdf_adicional)
-                IncluiDespacho(sei, NUP, 3) # - Recomenda análise de plano
+                psei.insereDocumentoExterno(0, pdf_interferencia)
+                psei.insereDocumentoExterno(5, pdf_adicional)
+                raise NotImplementedError() 
+            # IncluiDespacho(sei, nup, 3) # - Recomenda análise de plano
         else:
             # tipo - requerimento de cessão parcial ou outros
             if 'lavra' in fase.lower(): # minuta portaria de Lavra
                 # parecer de retificação de alvará
-                IncluiParecer(sei, NUP, 0)
+                #IncluiParecer(sei, nup, 0)
                 # Inclui Estudo pdf como Doc Externo no SEI
-                InsereDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)
-                InsereDocumentoExternoSEI(sei, NUP, 4, pdf_adicional)
+                #InsereDocumentoExternoSEI(sei, nup, 0, pdf_interferencia)
+                #InsereDocumentoExternoSEI(sei, nup, 4, pdf_adicional)
                 # Adicionado manualmente depois o PDF gerado
                 # com links p/ SEI
-                InsereDocumentoExternoSEI(sei, NUP, 6, None)
-                InsereDeclaracao(sei, NUP, 14) # 14 Informe: Requerimento de Lavra Formulario 1 realizado
-                # 15 - Para DFMNM: Requerimento aguardar cunprimento de exigências
-                IncluiDespacho(sei, NUP, 15, 
-                    setor=u"Divisão de Fiscalização da Mineração de Não Metálicos (DFMNM-MG)") 
-                # 16 - Para SECOR-MG Expedição: Requerimento de Lavra para análise
-                IncluiDespacho(sei, NUP, 16)
+                #InsereDocumentoExternoSEI(sei, nup, 6, None)
+                #InsereDeclaracao(sei, nup, 14) # 14 Informe: Requerimento de Lavra Formulario 1 realizado
+                # 15 - xxxxxxxx
+                #IncluiDespacho(sei, nup, 15, 
+                #    setor=u"ccccxxxxx") 
+                # 16 - xxxxxxx
+                #IncluiDespacho(sei, nup, 16)
                 # IncluiDespacho(sei, NUP, 9) # - Recomenda c/ retificação de alvará
+                raise NotImplementedError() 
             elif 'pesquisa' in tipo.lower(): # Requerimento de Pesquisa - 1 - Minuta - 'Pré de Alvará'
                 # Inclui Estudo pdf como Doc Externo no SEI
-                InsereDocumentoExternoSEI(sei, NUP, 0, pdf_interferencia)                
+                psei.insereDocumentoExterno(0, pdf_interferencia)                
                 if pdf_adicional is None:
                     if p_area == -1:                    
-                        IncluiDespacho(sei, NUP, 2) # - Recomenda interferencia total
+                        # Recomenda interferencia total
+                        psei.insereNotaTecnicaRequerimento("interferência_total") 
                     else:
-                        IncluiDespacho(sei, NUP, 3) # - Recomenda opção
+                        # Recomenda interferencia total
+                        psei.insereNotaTecnicaRequerimento("opção")                         
                 else:
-                    InsereDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)
+                    psei.insereDocumentoExterno(1, pdf_adicional)   
                     if p_area < 96.0: # > 4% change notificar 
-                        IncluiDespacho(sei, NUP, 0) # - Recomenda análise de plano c/ notificação titular
+                        psei.insereNotaTecnicaRequerimento("com_redução", # com notificação titular
+                                area_porcentagem=str(p_area).replace('.',','))
                     else:
-                        IncluiDespacho(sei, NUP, 1) # - Recomenda Só análise de plano s/ notificação titular (mais comum)
+                        psei.insereNotaTecnicaRequerimento("sem_redução") # Recomenda Só análise de plano s/ notificação titular (mais comum)
         #     pass
     else: # dont infer, especify explicitly        
         if sei_doc == SEI_DOCS.REQUERIMENTO_OPCAO_ALVARA: # opção de área na fase de requerimento                
-            InsereDocumentoExternoSEI(sei, NUP, 3, pdf_interferencia) # estudo opção
-            InsereDocumentoExternoSEI(sei, NUP, 1, pdf_adicional)  # minuta alvará
-            IncluiDespacho(sei, NUP, 13)  # despacho  análise de plano alvará
-
-    sei.ProcessoAtribuir() # default elaine - better do by hand
+            # InsereDocumentoExternoSEI(sei, nup, 3, pdf_interferencia) # estudo opção
+            # InsereDocumentoExternoSEI(sei, nup, 1, pdf_adicional)  # minuta alvará
+            # IncluiDespacho(sei, nup, 13)  # despacho  análise de plano alvará
+            raise NotImplementedError() 
+        
+    psei.atribuir()
     os.chdir(cur_path) # restore original path , to not lock the folder-path
     # should also close the openned text window - going to previous state
-    sei.closeOtherWindows()
+    psei.closeOtherWindows()
     if verbose:
-        print(NUP)
+        print(nup)
 
 
 

@@ -9,23 +9,22 @@ from .scm import (
     numberyearPname,    
 )
 
-from .constants import (
+from .config import (
     config
 )
 
 from .util import ContaPrazo
-
-from .workflows import (
-    IncluiDocumentosSEIFolder, 
-    EscreveDespacho,
-    EstudoBatchRun,
-    IncluiDocumentosSEIFoldersFirstN,
-    folder_process
-)
 
 # needed for connection so better be here
 # widely visible from careas
 from ...web import (
     wPageNtlm,
     wPage
+)
+
+from .workflows import (
+    IncluiDocumentosSEIFolder, 
+    EstudoBatchRun,
+    IncluiDocumentosSEIFoldersFirstN,
+    folder_process
 )
