@@ -1,3 +1,4 @@
+from pickle import NONE
 from selenium.webdriver import Chrome
 from selenium.webdriver import ChromeOptions
 from selenium.common.exceptions import (
@@ -16,23 +17,23 @@ from selenium.common.exceptions import (
     )
 
 import json 
-
 import time, sys
 from bs4 import BeautifulSoup
 import re 
-
-from seleniumbase import BaseCase
-bs = BaseCase() 
-#bs.type()
-#driver = Chrome()       
-#bs.switch_to_default_content
+from enum import IntEnum
 
 
+class DELAY(IntEnum): # delay in miliseconds
+    NONE = 0
+    TINY = 50
+    SMALL = 500
+    BIG = 1000
+    HUGE = 3000
+    
         
 # Ideas mainly based on SeleniumBase 
 # since I could not make it usable for my use case
 # https://github.com/seleniumbase/SeleniumBase/blob/master/seleniumbase/fixtures/base_case.py
-
 
 def switch_to_frame(driver, selector, by=By.CSS_SELECTOR, timeout=10):
     """Wait for an iframe to appear, and switch to it. 
@@ -52,7 +53,7 @@ def send_keys(driver, selector, text, by=By.CSS_SELECTOR, timeout=10,
     Has multiple parts:
     - Find the element
     - Waits for the element to be visible.
-    - Waits for the element to be interactive.
+    - Waits for the element to be interactive. (not doing!)
     - Clears the text field. (not doing!)
     - Types in the new text.    
     - Hits Enter/Submit (if the text ends in '\\n').
@@ -64,9 +65,7 @@ def send_keys(driver, selector, text, by=By.CSS_SELECTOR, timeout=10,
     * timeout - how long to wait for the selector to be visible
     
     """
-    element = driver.find_element(by, selector)    
-    wait_until(driver, selector, expected_conditions.visibility_of_element_located, by, timeout)   
-    #wait(driver, 10).until(expected_conditions.visibility_of_element_located())             
+    element = wait_for_element_visible(driver, selector, by)              
     try:        
         if text.endswith("\n"): # send Enter also
             text = text + Keys.ENTER
@@ -76,7 +75,8 @@ def send_keys(driver, selector, text, by=By.CSS_SELECTOR, timeout=10,
         send_keys(driver, selector, text, by, timeout, retry_count-1)
 
 
-def click(driver, selector, by=By.CSS_SELECTOR, timeout=10, retry=3, jsclick=False):
+def click(driver, selector, by=By.CSS_SELECTOR, timeout=10, 
+          retry=3, jsclick=False, delay=DELAY.NONE):
     """This method 'click' to an element 
     
     Params
@@ -84,6 +84,9 @@ def click(driver, selector, by=By.CSS_SELECTOR, timeout=10, retry=3, jsclick=Fal
     * text - the new text to type into the text field
     * by - the type of selector to search by (Default: CSS Selector)
     * timeout - how long to wait for the selector to be visible
+    * retry - how many times try to click when exception happens
+    * jsclick - click using javascript
+    * delay - delay before click 
     """
     element = wait_until(driver, selector, 
                          expected_conditions.presence_of_element_located, by, timeout)   
@@ -93,6 +96,8 @@ def click(driver, selector, by=By.CSS_SELECTOR, timeout=10, retry=3, jsclick=Fal
             scrool_to_element(driver, element)
             element = wait_for_element_visible(driver, selector, by)            
             # dont use wait for element to be clickable - seleniumbase method
+            if delay != DELAY.NONE:
+                time.sleep(float(delay.value)*0.001)
             element.click()
         except StaleElementReferenceException:
             wait_for_ready_state_complete(driver)
@@ -106,6 +111,8 @@ def click(driver, selector, by=By.CSS_SELECTOR, timeout=10, retry=3, jsclick=Fal
             # href = element.get_attribute('href')
             # driver.open(href)
     else:
+        if delay != DELAY.NONE:
+            time.sleep(float(delay.value)*0.001)
         # did not work wit selenium try with javascript
         # possible is in a permanent overlay by other elements of the page
         # so it'll never be 'clickable'
@@ -147,7 +154,7 @@ def try_accept_alert(driver):
     
 
 # from seleniumbase/fixtures/js_utils.py
-def wait_for_ready_state_complete(driver, timeout=3):
+def wait_for_ready_state_complete(driver, timeout=4):
     """
     The DOM (Document Object Model) has a property called "readyState".
     When the value of this becomes "complete", page resources are considered

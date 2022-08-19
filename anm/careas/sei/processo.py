@@ -58,10 +58,9 @@ class Processo(Sei):
         except NoSuchElementException:
             self.mainMenu()
             switch_to_frame(self.driver, 'iframe#ifrVisualizacao')
-            # wait for infraBarraComandos botoes available       
-            wait_until(self.driver, 'div#divArvoreAcoes.infraBarraComandos', 
-                expected_conditions.presence_of_all_elements_located)    
-    
+            # wait for infraBarraComandos botoes available   
+            wait_for_element_visible(self.driver, 'div#divArvoreAcoes.infraBarraComandos')    
+            
     def barraComandosState(self):
         self._barraComandos()
         nbuttons = len(find_elements(self.driver, ".botaoSEI"))
@@ -78,21 +77,22 @@ class Processo(Sei):
         """
         barra comandos list of by index
             1 - incluir documento
+            8 - atribuir
             20 - gerenciar marcador
         """
         state = self.barraComandosState()
-        if BARRACOMANDOS_STATE.MAIN_CLOSED_CAN_OPEN in state:            
+        if state == BARRACOMANDOS_STATE.MAIN_CLOSED_CAN_OPEN :            
             click(self.driver, "img[title='Reabrir Processo']")
-        elif BARRACOMANDOS_STATE.MAIN_CLOSED_CANT_OPEN:
+        elif state == BARRACOMANDOS_STATE.MAIN_CLOSED_CANT_OPEN:
             raise Exception(f"Processo {self.nup} nunca aberto nesta unidade")  
         # safer and more efficient to use click
-        click(self.driver, f'div.infraBarraComandos a:nth-of-type({index+1})')   
+        click(self.driver, f'div.infraBarraComandos a:nth-of-type({index})')   
                  
     def isOpen(self):
         """processo aberto nesta unidade"""
         return self.barraComandosState() == BARRACOMANDOS_STATE.MAIN_OPEN
 
-    def atribuir(self, pessoa=config['sei']['atribuir_default']):
+    def atribuir(self, pessoa):
         self.barraComandos(8)         
         dropdown = wait_for_element_visible(self.driver,'select#selAtribuicao')
         select = Select(dropdown)
@@ -138,10 +138,9 @@ class Processo(Sei):
             2  - 'Nota Tecnica' - only one to be used!
         """
         texts = [ 'Externo', 'Termo de Abertura de Processo Eletronico', 'Nota Tecnica']
-        self.barraComandos(0)  # botao[0] incluir doc
+        self.barraComandos(1)  # botao incluir doc
         # *= contains text in lowercase
-        click(self.driver, f"tr[data-desc*='{texts[code].lower()}'] td a:last-child")    
-                      
+        click(self.driver, f"tr[data-desc*='{texts[code].lower()}'] td a:last-child", delay=DELAY.SMALL)                          
     
     def insereDocumentoExterno(self, doc=0, pdf_path=None):
         """
@@ -165,10 +164,12 @@ class Processo(Sei):
         click(self.driver, '#lblPublico.infraLabelRadio') # Publico
         if pdf_path is not None: # existe documento para anexar
             send_keys(self.driver, 'input#filArquivo', pdf_path) # upload by path
-        click(self.driver, 'button#btnSalvar')        
+            wait_for_ready_state_complete(self.driver) # wait for upload complete
+        click(self.driver, 'button#btnSalvar', delay=DELAY.BIG)        
         # alert may sometimes show for 'duplicated' documents     
         try_accept_alert(self.driver)   
         self.driver.switch_to.default_content() # go back to main document
+        wait_for_ready_state_complete(self.driver) # wait for upload complete
         
         
     def insereNotaTecnica(self, htmltext):
@@ -249,10 +250,8 @@ class Processo(Sei):
             html_text = template.render(interferencia_sei=interferencia_np, minuta_sei=minuta_np)                                       
         self.insereNotaTecnica(html_text)
         
-    def insirerMarcador(self, marcador=config['sei']['marcador_default']):
-        self.barraComandos(20)         
-        dropdown = wait_for_element_visible(self.driver,'div.dd-select')
-        select = Select(dropdown)
-        select.select_by_visible_text(marcador)
-        select.first_selected_option.click()
+    def insereMarcador(self, marcador):
+        self.barraComandos(20)                  
+        click(self.driver, 'div.dd-select')
+        click(self.driver, f"//li//label[text()='{marcador}']", by=By.XPATH)        
         click(self.driver, "button[type=submit]")

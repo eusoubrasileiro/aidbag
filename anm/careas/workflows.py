@@ -229,6 +229,13 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
     data_protocolo = process['data_protocolo']    
     
     psei = Processo.fromSei(sei, nup)
+    
+    if verbose and __debugging__:
+        print(f"percentage_area {p_area}")
+        print(f"pdf_interferencia {pdf_interferencia}")
+        print(f"pdf_adicional {pdf_adicional}")
+        print(f"tipo {tipo.lower()}")
+        print(f"fase {fase.lower()}")        
        
     if empty:
         pdf_adicional = None
@@ -297,8 +304,8 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
             # InsereDocumentoExternoSEI(sei, nup, 1, pdf_adicional)  # minuta alvará
             # IncluiDespacho(sei, nup, 13)  # despacho  análise de plano alvará
             raise NotImplementedError() 
-        
-    psei.atribuir()
+    psei.insereMarcador(config['sei']['marcador_default'])
+    psei.atribuir(config['sei']['atribuir_default'])
     os.chdir(cur_path) # restore original path , to not lock the folder-path
     # should also close the openned text window - going to previous state
     psei.closeOtherWindows()
