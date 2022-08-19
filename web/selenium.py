@@ -41,7 +41,7 @@ def switch_to_frame(driver, selector, by=By.CSS_SELECTOR, timeout=10):
     * frame - the frame element, name, id, index, or selector
     * timeout - the time to wait for the alert in seconds
     """
-    frame = wait_for_element_visible(driver, selector)
+    frame = wait_for_element_visible(driver, selector, by)
     driver.switch_to.frame(frame)    
         
 
@@ -91,7 +91,7 @@ def click(driver, selector, by=By.CSS_SELECTOR, timeout=10, retry=3, jsclick=Fal
     if retry > 0 and not jsclick:
         try:
             scrool_to_element(driver, element)
-            element = wait_for_element_visible(driver, selector)            
+            element = wait_for_element_visible(driver, selector, by)            
             # dont use wait for element to be clickable - seleniumbase method
             element.click()
         except StaleElementReferenceException:
@@ -114,6 +114,14 @@ def click(driver, selector, by=By.CSS_SELECTOR, timeout=10, retry=3, jsclick=Fal
         if by == By.CSS_SELECTOR:
             # json dumpstring already fixes all ' or " quotes problems for javascript
             driver.execute_script(f"document.querySelector({json.dumps(selector)}).click()")
+        if by == By.XPATH:
+            getbyxpath_jscript = """
+            function getElementByXpath(path) {
+                return document.evaluate(path, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+            };
+            """
+            jscript = getbyxpath_jscript + f"getElementByXpath({json.dumps(selector)}).click();"
+            driver.execute_script(jscript)
         # assume it suceed
      
      
