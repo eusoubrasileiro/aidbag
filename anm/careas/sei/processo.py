@@ -140,7 +140,7 @@ class Processo(Sei):
         texts = [ 'Externo', 'Termo de Abertura de Processo Eletronico', 'Nota Tecnica']
         self.barraComandos(1)  # botao incluir doc
         # *= contains text in lowercase
-        click(self.driver, f"tr[data-desc*='{texts[code].lower()}'] td a:last-child", delay=DELAY.SMALL)                          
+        click(self.driver, f"tr[data-desc*='{texts[code].lower()}'] td a:last-child", delay=DELAY_SMALL)                          
     
     def insereDocumentoExterno(self, doc=0, pdf_path=None):
         """
@@ -164,10 +164,9 @@ class Processo(Sei):
         click(self.driver, '#lblPublico.infraLabelRadio') # Publico
         if pdf_path is not None: # existe documento para anexar
             send_keys(self.driver, 'input#filArquivo', pdf_path) # upload by path
-            wait_for_ready_state_complete(self.driver) # wait for upload complete
-        click(self.driver, 'button#btnSalvar', delay=DELAY.BIG)        
-        # alert may sometimes show for 'duplicated' documents     
-        try_accept_alert(self.driver)   
+        click(self.driver, 'button#btnSalvar') # this was problematic       
+        # alert may sometimes show for 'duplicated' documents             
+        try_accept_alerts(self.driver)   
         self.driver.switch_to.default_content() # go back to main document
         wait_for_ready_state_complete(self.driver) # wait for upload complete
         
@@ -216,7 +215,7 @@ class Processo(Sei):
         click(self.driver, '#lblPublico.infraLabelRadio') # Publico
         click(self.driver, 'button#btnSalvar')   
         # alert may sometimes show for 'duplicated' documents     
-        try_accept_alert(self.driver)   
+        try_accept_alerts(self.driver)   
         self.driver.switch_to.default_content() # go back to main document        
         
     def insereNotaTecnicaRequerimento(self, template_name, assinar=True, **kwargs):

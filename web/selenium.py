@@ -1,3 +1,4 @@
+from lib2to3.pgen2.driver import Driver
 from pickle import NONE
 from selenium.webdriver import Chrome
 from selenium.webdriver import ChromeOptions
@@ -23,13 +24,16 @@ import re
 from enum import IntEnum
 
 
-class DELAY(IntEnum): # delay in miliseconds
-    NONE = 0
-    TINY = 50
-    SMALL = 500
-    BIG = 1000
-    HUGE = 3000
+# delay in seconds
+DELAY_TINY = 0.050
+DELAY_SMALL = 0.500
+DELAY_BIG = 1.0
     
+# timoeut to element become visible in seconds
+TIMEOUT_MINI = 2
+TIMEOUT_SMALL = 7
+TIMEOUT_LARGE = 10
+TIMEOUT_EXTREME = 30    
         
 # Ideas mainly based on SeleniumBase 
 # since I could not make it usable for my use case
@@ -75,8 +79,8 @@ def send_keys(driver, selector, text, by=By.CSS_SELECTOR, timeout=10,
         send_keys(driver, selector, text, by, timeout, retry_count-1)
 
 
-def click(driver, selector, by=By.CSS_SELECTOR, timeout=10, 
-          retry=3, jsclick=False, delay=DELAY.NONE):
+def click(driver, selector, by=By.CSS_SELECTOR, timeout=TIMEOUT_SMALL, 
+          retry=3, jsclick=False, delay=0):
     """This method 'click' to an element 
     
     Params
@@ -88,20 +92,21 @@ def click(driver, selector, by=By.CSS_SELECTOR, timeout=10,
     * jsclick - click using javascript
     * delay - delay before click 
     """
-    element = wait_until(driver, selector, 
-                         expected_conditions.presence_of_element_located, by, timeout)   
-
     if retry > 0 and not jsclick:
-        try:
+        try:            
+            element = wait_for_element_visible(driver, selector, by, timeout)            
             scrool_to_element(driver, element)
-            element = wait_for_element_visible(driver, selector, by)            
+            #expected_conditions.element_to_be_clickable
             # dont use wait for element to be clickable - seleniumbase method
-            if delay != DELAY.NONE:
-                time.sleep(float(delay.value)*0.001)
+            if delay > 0:
+                time.sleep(delay)
+            if not element.is_enabled():
+                time.sleep(TIMEOUT_SMALL*0.25)
+                click(driver, selector, by, timeout, retry-1)
             element.click()
         except StaleElementReferenceException:
             wait_for_ready_state_complete(driver)
-            time.sleep(0.05)
+            time.sleep(0.16)
             click(driver, selector, by, timeout, retry-1)
         except ElementNotVisibleException: # element present but not visible
             click(driver, selector, by, timeout, jsclick=True)            
@@ -111,8 +116,8 @@ def click(driver, selector, by=By.CSS_SELECTOR, timeout=10,
             # href = element.get_attribute('href')
             # driver.open(href)
     else:
-        if delay != DELAY.NONE:
-            time.sleep(float(delay.value)*0.001)
+        if delay > 0:
+            time.sleep(delay)
         # did not work wit selenium try with javascript
         # possible is in a permanent overlay by other elements of the page
         # so it'll never be 'clickable'
@@ -144,23 +149,29 @@ def wait_until(driver, selector, expected_condition,
     return wait(driver, timeout).until(expected_condition((by, selector)))
 
 
-def try_accept_alert(driver):
-    """try dismiss aler if it shows up, if it doesn't dont botter"""
-    try :                
-        alert = wait(driver, 5).until(expected_conditions.alert_is_present()) 
-        alert.accept()
+def try_accept_alerts(driver, timeout=5):
+    """try dismiss alert as many as existent if it shows up, 
+    if it doesn't, dont botter"""
+    try :        
+        wait(driver, 5).until(expected_conditions.alert_is_present()) 
+        while True:
+            alert = driver.switch_to.alert
+            alert.accept()
+            alert.dismiss()
     except:
         pass 
     
 
 # from seleniumbase/fixtures/js_utils.py
-def wait_for_ready_state_complete(driver, timeout=4):
+def wait_for_ready_state_complete(driver, timeout=TIMEOUT_MINI):
     """
     The DOM (Document Object Model) has a property called "readyState".
     When the value of this becomes "complete", page resources are considered
       fully loaded (although AJAX and other loads might still be happening).
     This method will wait until document.readyState == "complete".
     This may be redundant, as methods already wait for page elements to load.
+    
+    possible document ready states: 'loading', 'interactive', 'complete'
     """
     start_ms = time.time() * 1000.0
     stop_ms = start_ms + (timeout * 1000.0)
@@ -179,7 +190,8 @@ def wait_for_ready_state_complete(driver, timeout=4):
             if now_ms >= stop_ms:
                 break
             time.sleep(0.1)
-    return False  # readyState stayed "interactive" (Not "complete")
+    raise TimeoutException("Ready state still in interactive mode")  # readyState stayed "interactive" (Not "complete")
+
 
 
 def scrool_to_element(driver, element):
