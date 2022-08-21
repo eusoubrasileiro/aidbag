@@ -167,8 +167,9 @@ class Processo(Sei):
         click(self.driver, 'button#btnSalvar') # this was problematic       
         # alert may sometimes show for 'duplicated' documents             
         try_accept_alerts(self.driver)   
-        self.driver.switch_to.default_content() # go back to main document
         wait_for_ready_state_complete(self.driver) # wait for upload complete
+        self.driver.switch_to.default_content() # go back to main document
+        
         
         
     def insereNotaTecnica(self, htmltext):
@@ -218,7 +219,7 @@ class Processo(Sei):
         try_accept_alerts(self.driver)   
         self.driver.switch_to.default_content() # go back to main document        
         
-    def insereNotaTecnicaRequerimento(self, template_name, assinar=True, **kwargs):
+    def insereNotaTecnicaRequerimento(self, template_name, assinar=True, tipo='pesquisa', **kwargs):
         """analisa documentos e cria nota técnica sobre análise de interferência
         based on jinja2 template
         'area_porcentagem' must be passed as kwargs"""
@@ -232,21 +233,29 @@ class Processo(Sei):
             if 'Minuta' in title and not minuta_np:
                 minuta_np = docs[title]
             if 'Interferência' in title and not interferencia_np:
-                interferencia_np = docs[title]                     
+                interferencia_np = docs[title]        
+                
+        if tipo == 'pesquisa':
+            minuta_de = 'de Alvará de Pesquisa'
+        elif tipo == 'licenciamento':
+            minuta_de = 'de Licenciamento'
                  
         if 'interferência_total' in template_name: 
-            template = templateEnv.get_template("req_pesquisa_interferência_total.html")                
-            html_text = template.render(interferencia_sei=interferencia_np)     
+            template = templateEnv.get_template("req_interferência_total.html",)                
+            html_text = template.render(interferencia_sei=interferencia_np,
+                                        tipo=tipo, minuta_de=minuta_de)     
         elif 'opção' in template_name:
-            template = templateEnv.get_template("req_pesquisa_opção.html")                
-            html_text = template.render(interferencia_sei=interferencia_np)   
+            template = templateEnv.get_template("req_opção.html")                
+            html_text = template.render(interferencia_sei=interferencia_np,
+                                        tipo=tipo, minuta_de=minuta_de)     
         elif 'com_redução' in template_name:
-            template = templateEnv.get_template("req_pesquisa_com_redução.html")                
-            html_text = template.render(interferencia_sei=interferencia_np, minuta_sei=minuta_np, 
+            template = templateEnv.get_template("req_com_redução.html")                
+            html_text = template.render(interferencia_sei=interferencia_np, minuta_sei=minuta_np, tipo=tipo, minuta_de=minuta_de,  
                                         **kwargs)  # area_porcentagem must be passed as kwargs  
         elif 'sem_redução' in template_name:
-            template = templateEnv.get_template("req_pesquisa_sem_redução.html")                
-            html_text = template.render(interferencia_sei=interferencia_np, minuta_sei=minuta_np)                                       
+            template = templateEnv.get_template("req_sem_redução.html")                
+            html_text = template.render(interferencia_sei=interferencia_np, minuta_sei=minuta_np, tipo=tipo, minuta_de=minuta_de)  
+                                     
         self.insereNotaTecnica(html_text)
         
     def insereMarcador(self, marcador):

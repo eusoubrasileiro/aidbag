@@ -247,56 +247,52 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
         psei.InsereTermoAberturaProcessoEletronico(nup)
 
     if infer: # infer from tipo, fase 
-        if 'licen' in tipo.lower():
+        if 'requerimento' in tipo.lower(): 
+            if 'requerimento de lavra' in fase.lower():
+                raise NotImplementedError() 
+                #Formulário 1
+            tipo=None
+            if 'requerimento de pesquisa' in fase.lower():
+                tipo = 'pesquisa' 
+            elif 'requerimento de licenciamento' in fase.lower():
+                tipo = 'licenciamento'                    
             # Inclui Estudo pdf como Doc Externo no SEI
-            psei.insereDocumentoExterno(0, pdf_interferencia)
-            # 2 - Minuta - 'de Licenciamento'
-            psei.insereDocumentoExterno(2, pdf_adicional)
-            raise NotImplementedError()
-            # IncluiDespacho(sei, nup, 3) # - Recomenda análise de plano
-        elif 'garimpeira' in tipo.lower():
-            if 'requerimento' in fase.lower(): # Minuta de P. de Lavra Garimpeira
-                # Inclui Estudo pdf como Doc Externo no SEI
-                psei.insereDocumentoExterno(0, pdf_interferencia)
-                psei.insereDocumentoExterno(5, pdf_adicional)
-                raise NotImplementedError() 
-            # IncluiDespacho(sei, nup, 3) # - Recomenda análise de plano
-        else:
-            # tipo - requerimento de cessão parcial ou outros
-            if 'lavra' in fase.lower(): # minuta portaria de Lavra
-                # parecer de retificação de alvará
-                #IncluiParecer(sei, nup, 0)
-                # Inclui Estudo pdf como Doc Externo no SEI
-                #InsereDocumentoExternoSEI(sei, nup, 0, pdf_interferencia)
-                #InsereDocumentoExternoSEI(sei, nup, 4, pdf_adicional)
-                # Adicionado manualmente depois o PDF gerado
-                # com links p/ SEI
-                #InsereDocumentoExternoSEI(sei, nup, 6, None)
-                #InsereDeclaracao(sei, nup, 14) # 14 Informe: Requerimento de Lavra Formulario 1 realizado
-                # 15 - xxxxxxxx
-                #IncluiDespacho(sei, nup, 15, 
-                #    setor=u"ccccxxxxx") 
-                # 16 - xxxxxxx
-                #IncluiDespacho(sei, nup, 16)
-                # IncluiDespacho(sei, NUP, 9) # - Recomenda c/ retificação de alvará
-                raise NotImplementedError() 
-            elif 'pesquisa' in tipo.lower(): # Requerimento de Pesquisa - 1 - Minuta - 'Pré de Alvará'
-                # Inclui Estudo pdf como Doc Externo no SEI
-                psei.insereDocumentoExterno(0, pdf_interferencia)                
-                if pdf_adicional is None:
-                    if p_area == -1:                    
-                        # Recomenda interferencia total
-                        psei.insereNotaTecnicaRequerimento("interferência_total") 
-                    else:
-                        # Recomenda interferencia total
-                        psei.insereNotaTecnicaRequerimento("opção")                         
+            psei.insereDocumentoExterno(0, pdf_interferencia)                
+            if pdf_adicional is None:
+                if p_area == -1:                    
+                    # Recomenda interferencia total
+                    psei.insereNotaTecnicaRequerimento("interferência_total", tipo=tipo) 
                 else:
-                    psei.insereDocumentoExterno(1, pdf_adicional)   
-                    if p_area < 96.0: # > 4% change notificar 
-                        psei.insereNotaTecnicaRequerimento("com_redução", # com notificação titular
-                                area_porcentagem=str(p_area).replace('.',','))
-                    else:
-                        psei.insereNotaTecnicaRequerimento("sem_redução") # Recomenda Só análise de plano s/ notificação titular (mais comum)
+                    # Recomenda interferencia total
+                    psei.insereNotaTecnicaRequerimento("opção", tipo=tipo)                          
+            else:
+                psei.insereDocumentoExterno(1, pdf_adicional)   
+                if p_area < 96.0: # > 4% change notificar 
+                    psei.insereNotaTecnicaRequerimento("com_redução", tipo=tipo, # com notificação titular
+                            area_porcentagem=str(p_area).replace('.',',')) 
+                else:
+                    psei.insereNotaTecnicaRequerimento("sem_redução", tipo=tipo) 
+                    # Recomenda Só análise de plano s/ notificação titular (mais comum)
+        # else:
+        #     # tipo - requerimento de cessão parcial ou outros
+        #     if 'lavra' in fase.lower(): # minuta portaria de Lavra
+        #         # parecer de retificação de alvará
+        #         #IncluiParecer(sei, nup, 0)
+        #         # Inclui Estudo pdf como Doc Externo no SEI
+        #         #InsereDocumentoExternoSEI(sei, nup, 0, pdf_interferencia)
+        #         #InsereDocumentoExternoSEI(sei, nup, 4, pdf_adicional)
+        #         # Adicionado manualmente depois o PDF gerado
+        #         # com links p/ SEI
+        #         #InsereDocumentoExternoSEI(sei, nup, 6, None)
+        #         #InsereDeclaracao(sei, nup, 14) # 14 Informe: Requerimento de Lavra Formulario 1 realizado
+        #         # 15 - xxxxxxxx
+        #         #IncluiDespacho(sei, nup, 15, 
+        #         #    setor=u"ccccxxxxx") 
+        #         # 16 - xxxxxxx
+        #         #IncluiDespacho(sei, nup, 16)
+        #         # IncluiDespacho(sei, NUP, 9) # - Recomenda c/ retificação de alvará
+        #         raise NotImplementedError() 
+
         #     pass
     else: # dont infer, especify explicitly        
         if sei_doc == SEI_DOCS.REQUERIMENTO_OPCAO_ALVARA: # opção de área na fase de requerimento                

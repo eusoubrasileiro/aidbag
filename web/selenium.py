@@ -6,7 +6,8 @@ from selenium.common.exceptions import (
     WebDriverException, 
     TimeoutException, 
     NoSuchElementException, 
-    ElementNotVisibleException
+    ElementNotVisibleException,
+    NoAlertPresentException
 )
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions
@@ -96,7 +97,7 @@ def click(driver, selector, by=By.CSS_SELECTOR, timeout=TIMEOUT_SMALL,
         try:            
             element = wait_for_element_visible(driver, selector, by, timeout)            
             scrool_to_element(driver, element)
-            #expected_conditions.element_to_be_clickable
+            # expected_conditions.element_to_be_clickable
             # dont use wait for element to be clickable - seleniumbase method
             if delay > 0:
                 time.sleep(delay)
@@ -150,17 +151,16 @@ def wait_until(driver, selector, expected_condition,
 
 
 def try_accept_alerts(driver, timeout=5):
-    """try dismiss alert as many as existent if it shows up, 
-    if it doesn't, dont botter"""
-    try :        
-        wait(driver, 5).until(expected_conditions.alert_is_present()) 
-        while True:
+    """try dismiss as many alerts if shown up"""  
+    alert = wait(driver, timeout).until(expected_conditions.alert_is_present())  
+    alert.accept()    
+    while True:         
+        try:
+            time.sleep(DELAY_SMALL)
             alert = driver.switch_to.alert
             alert.accept()
-            alert.dismiss()
-    except:
-        pass 
-    
+        except NoAlertPresentException:
+            return 
 
 # from seleniumbase/fixtures/js_utils.py
 def wait_for_ready_state_complete(driver, timeout=TIMEOUT_MINI):
@@ -176,12 +176,12 @@ def wait_for_ready_state_complete(driver, timeout=TIMEOUT_MINI):
     start_ms = time.time() * 1000.0
     stop_ms = start_ms + (timeout * 1000.0)
     for x in range(int(timeout * 10)):
-        try:
-            ready_state = driver.execute_script("return document.readyState;")
-        except WebDriverException:
-            # Bug fix for: [Permission denied to access property "document"]
-            time.sleep(0.03)
-            return True
+        # try:
+        ready_state = driver.execute_script("return document.readyState;")
+        # except WebDriverException:
+        #     # Bug fix for: [Permission denied to access property "document"]
+        #     time.sleep(0.03)
+        #     return True
         if ready_state == "complete":
             time.sleep(0.01)  # Better be sure everything is done loading
             return True
