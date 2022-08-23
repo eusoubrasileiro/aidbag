@@ -151,16 +151,16 @@ def wait_until(driver, selector, expected_condition,
 
 
 def try_accept_alerts(driver, timeout=5):
-    """try dismiss as many alerts if shown up"""  
-    alert = wait(driver, timeout).until(expected_conditions.alert_is_present())  
-    alert.accept()    
-    while True:         
-        try:
+    """try dismiss as many alerts IF shown up"""  
+    try:
+        alert = wait(driver, timeout).until(expected_conditions.alert_is_present())  
+        alert.accept()    
+        while True:                 
             time.sleep(DELAY_SMALL)
             alert = driver.switch_to.alert
             alert.accept()
-        except NoAlertPresentException:
-            return 
+    except (NoAlertPresentException, TimeoutException) as e:
+        return 
 
 # from seleniumbase/fixtures/js_utils.py
 def wait_for_ready_state_complete(driver, timeout=TIMEOUT_MINI):
@@ -226,7 +226,7 @@ def wait_for_element_visible(driver, selector, by=By.CSS_SELECTOR,  timeout=5):
         try:
             element = driver.find_element(by=by, value=selector)
             is_present = True
-            if element.is_displayed():
+            if element.is_displayed() and element.is_enabled():
                 return element
             else:
                 element = None
@@ -239,7 +239,7 @@ def wait_for_element_visible(driver, selector, by=By.CSS_SELECTOR,  timeout=5):
     if not is_present: # The element does not exist in the HTML        
         message = f"Element {selector} was not present after {timeout} second%s!"
         raise NoSuchElementException(message)
-    if is_present: # The element exists in the HTML, but is not visible
-        message = f"Element {selector} was not visible after {timeout} second%s!" 
+    if is_present: # The element exists in the HTML, but is not visible or enabled
+        message = f"Element {selector} was not visible or enabled after {timeout} second%s!" 
         raise ElementNotVisibleException(message)
     
