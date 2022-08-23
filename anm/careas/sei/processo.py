@@ -201,6 +201,10 @@ class Processo(Sei):
         self.driver.execute_script(jscript)        
         click(self.driver, "a[title*='Salvar']")
         wait_for_ready_state_complete(self.driver) # it stalls the page
+        # to garantee save, wait for button assinar to be visible and enabled
+        wait_for_element_visible(self.driver, 
+                                 "a[class='cke_button cke_button__assinatura cke_button_off']")
+        # expected_conditions.element_to_be_selected
         self.driver.close() # close this page         
         self.driver.switch_to.window(self.mainwindow) # go to main window
         
