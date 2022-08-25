@@ -1,18 +1,16 @@
 import glob
 import os
+import pathlib
 import sys
 import traceback
 import shutil
 import json
 import re 
 import tqdm
-from pathlib import Path
-from datetime import datetime
 from PyPDF2 import PdfReader
 
 from . import estudos
 from .config import config
-from ...web import htmlscrap
 from . import scm
 from .scm.util import regex_process
 
@@ -27,7 +25,7 @@ from .sei import (
         SEI_DOCS
     )
 
-
+from .estudos.util import downloadMinuta
 
 
 # Current Processes being worked on - features
@@ -88,7 +86,7 @@ def currentProcessMove(process_str, dest_folder='Concluidos',
         delete the path from `ProcessPathStorage` (stop tracking)
     """    
     process_str = scm.fmtPname(process_str) # just to make sure it is unique
-    dest_path =  Path(rootpath).joinpath(dest_folder).joinpath(folder_process(process_str)).resolve() # resolve, solves "..\" to an absolute path 
+    dest_path =  pathlib.Path(rootpath).joinpath(dest_folder).joinpath(folder_process(process_str)).resolve() # resolve, solves "..\" to an absolute path 
     shutil.move(ProcessPathStorage[process_str], dest_path)    
     if delpath: 
         del ProcessPathStorage[process_str]
@@ -146,8 +144,8 @@ def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False):
 
 
 
-def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=None, 
-        empty=False, wpage=None, verbose=True):
+def IncluiDocumentosSEIFolder(sei, process_folder, wpage, infer=True, sei_doc=None, 
+        empty=False, verbose=True):
     """
     Inclui process documents from specified folder:
     `__secor_path__\\path\\process_folder`
@@ -155,23 +153,20 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
 
     * sei : class
         selenium chrome webdriver instance
-    * process_folder: string
-        name of process folder where documentos are placed
-        eg. 832125-2005 (MUST use name xxxxxx-xxx format)
-    * path : string
-        parent folder inside estudos.__secor_path__ to search
-        for `process_folder`
-        __secor_path__ defaults to '~\Documents\Controle_Areas'
-        e.g
-        path='Processos' final parent folder is
-        '~\Documents\Controle_Areas\Processos'
+        
+    * process_folder: string or pathlib.Path 
+        string name of process folder where documentos are placed
+        eg. 832125-2005 (MUST use name xxxxxx-xxx format)        
+        or 
+        pathlib.Path for process folder 
 
     * wpage: wPageNtlm 
-        defaul None
-        na ausência de página html salva, baixa NUP diretamente
+        baixa NUP e outros from html salvo
+        faz download da minuta 
 
     * verbose: True
         avisa ausência de pdfs, quando cria documentos sem anexos
+        
     * empty : True
         cria documentos sem anexos
 
@@ -183,95 +178,88 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
         Enum `SEI_DOCS`
 
     """
-    cur_path = os.getcwd() # for restoring after
-    main_path = os.path.join(config['secor_path'], path)
+    if type(process_folder) is str: 
+        process_folder = pathlib.Path(config['processos_path']).joinpath(process_folder)
+
+    os.chdir(process_folder.absolute()) # enter on process folder
     if verbose and __debugging__:
-        print("Main path: ", main_path)
-    process_path = os.path.join(main_path, process_folder)
-    os.chdir(process_path) # enter on process folder
-    if verbose and __debugging__:
-        print("Process path: ", process_path)
+        print("Main path: ", process_folder.parent)     
+        print("Process path: ", process_folder.absolute())
         print("Current dir: ", os.getcwd())
 
+    # get nup, fase, tipo etc... 
+    process = scm.Processo.fromHtml(verbose=False) # default from current folder
+
     if not empty: # busca pdfs e adiciona só os existentes
-        # Estudo de Interferência deve chamar 'R.pdf' ou qualquer coisa
-        # que glob.glob("R*.pdf")[0] seja o primeiro
-        pdf_interferencia = glob.glob("R*.pdf")
+        # Estudo de Interferência deve chamar 'R.pdf' glob.glob("R*.pdf")[0] seja o primeiro
+        pdf_interferencia = [ file for file in process_folder.glob("R*.pdf") ]
         # turn empty list to None
         pdf_interferencia = pdf_interferencia[0] if pdf_interferencia else None
-        if not pdf_interferencia is None:
-            pdf_interferencia = os.path.join(process_path, pdf_interferencia)
-            pdf_interferencia_text = readPdfText(pdf_interferencia)
-            pct_text="PORCENTAGEM ENTRE ESTA ÁREA E A ÁREA ORIGINAL DO PROCESSO:"
-            if pct_text in pdf_interferencia_text:
-                p_area = re.findall(f"(?<={pct_text}) +([\d,]+)", pdf_interferencia_text)
+        if pdf_interferencia:                
+            pdf_interferencia_text = readPdfText(pdf_interferencia.absolute())
+            area_text="PORCENTAGEM ENTRE ESTA ÁREA E A ÁREA ORIGINAL DO PROCESSO:" # para cada area poligonal 
+            count_areas = pdf_interferencia_text.count(area_text)            
+            if count_areas == 1: # só uma área
+                p_area = re.findall(f"(?<={area_text}) +([\d,]+)", pdf_interferencia_text)
                 p_area = float(p_area[0].replace(',','.'))
-            else: # interferência total 
+                # pdf minuta alvará, licenciamento etc... 
+                pdf_adicional = pathlib.Path("minuta.pdf")
+                if not pdf_adicional.exists():
+                    downloadMinuta(wpage, process.name, "minuta.pdf") # use current folder to save pdf 
+                    pdf_adicional = pathlib.Path("minuta.pdf") # chamar-se-a minuta.pdf 
+                    pdf_adicional = pdf_adicional.absolute()
+                    readPdfText(pdf_adicional)  
+            elif count_areas > 1: # multiplas áreas opção 
+                p_area = ['33,222', '22,120', '0,153'] # exemple TODO implement!
+                pdf_adicional = None  
+            elif count_areas == 0: # interferência total 
                 p_area = -1                
-        elif verbose:
-            print('Nao encontrou pdf R*.pdf', file=sys.stderr)            
-        # pdf adicional Minuta de Licenciamento ou Pré Minuta de Alvará
-        # deve chamar 'Imprimir.pdf'
-        # ou qualquer coisa que glob.glob("Imprimir*.pdf")[0] seja o primeiro
-        pdf_adicional = glob.glob("Imprimir*.pdf")
-        # turn empty list to None
-        pdf_adicional = pdf_adicional[0] if pdf_adicional else None
-        if not pdf_adicional is None:
-            pdf_adicional = os.path.join(process_path, pdf_adicional)
-            pdf_adicional_text = readPdfText(pdf_adicional)    
-        elif verbose:
-            print('Nao encontrou pdf Imprimir*.pdf', file=sys.stderr)
-
-    html = None
-    process = scm.Processo.fromHtml(verbose=False) # default from current folder
-    # get everything needed
-    nup, tipo, fase = process['NUP'], process['tipo'], process['fase']
-    data_protocolo = process['data_protocolo']    
+        else:
+            RuntimeError('Nao encontrou pdf R*.pdf')
+    else:
+        pdf_adicional = None
+        pdf_interferencia = None            
     
-    psei = Processo.fromSei(sei, nup)
-    
+    psei = Processo.fromSei(sei, process['NUP'])    
     if verbose and __debugging__:
         print(f"percentage_area {p_area}")
         print(f"pdf_interferencia {pdf_interferencia}")
         print(f"pdf_adicional {pdf_adicional}")
-        print(f"tipo {tipo.lower()}")
-        print(f"fase {fase.lower()}")        
-       
-    if empty:
-        pdf_adicional = None
-        pdf_interferencia = None
+        print(f"tipo {process['tipo'].lower()}")
+        print(f"fase {process['fase'].lower()}")        
+        
     # inclui vários documentos, se desnecessário é só apagar
     # Inclui termo de abertura de processo eletronico se data < 2020 (protocolo digital nov/2019)
     # to avoid placing IncluiTermoAberturaPE on processos puro digitais 
-    if data_protocolo.year < 2020:  
-        psei.InsereTermoAberturaProcessoEletronico(nup)
+    if process['data_protocolo'].year < 2020:  
+        psei.InsereTermoAberturaProcessoEletronico(process['NUP'])
 
     if infer: # infer from tipo, fase 
-        if 'requerimento' in tipo.lower(): 
-            if 'requerimento de lavra' in fase.lower():
+        processo_tipo=None
+        if 'requerimento' in process['tipo'].lower(): 
+            if 'requerimento de lavra' in process['fase'].lower():
                 raise NotImplementedError() 
-                #Formulário 1
-            tipo=None
-            if 'requerimento de pesquisa' in fase.lower():
-                tipo = 'pesquisa' 
-            elif 'requerimento de licenciamento' in fase.lower():
-                tipo = 'licenciamento'                    
+                #Formulário 1            
+            if 'requerimento de pesquisa' in process['fase'].lower():
+                processo_tipo = 'pesquisa' 
+            elif 'requerimento de licenciamento' in process['fase'].lower():
+                processo_tipo = 'licenciamento'                    
             # Inclui Estudo pdf como Doc Externo no SEI
-            psei.insereDocumentoExterno(0, pdf_interferencia)                
+            psei.insereDocumentoExterno(0, str(pdf_interferencia.absolute()))
             if pdf_adicional is None:
                 if p_area == -1:                    
                     # Recomenda interferencia total
-                    psei.insereNotaTecnicaRequerimento("interferência_total", tipo=tipo) 
+                    psei.insereNotaTecnicaRequerimento("interferência_total", tipo=processo_tipo) 
                 else:
                     # Recomenda interferencia total
-                    psei.insereNotaTecnicaRequerimento("opção", tipo=tipo)                          
+                    psei.insereNotaTecnicaRequerimento("opção", tipo=processo_tipo)                          
             else:
-                psei.insereDocumentoExterno(1, pdf_adicional)   
+                psei.insereDocumentoExterno(1, str(pdf_adicional.absolute()))   
                 if p_area < 96.0: # > 4% change notificar 
-                    psei.insereNotaTecnicaRequerimento("com_redução", tipo=tipo, # com notificação titular
+                    psei.insereNotaTecnicaRequerimento("com_redução", tipo=processo_tipo, # com notificação titular
                             area_porcentagem=str(p_area).replace('.',',')) 
                 else:
-                    psei.insereNotaTecnicaRequerimento("sem_redução", tipo=tipo) 
+                    psei.insereNotaTecnicaRequerimento("sem_redução", tipo=processo_tipo) 
                     # Recomenda Só análise de plano s/ notificação titular (mais comum)
         # else:
         #     # tipo - requerimento de cessão parcial ou outros
@@ -302,15 +290,16 @@ def IncluiDocumentosSEIFolder(sei, process_folder, path='', infer=True, sei_doc=
             raise NotImplementedError() 
     psei.insereMarcador(config['sei']['marcador_default'])
     psei.atribuir(config['sei']['atribuir_default'])
-    os.chdir(cur_path) # restore original path , to not lock the folder-path
     # should also close the openned text window - going to previous state
     psei.closeOtherWindows()
+    
+    os.chdir(process_folder.parent) # restore original path , to not lock the folder-path
     if verbose:
-        print(nup)
+        print(process['NUP'])
 
 
 
-def IncluiDocumentosSEIFolders(sei, process_folders, path='Processos', **kwargs):
+def IncluiDocumentosSEIFolders(sei, wpage, process_folders, **kwargs):
     """
     Inclui docs. from process folders [list of process-folder-names] on SEI.  
 
@@ -318,16 +307,16 @@ def IncluiDocumentosSEIFolders(sei, process_folders, path='Processos', **kwargs)
     
     Aditional args should be passed as keyword arguments
     """
-    for folder_name in process_folders:
+    for process_folder in process_folders:
         try:
-            IncluiDocumentosSEIFolder(sei, folder_name, path, **kwargs)
+            IncluiDocumentosSEIFolder(sei, process_folder, wpage, **kwargs)
         except Exception:
-            print("Process {:} Exception: ".format(folder_name), traceback.format_exc(), file=sys.stderr)           
+            print("Process {:} Exception: ".format(process_folder), traceback.format_exc(), file=sys.stderr)           
             continue
         
 
 
-def IncluiDocumentosSEIFoldersFirstN(sei, nfirst=1, path='Processos', **kwargs):
+def IncluiDocumentosSEIFoldersFirstN(sei, wpage, nfirst=1, path=None, **kwargs):
     """
     Inclui first process folders `nfirst` (list of folders) docs on SEI. Follow order of glob(*) 
     
@@ -335,11 +324,12 @@ def IncluiDocumentosSEIFoldersFirstN(sei, nfirst=1, path='Processos', **kwargs):
     
     Aditional args should be passed as keyword arguments
     """
-    os.chdir(os.path.join(config['secor_path'], path))
-    files_folders = glob.glob('*')
+    if not path:
+        path = config['processos_path']        
+    path = pathlib.Path(path)    
     process_folders = []
-    for cur_path in files_folders: # remove what is NOT a process folder
-        if scm.util.regex_process.search(cur_path) and os.path.isdir(cur_path):
-            process_folders.append(cur_path)
+    for cur_path in path.glob('*'): # remove what is NOT a process folder
+        if scm.util.regex_process.search(str(cur_path)) and cur_path.is_dir():
+            process_folders.append(cur_path.absolute())
     process_folders = process_folders[:nfirst]
-    IncluiDocumentosSEIFolders(sei, process_folders, path, **kwargs)
+    IncluiDocumentosSEIFolders(sei, wpage, process_folders, **kwargs)

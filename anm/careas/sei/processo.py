@@ -121,13 +121,14 @@ class Processo(Sei):
         self._abrirPastas()
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')
         self.driver.switch_to.default_content() # was focused on frame left!
-        edocs = soup.select("a.clipboard + a span:first-child") # getting all docs on process
+        edocs = soup.select("a.clipboard + a") # getting all docs on process
         # len(docs)
         docs = {}
         for edoc in edocs[1:]: #ignore first that's the process 
-            np = re.search('(\d{6,})', edoc['title']).group()  # numero protocolo
-            name = re.sub("[()]", "", edoc['title'].replace(np, '')).strip() # anything except ( )            
-            docs.update({ name : np })
+            title = edoc.contents[0]['title'] # inside span 1st children
+            np = re.search('(\d{6,})', title).group()  # numero protocolo
+            name = re.sub("[()]", "", title.replace(np, '')).strip() # anything except ( )            
+            docs.update({ name : { 'np' : np, 'soup_element' : edoc } } )
         return docs 
 
     def insereDocumento(self, code=0):
@@ -199,6 +200,7 @@ class Processo(Sei):
         iframe.contentWindow.document.write(html_code); 
         iframe.contentWindow.document.close();"""
         self.driver.execute_script(jscript)        
+        wait_for_ready_state_complete(self.driver) # it stalls the page
         click(self.driver, "a[title*='Salvar']")
         wait_for_ready_state_complete(self.driver) # it stalls the page
         # to garantee save, wait for button assinar to be visible and enabled
@@ -235,9 +237,9 @@ class Processo(Sei):
             if minuta_np and interferencia_np: # dont continue if found already
                 break
             if 'Minuta' in title and not minuta_np:
-                minuta_np = docs[title]
+                minuta_np = docs[title]['np']
             if 'Interferência' in title and not interferencia_np:
-                interferencia_np = docs[title]        
+                interferencia_np = docs[title]['np']        
                 
         if tipo == 'pesquisa':
             minuta_de = 'de Alvará de Pesquisa'
