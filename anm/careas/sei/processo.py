@@ -184,37 +184,41 @@ class Processo(Sei):
         # text window now open, but list of handles is not ordered
         textwindow = [hnd for hnd in self.driver.window_handles if hnd != self.mainwindow ][0]
         self.driver.switch_to.window(textwindow) # go to text pop up window
-        self.driver.switch_to.default_content() # go to parent main document
-        # switch to input text frame 
-        switch_to_frame(self.driver, "#cke_6_contents iframe")
-        editor = find_element(self.driver, "body[contenteditable='true']") # just to enable save button        
-        editor.clear()
-        editor.send_keys(Keys.BACK_SPACE*42)        
-        self.driver.switch_to.default_content() # go to parent main document
-
-        htmltext = htmltext.replace('\n', '') # just to make sure dont mess with jscript        
-        # insert html code of template doc using javascript iframe.write 
-        jscript = f"""html_code = '{htmltext}'
-        iframe = document.querySelector('#cke_6_contents iframe');
-        iframe.contentWindow.document.open();
-        iframe.contentWindow.document.write(html_code); 
-        iframe.contentWindow.document.close();"""
-        self.driver.execute_script(jscript)        
-        wait_for_ready_state_complete(self.driver) # it stalls the page
-        click(self.driver, "a[title*='Salvar']")
-        wait_for_ready_state_complete(self.driver) # it stalls the page
-        # to garantee save, wait for button assinar to be visible and enabled
-        wait_for_element_visible(self.driver, 
-                                 "a[class='cke_button cke_button__assinatura cke_button_off']")
-        # expected_conditions.element_to_be_selected
+        htmltext = htmltext.replace('\n', '') # just to make sure dont mess with jscript                                
+        def write_html_on_iframe():
+            self.driver.switch_to.default_content() # go to parent main document
+            switch_to_frame(self.driver, "#cke_6_contents iframe")
+            editor = find_element(self.driver, "body") # just to enable save button        
+            editor.clear()
+            editor.send_keys(Keys.BACK_SPACE*42)        
+            self.driver.switch_to.default_content() # go to parent main document                   
+            # insert html code of template doc using javascript iframe.write 
+            # using arguments 
+            # https://stackoverflow.com/questions/52273298/what-is-arguments0-while-invoking-execute-script-method-through-webdriver-in
+            jscript = f"""iframe = document.querySelector('#cke_6_contents iframe');
+            iframe.contentWindow.document.open();
+            iframe.contentWindow.document.write(arguments[0]); 
+            iframe.contentWindow.document.close();"""
+            self.driver.execute_script(jscript, htmltext)        
+            wait_for_ready_state_complete(self.driver) # it stalls the page                        
+            # to garantee save, wait for button assinar to be visible and enabled
+            click(self.driver, "a[title*='Salvar']")            
+            wait_for_element_visible(self.driver, 
+                            "a[class='cke_button cke_button__assinatura cke_button_off']")  
+        def check_write_on_iframe():
+            self.driver.switch_to.default_content() # go to parent main document
+            switch_to_frame(self.driver, "#cke_6_contents iframe")
+            wait_for_element_visible(self.driver, "body#sei_edited") # body id to check it wrote            
+        while True: # to guarantee it really gets written
+            try: 
+                write_html_on_iframe() 
+                check_write_on_iframe()
+            except NoSuchElementException:
+                continue
+            else:
+                break 
         self.driver.close() # close this page         
         self.driver.switch_to.window(self.mainwindow) # go to main window
-        
-        # javascript         
-        #iframe = document.querySelector('#cke_6_contents iframe');
-        #iframe.contentWindow.document.open();
-        #iframe.contentWindow.document.write('<p>A new paragraph</p>'); // replaces everthing on iframe
-        #iframe.contentWindow.document.close();
 
     def InsereTermoAberturaProcessoEletronico(self):
         """Inclui Termo de Abertura de Processo Eletronico"""
