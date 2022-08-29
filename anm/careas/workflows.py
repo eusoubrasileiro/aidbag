@@ -216,6 +216,9 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, infer=True, sei_doc=No
     # get nup, fase, tipo etc... 
     process = scm.Processo.fromHtml(verbose=False) # default from current folder
 
+    pdf_adicional = None
+    pdf_interferencia = None            
+
     if not empty: # busca pdfs e adiciona só os existentes
         # Estudo de Interferência deve chamar 'R.pdf' glob.glob("R*.pdf")[0] seja o primeiro
         pdf_interferencia = [ file for file in process_folder.glob("R*.pdf") ]
@@ -242,9 +245,6 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, infer=True, sei_doc=No
                 p_area = -1                
         else:
             RuntimeError('Nao encontrou pdf R*.pdf')
-    else:
-        pdf_adicional = None
-        pdf_interferencia = None            
     
     psei = Processo.fromSei(sei, process['NUP'])    
     if verbose and __debugging__:
