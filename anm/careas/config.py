@@ -17,18 +17,5 @@ def SetHomeCareasPath(home=str(Path.home())): # default get userhome folder
     config['eventos_scm'] = os.path.join(config['secor_path'], 'Secorpy', 'eventos_scm_12032020.xls')    
     config['sei']['doc_templates'] = os.path.join(config['secor_path'], 'Secorpy', 'docs_models')  # os independent 
     config['processos_path'] = os.path.join(config['secor_path'], 'Processos')  # os independent     
-    
-def processPathSecor(processo, create=True):
-    """pasta padrao salvar todos processos 
-    * processo : `Processo` class
-    * create: create the path/folder if true (default)
-    """
-    secorpath = os.path.join(config['secor_path'], 'Processos')
-    processo_path = os.path.join(secorpath,
-                processo.number+'-'+processo.year)    
-    
-    if create and not os.path.exists(processo_path): # cria a pasta se nao existir
-        os.mkdir(processo_path)                
-    return processo_path
 
 SetHomeCareasPath() # set config path defaults

@@ -29,7 +29,7 @@ from .estudos.util import downloadMinuta
 
 
 # Current Processes being worked on - features
-# tha means that workflows.py probably should be a package 
+# that means that workflows.py probably should be a package 
 # with this being another .py 
 
 ProcessPathStorage = {} # stores paths for current process being worked on 
@@ -41,6 +41,31 @@ try: # Read paths for current process being worked on from file
 except:
     pass 
 
+
+def currentProcessFolders(path=None, sort='name'):
+    """
+    * sort:
+        to sort glob result by 
+        'time' modification time recent modifications first
+        'name' sort by name 
+    * return: list [ pathlib.Path's ...]
+        current process folders working on from default careas working env.
+    """
+    if not path:
+        path = config['processos_path']        
+    path = pathlib.Path(path)    
+    process_folders = []
+    paths = path.glob('*') 
+    if 'time' in sort:
+        paths = sorted(paths, key=os.path.getmtime)[::-1]        
+    elif 'name' in sort:
+        paths = sorted(paths)        
+    for cur_path in paths: # remove what is NOT a process folder
+        #sorted(glob.glob('*.png'), key=os.path.getmtime)
+        if scm.util.regex_process.search(str(cur_path)) and cur_path.is_dir():
+            process_folders.append(cur_path.absolute())            
+    return process_folders
+    
 def currentProcessGet(path='Processos', clear=False):
     """update `ProcessPathStorage` dict with process names and paths
     * clear : clear `ProcessPathStorage` before updating (ignore json file)"""
@@ -67,6 +92,7 @@ def currentProcessFromHtml(path='Processos', clear=True):
     for _, process_path in tqdm.tqdm(ProcessPathStorage.items()):    
         scm.Processo.fromHtml(process_path, verbose=False)
     os.chdir(cwd) # restore path state 
+    
 
 def folder_process(process_str):
     """get folder name used to store a process from NUP or whatever other form like 
@@ -298,11 +324,8 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, infer=True, sei_doc=No
         print(process['NUP'])
 
 
-
 def IncluiDocumentosSEIFolders(sei, wpage, process_folders, **kwargs):
     """
-    Inclui docs. from process folders [list of process-folder-names] on SEI.  
-
     Wrapper for `IncluiDocumentosSEIFolder` 
     
     Aditional args should be passed as keyword arguments
@@ -312,8 +335,7 @@ def IncluiDocumentosSEIFolders(sei, wpage, process_folders, **kwargs):
             IncluiDocumentosSEIFolder(sei, process_folder, wpage, **kwargs)
         except Exception:
             print("Process {:} Exception: ".format(process_folder), traceback.format_exc(), file=sys.stderr)           
-            continue
-        
+            continue        
 
 
 def IncluiDocumentosSEIFoldersFirstN(sei, wpage, nfirst=1, path=None, **kwargs):
@@ -324,12 +346,5 @@ def IncluiDocumentosSEIFoldersFirstN(sei, wpage, nfirst=1, path=None, **kwargs):
     
     Aditional args should be passed as keyword arguments
     """
-    if not path:
-        path = config['processos_path']        
-    path = pathlib.Path(path)    
-    process_folders = []
-    for cur_path in path.glob('*'): # remove what is NOT a process folder
-        if scm.util.regex_process.search(str(cur_path)) and cur_path.is_dir():
-            process_folders.append(cur_path.absolute())
-    process_folders = process_folders[:nfirst]
+    process_folders = currentProcessFolders(path)[:nfirst]
     IncluiDocumentosSEIFolders(sei, wpage, process_folders, **kwargs)

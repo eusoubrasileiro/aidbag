@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 
-from ..config import config, processPathSecor
+from ..config import config
 from ..scm import *
 from ....web import htmlscrap 
 
@@ -35,6 +35,8 @@ def getEventosSimples(wpage, processostr):
     df.Processo = df.Processo.apply(lambda x: fmtPname(x)) # standard names
     return df
 
+
+
 class CancelaUltimoEstudoFailed(Exception):
     """could not cancel ultimo estudo sigareas"""
     pass
@@ -53,7 +55,19 @@ class Interferencia:
         self.processo = Processo.Get(processostr, wpage, dados, verbose)
         self.wpage = wpage
         self.verbose = verbose       
-        self.processo_path = processPathSecor(self.processo)
+        self.processo_path = Interferencia.processPath(self.processo)
+
+    @staticmethod
+    def processPath(processo, create=True):
+        """pasta padrao salvar todos processos 
+        * processo : `Processo` class
+        * create: create the path/folder if true (default)
+        """    
+        processo_path = os.path.join(config['processos_path'],
+                    processo.number+'-'+processo.year)  
+        if create and not os.path.exists(processo_path): # cria a pasta se nao existir
+            os.mkdir(processo_path)                
+        return processo_path    
 
     @staticmethod
     def make(wpage, processostr, verbose=False, download=True):
