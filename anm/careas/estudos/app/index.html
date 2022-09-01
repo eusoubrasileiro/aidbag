@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script
+    src="https://code.jquery.com/jquery-3.6.1.min.js"
+    integrity="sha256-o88AwQnZB+VDvE9tvIXrMQaPlFFSUTR+nldQm1LuPXQ="
+    crossorigin="anonymous"></script>
+  <script language="javascript" type="text/javascript">
+    $( document ).ready(function() {
+
+      $("tbody tr[evindex='0']").each(function(index) { /* add class c1/c2 even/odd rows */
+        if (index % 2 === 0) { 
+          $(this).attr('class', 'c1'); /* father */
+          pgroup = $(this).attr('group');  /*  children process group identifier */
+          $("tr[group='" + pgroup + "']:not([evindex='0'])").attr('class', 'c1');
+        }
+        else { 
+          $(this).attr('class', 'c2'); /* father */
+          pgroup = $(this).attr('group');  /*  children process group identifier */
+          $("tr[group='" + pgroup + "']:not([evindex='0'])").attr('class', 'c2');
+        }
+      }); 
+
+      $("tr[evindex='0']:not([evn='1'])").click(function () {
+        //open up the events - toggle from the process atribute 
+        pgroup = $(this).attr('group');  
+        events = $("tr[group='" + pgroup + "']:not([evindex='0'])")
+        events.slideToggle();                      
+      });
+
+      /* to show when there are children */
+      // $("tr[evindex='0']:not([evn='1'])").each(function(index) {
+      //   pgroup = $(this).attr('group');  
+      //   events = $("tr#events[group='" + pgroup + "']");          
+      // });
+
+    });
+  </script>
+  <style>
+    html {
+      font-size: 14px; 
+      font-family: Verdana, Geneva, Tahoma, sans-serif;
+    }
+    table {
+      border: none;
+      width: 90%;
+    }
+    th {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    th, td { /* default settings */    
+      padding: 8px;
+      text-align: center;      
+      max-width: min-content;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    tbody tr:not([evindex='0']) { /* hide older events */
+        display: none;
+        padding : 5px;
+    }
+    tr[evindex='0']:not([evn='1']) { /* has events - mark bold */
+      font-weight: bold;
+      border-width: 1rem;
+    } 
+    tbody tr[ativo='não'] { /* mark dead processes */
+      color: rgb(148, 13, 40);      
+    }
+    tbody tr[ativo='sim'] { /* mark dead processes */
+      color: blue;      
+    }
+    /* Descrição (6) must be readable completely */
+    tr td:nth-child(6) { max-width: fit-content !important; }
+    /* OBS(7) DOU(8) set max-width with rem - 
+    don't need to read at first glance */
+    tr td:nth-child(7), tr td:nth-child(8) {
+      max-width: 15rem !important;
+    } 
+    /* to read overflow hidden text on 9, 10 */
+    tr td:nth-child(7):hover, tr td:nth-child(8):hover { /* disable overflow on hover */
+      /* show content as a box */
+      overflow: visible;
+      white-space: normal;
+      position: fixed;
+      background-color: white;
+      box-shadow: 0 0 4px 0 black;
+      border-radius: 1px;
+    }
+    tr.c1 { background-color: rgb(200, 200, 255);   }
+    tr.c2 { background-color: rgb(210, 255, 210);   }
+    tr:hover { background-color: rgb(180, 180, 180) !important; }
+  </style>
+</head> 
+<body>
+  {% if processos_list %}
+    <h2>Select a process</h2>
+    <ul>
+    {% for process in processos_list %} 
+      <li><a href="/select?selected={{ process.replace('/','-') }}">{{ process }}</a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    {{ pandas_table|safe }} 
+  {% endif %}    
+</body>
+</html>
+
+
+
+
+
+   
