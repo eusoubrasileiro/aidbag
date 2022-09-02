@@ -15,7 +15,7 @@ from . import ancestry
 from .util import (
     fmtPname,
     numberyearPname,
-    yearNumber
+    processUniqueNumber
 )
 
 from .parsing import (
@@ -332,7 +332,7 @@ class Processo:
         name given by `yearNumber`
         """
         if not fname:
-            fname = yearNumber(self.name)+'.JSON'
+            fname = processUniqueNumber(self.name)+'.JSON'
         with open(fname, 'w', encoding='utf-8') as f:
             f.write(self.toJSON())
         return fname
