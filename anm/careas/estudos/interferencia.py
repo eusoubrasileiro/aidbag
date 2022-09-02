@@ -29,32 +29,34 @@ def inFaseRInterferencia(fase_str):
             return True
     return False
 
-
-def prettyTabelaInterferenciaMaster(tabela_interf_eventos):
+def prettyTabelaInterferenciaMaster(tabela_interf_eventos, view=True):
     """
-    Prettify tabela interferencia master for display only!
+    Prettify tabela interferencia master for display or view.
     
-        * tabela_interf_eventos - pandas dataframe
-        
-    - Dataframe columns are converted to text.
-    - Many rows get's values removed hence it's for display only!
+        * tabela_interf_eventos: pandas dataframe
+        * view : bool
+            - True - For display only! Many rows get values removed. Hence it's for display only!   
+            - False - For exporting as json, excel etc.
+            
+    Dataframe columns are converted to text. Nans to ''. Datetime to '%d/%m/%Y %H:%M:%S'    
     """
     table = tabela_interf_eventos.copy() 
     dataformat = (lambda x: x.strftime("%d/%m/%Y %H:%M:%S"))
     if is_datetime(table.Data):        
         table.Data = table.Data.apply(dataformat)
     if is_datetime(table.DataPrior):        
-        table.DataPrior = table.DataPrior.apply(dataformat)
+        table.DataPrior = table.DataPrior.apply(dataformat)    
     table.fillna('', inplace=True) # fill nan to ''
-    for name, group in table.groupby(table.Processo):
-        # unecessary information - making visual analysis polluted
-        table.loc[group.index[1:], 'Ativo'] = '' 
-        table.loc[group.index[1:], 'Prior'] = ''  # 1'st will be replaced by a checkbox
-        table.loc[group.index[1:], 'Processo'] = ''
-        table.loc[group.index[1:], 'Dads'] = ''
-        table.loc[group.index[1:], 'Sons'] = ''      
+    table = table.astype(str)    
+    if view:
+        for name, group in table.groupby(table.Processo):
+            # unecessary information - making visual analysis polluted
+            table.loc[group.index[1:], 'Ativo'] = '' 
+            table.loc[group.index[1:], 'Prior'] = ''  # 1'st will be replaced by a checkbox
+            table.loc[group.index[1:], 'Processo'] = ''
+            table.loc[group.index[1:], 'Dads'] = ''
+            table.loc[group.index[1:], 'Sons'] = ''      
     return table 
-
 
 class CancelaUltimoEstudoFailed(Exception):
     """could not cancel ultimo estudo sigareas"""
@@ -329,6 +331,7 @@ class Interferencia:
             if not self.createTableMaster():
                 return False
         table = self.tabela_interf_master.copy()
+        table = prettyTabelaInterferenciaMaster(table, view=False)
         excelfile = os.path.join(self.processo_path, config['interferencia']['file_prefix'] + '_' +
                 '_'.join([self.processo.number,self.processo.year])+'.xlsx')        
         # Get max string size each collum for setting excel width column
@@ -384,12 +387,12 @@ class Interferencia:
         i=0 # each process row share the same bg color
         for process, events in table.groupby('Processo', sort=False):
             # prioritário ou não pela coluna 'Prior' primeiro value
-            prior = events['Prior'].values[0] >= 0 # prioritário ou unknown
-            dead = events['Ativo'].values[0] == r'Não'
+            prior = float(events['Prior'].values[0]) >= 0 # prioritário ou unknown
+            dead = 'Não' in events['Ativo'].values[0]
             dead_nprior = dead and (not prior) # only fade/dim/paint dead and not prior
             for idx, row in events.iterrows(): # processo row by row set format
                 #excel row index is not zero based, that's why idx+1 bellow
-                if row['Inativ'] > 0 or row['Inativ'] < 0: # revival event / die event
+                if float(row['Inativ']) > 0 or float(row['Inativ']) < 0: # revival event / die event
                     # make text bold
                     worksheet.set_row(idx+1, None, row_fmt(i, dead_nprior, True))
                 else: # 0
