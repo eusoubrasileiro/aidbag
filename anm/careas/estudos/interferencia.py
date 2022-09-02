@@ -2,6 +2,7 @@ import os
 from bs4 import BeautifulSoup
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_datetime64_any_dtype as is_datetime
 from datetime import datetime
 
 from ..config import config
@@ -35,6 +36,29 @@ def getEventosSimples(wpage, processostr):
     df.Processo = df.Processo.apply(lambda x: fmtPname(x)) # standard names
     return df
 
+def prettyTabelaInterferenciaMaster(tabela_interf_eventos):
+    """
+    Prettify tabela interferencia master for exporting or display
+    
+        * tabela_interf_eventos - pandas dataframe
+        
+    Dataframe columns converted to text
+    """
+    table = tabela_interf_eventos.copy() 
+    dataformat = (lambda x: x.strftime("%d/%m/%Y %H:%M:%S"))
+    if is_datetime(table.Data):        
+        table.Data = table.Data.apply(dataformat)
+    if is_datetime(table.DataPrior):        
+        table.DataPrior = table.DataPrior.apply(dataformat)
+    table.fillna('', inplace=True) # fill nan to ''
+    for name, group in table.groupby(table.Processo):
+        # unecessary information - making visual analysis polluted
+        table.loc[group.index[1:], 'Ativo'] = '' 
+        table.loc[group.index[1:], 'Prior'] = ''  # 1'st will be replaced by a checkbox
+        table.loc[group.index[1:], 'Processo'] = ''
+        table.loc[group.index[1:], 'Dads'] = ''
+        table.loc[group.index[1:], 'Sons'] = ''      
+    return table 
 
 
 class CancelaUltimoEstudoFailed(Exception):
@@ -99,9 +123,9 @@ class Interferencia:
                 # only if retirada interferencia html is saved we can create spreadsheets
                 # sometimes we just don't need it   
                 try:               
-                    if estudo.getTabelaInterferencia(): # sometimes there is no interferences 
-                        estudo.getTabelaInterferenciaTodos()
-                        estudo.excelInterferencia()
+                    if estudo.parseTabelaInterferencia(): # sometimes there is no interferences 
+                        estudo.createTabelaInterferenciaMaster()
+                        estudo.interferencia_to_excel()
                         estudo.excelInterferenciaAssociados()                
                 finally: # if there was an exception cancela ultimo estudo
                     if not estudo.cancelaUltimoEstudo():
@@ -155,7 +179,17 @@ class Interferencia:
             return False 
         return True
 
-    def getTabelaInterferencia(self):
+    def parseTabelaInterferencia(self):
+        """Parse the .html previous downloaded containing interferentes data. 
+        
+        Create `self.tabela_interf` and `self.tabela_assoc`.
+
+        Raises:
+            ConnectionError: 'Did not fetch the table'
+
+        Returns:
+            bool: True if there are interferentes
+        """
         interf_html = 'sigareas_rinterferencia_'+self.processo.number+'_'+self.processo.year+'.html'
         interf_html = os.path.join(self.processo_path, interf_html)
         with open(interf_html, "r", encoding="utf-8") as f:
@@ -169,91 +203,67 @@ class Interferencia:
             return False # nenhuma interferencia SHOW!!
         rows = htmlscrap.tableDataText(interf_table)
         self.tabela_interf = pd.DataFrame(rows[1:], columns=rows[0])
-        # instert list of processos associados for each processo interferente
+        # columns to fill in 
         self.tabela_interf['Dads'] = 0
         self.tabela_interf['Sons'] = 0
         self.tabela_interf['Ativo'] = 'Sim'
-        interferentes = [fmtPname(row[1]['Processo'])
-                                    for row in self.tabela_interf.iterrows()]
-        # Unique Process Only
-        interferentes = list(set(interferentes))
-        # cannot have this here for now ...
-        # hack to workaround
-        # create multiple python requests sessions
-        # self.processes_interf = None
-        # with ThreadPool(len(processos_interferentes)) as pool:
-        #     # Open the URLs in their own threads and return the results
-        #     #processo = Processo(row[1].Processo, self.wpage, verbose=self.verbose)
-        #     self.processes_interf = pool.starmap(Processo,
-        #                                 zip(processos_interferentes,
-        #                                     itertools.repeat(self.wpage),
-        #                                     itertools.repeat(3),
-        #                                     itertools.repeat(self.verbose)))
-        # # create dict of key process name , value process objects
-        # self.processes_interf = dict(zip(list(map(lambda p: p.name, self.processes_interf)),
-        #                                 self.processes_interf))
-        self.Interferentes = {}
-        for name in interferentes:
-            processo = Processo.Get(name, self.wpage, SCM_SEARCH.PRIORIDADE, self.verbose)
-            self.Interferentes[name] = processo
+        self.tabela_interf.loc[:,'Processo'] = self.tabela_interf.Processo.apply(lambda x: util.fmtPname(x))
         # tabela c/ processos associadoas aos processos interferentes
         self.tabela_assoc = pd.DataFrame()
-        for row in self.tabela_interf.iterrows():
-            # it seams excel writer needs every process name have same length string 000.000/xxxx (12)
-            # so reformat process name
-            name = fmtPname(row[1]['Processo'])
-            processo = self.Interferentes[name]
-            self.tabela_interf.loc[row[0], 'Processo'] = name
-            self.tabela_interf.loc[row[0], 'Ativo'] = processo['ativo']
+        self.interferentes = {}
+        for name in self.list(set(self.tabela_interf.Processo)): # Unique Process Only
+            processo  = Processo.Get(name, 
+                            self.wpage, SCM_SEARCH.PRIORIDADE, self.verbose)
+            self.interferentes[name] = processo # store Processo object
+            indexes = (self.tabela_interf.Processo == name)
+            self.tabela_interf.loc[indexes, 'Ativo'] = processo['ativo']
             if processo.associados:
+                self.tabela_interf.loc[indexes, 'Sons'] = len(processo['sons'])
+                self.tabela_interf.loc[indexes, 'Dads'] = len(processo['parents'])
                 assoc_items = pd.DataFrame({ "Main" : processo.name, "Target" : processo.associados.keys() })
                 assoc_items = assoc_items.join(pd.DataFrame(processo.associados.values()))
                 assoc_items.drop(columns='obj', inplace=True)
                 # not using prioridade of associados
                 # assoc_items['Prior'] = processo['prioridadec'] if processo['prioridadec'] else processo['prioridade']
                 # number of direct sons/ ancestors
-                self.tabela_interf.loc[row[0], 'Sons'] = len(processo['sons'])
-                self.tabela_interf.loc[row[0], 'Dads'] = len(processo['parents'])
                 self.tabela_assoc = pd.concat([self.tabela_assoc, assoc_items], sort=False, ignore_index=True, axis=0, join='outer')                
         return True
 
-    def getTabelaInterferenciaTodos(self):
+    def createTabelaInterferenciaMaster(self):
         """
-          Baixa todas as tabelas de eventos processos interferentes:
-            - concatena em tabela única
-            - converte data texto para datetime
-            - converte numero evento para np.int
-            - cria index ordem eventos para
+        Create `tabela_interf_eventos` from `self.tabela_interf` previouly parsed,        
+        Uses 'tabela de eventos' of processes 'interferentes'. 
+        
+        return False if no 'interferencia'          
         """
         if not hasattr(self, 'tabela_interf'):
-            if self.getTabelaInterferencia(): # there is no interference !
+            if self.parseTabelaInterferencia(): # there is no interference !
                 return False
         if hasattr(self, 'tabela_interf_eventos'):
             return self.tabela_interf_eventos
 
         self.tabela_interf_eventos = pd.DataFrame()
-        for row in self.tabela_interf.iterrows():
+        for _,row in self.tabela_interf.iterrows():
             # cannot remove getEventosSimples and extract everything from dados basicos
             # dados basico scm data nao inclui hora! cant use only scm
-            processo_events = getEventosSimples(self.wpage, row[1][1])
-            # get columns 'Publicação D.O.U' & 'Observação' from dados basicos
-            eventos = self.Interferentes[fmtPname(row[1][1])]['eventos']
-            dfbasicos = pd.DataFrame(eventos[1:],
-                        columns=eventos[0])
+            processo_events = getEventosSimples(self.wpage, row['Processo'])            
+            processo_scm = self.interferentes[row['Processo']]
+            eventos = processo_scm['eventos']
+            dfbasicos = pd.DataFrame(eventos[1:], columns=eventos[0])
             processo_events['EvSeq'] = len(processo_events)-processo_events.index.values.astype(int) # set correct order of events
             processo_events['Evento'] = processo_events['Evento'].astype(int)
             # put count of associados father and sons
-            processo_events['Dads'] = row[1]['Dads']
-            processo_events['Sons'] =row[1]['Sons']
-            processo_events['Ativo'] = row[1]['Ativo']
+            processo_events['Dads'] = row['Dads']
+            processo_events['Sons'] = row['Sons']
+            processo_events['Ativo'] = row['Ativo']
             processo_events['Obs'] = dfbasicos['Observação']
             processo_events['DOU'] = dfbasicos['Publicação D.O.U']
             # strdate to datetime comparacao prioridade
-            processo_events.Data = processo_events.Data.apply(
+            processo_events.loc[:, 'Data'] = processo_events.Data.apply(
                 lambda strdate: datetime.strptime(strdate, "%d/%m/%Y %H:%M:%S"))
             # to add an additional row caso a primeira data dos eventos diferente
             # da prioritária correta
-            processo_prioridadec = self.Interferentes[fmtPname(row[1][1])]['prioridadec']
+            processo_prioridadec = processo_scm['prioridadec']
             if processo_events['Data'].values[-1] > np.datetime64(processo_prioridadec):
                 #processo_events = processo_events.append(processo_events.tail(1), ignore_index=True) # repeat the last/or first
                 processo_events = pd.concat([processo_events, processo_events.tail(1)], ignore_index=True, axis=0, join='outer')
@@ -269,7 +279,7 @@ class Interferencia:
 
         self.tabela_interf_eventos.reset_index(inplace=True,drop=True)
         # rearrange collumns in more meaningfully viewing
-        columns_order = ['Ativo','Processo', 'Evento', 'EvSeq', 'Descrição', 'Data', 'Dads', 'Sons', 'Obs', 'DOU']
+        columns_order = ['Ativo','Processo', 'Evento', 'EvSeq', 'Descrição', 'Data', 'Obs', 'DOU', 'Dads', 'Sons']
         self.tabela_interf_eventos = self.tabela_interf_eventos[columns_order]
         ### Todos os eventos posteriores a data de prioridade são marcados
         # como 0 na coluna Prioridade otherwise 1
@@ -304,23 +314,34 @@ class Interferencia:
             #self.tabela_interf_eventos.loc[self.tabela_interf_eventos.Processo == name, 'Prior'] = (
             #1*(events.EvPrior.sum() > 0 and events.Inativ.sum() > -1))
         # re-rearrange columns
-        newcolumns = ['Prior'] + self.tabela_interf_eventos.columns[:-1].tolist()
-        self.tabela_interf_eventos = self.tabela_interf_eventos[newcolumns]
-        # place Observação/DOU in the end (last columns)
-        newcolumns = self.tabela_interf_eventos.columns.tolist()
-        newcolumns = [e for e in newcolumns if e not in ('Obs', 'DOU')] + ['Obs', 'DOU']
-        self.tabela_interf_eventos = self.tabela_interf_eventos[newcolumns]
-
-    def excelInterferencia(self):
+        cols_order = ['Prior', 'Ativo', 'Processo', 'Evento', 'EvSeq', 'Descrição', 'Data', 
+        'DataPrior', 'EvPrior', 'Inativ', 'Obs', 'DOU', 'Dads', 'Sons']
+        self.tabela_interf_eventos = self.tabela_interf_eventos[cols_order]    
+        return True
+    
+        
+    def interferencia_to_json(self):
+        """pretty print to json file tabela interferencia master"""
         if not hasattr(self, 'tabela_interf_eventos'):
-            self.getTabelaInterferenciaTodos()
+            if not self.createTabelaInterferenciaMaster():
+                return False
+        table = prettyTabelaInterferenciaMaster(self.tabela_interf_eventos)
+        json_file = os.path.join(self.processo_path, '_'.join('eventos_prioridade', 
+                        self.processo.number, self.processo.year)+'.json')
+        table.to_json(json_file)
+
+
+    def interferencia_to_excel(self):
+        """pretty print to excel file tabela interferencia master"""
+        if not hasattr(self, 'tabela_interf_eventos'):
+            if not self.createTabelaInterferenciaMaster():
+                return False
         interf_eventos = self.tabela_interf_eventos.copy() # needed due to str conversion
         dataformat = (lambda x: x.strftime("%d/%m/%Y %H:%M:%S"))
         interf_eventos.Data = interf_eventos.Data.apply(dataformat)
         interf_eventos.DataPrior = interf_eventos.DataPrior.apply(dataformat)
-        excelname = ('eventos_prioridade_' + self.processo.number + '_' 
-                            + self.processo.year+'.xlsx')
-        excelname = os.path.join(self.processo_path, excelname)
+        excelfile = os.path.join(self.processo_path, '_'.join('eventos_prioridade', 
+                self.processo.number, self.processo.year)+'.xlsx')        
         # Get max string size each collum for setting excel width column
         txt_table = interf_eventos.values.astype(str).T
         minsize = np.apply_along_axis(lambda array: np.max([ len(string) for string in array ] ),
@@ -333,7 +354,7 @@ class Interferencia:
         # number of rows
         nrows = len(interf_eventos)
         # Create a Pandas Excel writer using XlsxWriter as the engine.
-        writer = pd.ExcelWriter(excelname, engine='xlsxwriter')
+        writer = pd.ExcelWriter(excelfile, engine='xlsxwriter')
         # Convert the dataframe to an XlsxWriter Excel object.
         interf_eventos.to_excel(writer, sheet_name='Sheet1', index=False)
         # Get the xlsxwriter workbook and worksheet objects.
