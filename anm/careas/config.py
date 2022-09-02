@@ -10,6 +10,10 @@ config['sei'] = {}
 config['sei']['atribuir_default'] = 'set-this-at-run-time'
 config['sei']['marcador_default'] = 'set-the-default-marcador-at-run-time'
 config['sei']['doc_templates'] = ''
+# intereferencia module configuration
+config['interferencia'] = {}
+config['interferencia']['html_prefix'] = {'this' : 'interferencia', 'legacy': 'sigareas_rinterferencia'}
+config['interferencia']['file_prefix'] = 'eventos_prioridade'
 
 def SetHomeCareasPath(home=str(Path.home())): # default get userhome folder
     """for mounted disk on linux, set windows home user path"""

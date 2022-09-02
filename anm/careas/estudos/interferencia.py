@@ -1,14 +1,23 @@
 import os
-from bs4 import BeautifulSoup
+import pathlib 
 import numpy as np
+from datetime import datetime
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
-from datetime import datetime
+from bs4 import BeautifulSoup
 
 from ..config import config
-from ..scm import *
+from ..scm import (
+    fmtPname,
+    SCM_SEARCH,
+    Processo
+)
 from ....web import htmlscrap 
-
+from .scraping import (
+    fetch_save_Html,
+    cancelaUltimo,
+    getEventosSimples
+)
 
 # fases necessarias e obrigatorias para retirada de interferencia 
 interferencia_fases = ['Requerimento de Pesquisa', 'Direito de Requerer a Lavra', 
@@ -18,31 +27,17 @@ def inFaseRInterferencia(fase_str):
     for fase in interferencia_fases:
         if fase.find(fase_str.strip()) != -1:
             return True
-    return False 
+    return False
 
-def getEventosSimples(wpage, processostr):
-    """ Retorna tabela de eventos simples para processo especificado
-    wpage : class wPage
-    processostr : str
-    return : (Pandas DataFrame)"""
-    processo_number, processo_year = numberyearPname(processostr)
-    wpage.get(('http://sigareas.dnpm.gov.br/Paginas/Usuario/ListaEvento.aspx?processo='+
-          processo_number+'_'+processo_year))
-    htmltxt = wpage.response.content
-    soup = BeautifulSoup(htmltxt, features="lxml")
-    eventstable = soup.find("table", {'class': "BordaTabela"})
-    rows = htmlscrap.tableDataText(eventstable)
-    df = pd.DataFrame(rows[1:], columns=rows[0])
-    df.Processo = df.Processo.apply(lambda x: fmtPname(x)) # standard names
-    return df
 
 def prettyTabelaInterferenciaMaster(tabela_interf_eventos):
     """
-    Prettify tabela interferencia master for exporting or display
+    Prettify tabela interferencia master for display only!
     
         * tabela_interf_eventos - pandas dataframe
         
-    Dataframe columns converted to text
+    - Dataframe columns are converted to text.
+    - Many rows get's values removed hence it's for display only!
     """
     table = tabela_interf_eventos.copy() 
     dataformat = (lambda x: x.strftime("%d/%m/%Y %H:%M:%S"))
@@ -65,21 +60,27 @@ class CancelaUltimoEstudoFailed(Exception):
     """could not cancel ultimo estudo sigareas"""
     pass
 
-class DownloadRetiradaInterferenciaFailed(Exception):
+class DownloadInterferenciaFailed(Exception):
     """could not download retirada de interferencia"""
     pass 
 
+
 class Interferencia:
     """Estudo de Retirada de Interferência SIGAREAS"""
-    def __init__(self, wpage, processostr, dados=SCM_SEARCH.PRIORIDADE, verbose=True):
+    def __init__(self, wpage, processostr, dados=SCM_SEARCH.PRIORIDADE, verbose=True, processoget=True):
         """        
         wpage : wPage html webpage scraping class com login e passwd preenchidos
         processostr : numero processo format xxx.xxx/ano
         """
-        self.processo = Processo.Get(processostr, wpage, dados, verbose)
+        self.processo = None 
+        if processoget:
+            self.processo = Processo.Get(processostr, wpage, dados, verbose)
         self.wpage = wpage
         self.verbose = verbose       
         self.processo_path = Interferencia.processPath(self.processo)
+        self.tabela_interf_master = None 
+        self.tabela_assoc = None 
+        self.tabela_interf = None        
 
     @staticmethod
     def processPath(processo, create=True):
@@ -92,7 +93,7 @@ class Interferencia:
         if create and not os.path.exists(processo_path): # cria a pasta se nao existir
             os.mkdir(processo_path)                
         return processo_path    
-
+    
     @staticmethod
     def make(wpage, processostr, verbose=False, download=True):
         """
@@ -110,76 +111,68 @@ class Interferencia:
         * returns: instance `Interferencia`
 
         * exceptions: 
-            `DownloadRetiradaInterferenciaFailed`, `CancelaUltimoEstudoFailed`
+            `DownloadInterferenciaFailed`, `CancelaUltimoEstudoFailed`
         """
         estudo = Interferencia(wpage, processostr, dados=SCM_SEARCH.PRIORIDADE, verbose=verbose)
         estudo.processo.salvaDadosBasicosHtml(estudo.processo_path)
         estudo.processo.salvaDadosPoligonalHtml(estudo.processo_path)                    
         # if fase correct MUST have access to retirada de 
         if inFaseRInterferencia(estudo.processo['fase']):
-            if not estudo.salvaRetiradaInterferenciaHtml(estudo.processo_path, download):
-                raise DownloadRetiradaInterferenciaFailed()
+            if not estudo.saveHtml(download):
+                raise DownloadInterferenciaFailed()
             else:
                 # only if retirada interferencia html is saved we can create spreadsheets
-                # sometimes we just don't need it   
                 try:               
-                    if estudo.parseTabelaInterferencia(): # sometimes there is no interferences 
-                        estudo.createTabelaInterferenciaMaster()
-                        estudo.interferencia_to_excel()
-                        estudo.excelInterferenciaAssociados()                
+                    if estudo.createTable(): # sometimes there is no interferences 
+                        estudo.createTableMaster()
+                        estudo.to_excel()
+                        estudo.associados_to_excel()                
                 finally: # if there was an exception cancela ultimo estudo
-                    if not estudo.cancelaUltimoEstudo():
+                    if not estudo.cancelLast():
                         raise CancelaUltimoEstudoFailed()
         return estudo
     
-    def salvaRetiradaInterferenciaHtml(self, html_path, download=True):
-        fname = 'sigareas_rinterferencia_'+self.processo.number+'_'+self.processo.year
-        if not os.path.exists(os.path.join(html_path, fname)) or download:
-            self.wpage.get('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1')
-            formcontrols = {
-                'ctl00$cphConteudo$txtNumProc': self.processo.number,
-                'ctl00$cphConteudo$txtAnoProc': self.processo.year,
-                'ctl00$cphConteudo$btnEnviarUmProcesso': 'Processar'
-            }
-            formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
-            # must be timout 2 minutes
-            self.wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1',
-                    data=formdata, timeout=config['secor_timeout'])
-            if not ( self.wpage.response.url == r'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'):
-                return False             # Falhou salvar Retirada de Interferencia # provavelmente estudo aberto            
-            self.wpage.save(os.path.join(html_path, fname))
+    @staticmethod
+    def from_html():
+        pass 
+
+    @staticmethod
+    def from_excel(dir='.'):        
+        processo = Processo.fromHtml(dir, 'False')
+        estudo = Interferencia(None, processo.name, verbose=False, processoget=False)        
+        file_path = pathlib.Path('.').glob(config['interferencia']['file_prefix']+'*.xlsx')
+        if not file_path: 
+            raise RuntimeError("Legacy Excel prioridade not found, something like eventos_prioridade_*.xlsx")
+        estudo.tabela_interf_master = pd.read_excel(list(file_path)[0])          
+        return estudo
+        
+    @staticmethod
+    def from_json(dir='.'):
+        processo = Processo.fromHtml(dir, 'False')
+        estudo = Interferencia(None, processo.name, verbose=False, processoget=False)        
+        file_path = pathlib.Path('.').glob(config['interferencia']['file_prefix'] +'*.xlsx')
+        if not file_path: 
+            raise RuntimeError("Json file not found, something like eventos_prioridade*.json")
+        estudo.tabela_interf_master = pd.read_json(list(file_path)[0])          
+        return estudo 
+    
+    def saveHtml(self, download=True):
+        """fetch and save html interferencia"""
+        if download:
+            html_file = (config['interferencia']['html_prefix']['this']+'_'+
+                '_'.join([self.processo.number, self.processo.year]))  
+            html_file = os.path.join(self.processo_path, html_file)
+            return fetch_save_Html(self.wpage, self.processo.number, self.processo.year, 
+                            html_file, download)
         return True
 
-    def cancelaUltimoEstudo(self):
-        """Danger Zone - cancela ultimo estudo em aberto sem perguntar mais nada:
-        - estudo de retirada de Interferencia
-        - estudo de opcao de area        
+    def cancelLast(self):
         """
-        self.wpage.get('http://sigareas.dnpm.gov.br/Paginas/Usuario/CancelarEstudo.aspx')
-        #self.wpage.save('cancelar_estudo')
-        formcontrols = {
-            'ctl00$cphConteudo$txtNumero': self.processo.number,
-            'ctl00$cphConteudo$txtAno': self.processo.year,
-            'ctl00$cphConteudo$btnConsultar': 'Consultar'
-        }
-        formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
-        # Consulta
-        self.wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/CancelarEstudo.aspx', data=formdata)
-        # wpage.save('cancelar_estudo')
-        # Cancela
-        formcontrols = {
-            'ctl00$cphConteudo$txtNumero': self.processo.number,
-            'ctl00$cphConteudo$txtAno': self.processo.year,
-            'ctl00$cphConteudo$rptEstudo$ctl00$btnCancelar.x': '12',
-            'ctl00$cphConteudo$rptEstudo$ctl00$btnCancelar.y': '12'
-        }
-        formdata = htmlscrap.formdataPostAspNet(self.wpage.response, formcontrols)
-        self.wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/CancelarEstudo.aspx', data=formdata)
-        if self.wpage.response.text.find(r'Estudo excluído com sucesso.') == -1:
-            return False 
-        return True
+        Cancela ultimo estudo em aberto. ('opção', 'interferencia' etc..)
+        """
+        return cancelaUltimo(self.wpage, self.processo.number, self.processo.year)        
 
-    def parseTabelaInterferencia(self):
+    def createTable(self):
         """Parse the .html previous downloaded containing interferentes data. 
         
         Create `self.tabela_interf` and `self.tabela_assoc`.
@@ -189,8 +182,9 @@ class Interferencia:
 
         Returns:
             bool: True if there are interferentes
-        """
-        interf_html = 'sigareas_rinterferencia_'+self.processo.number+'_'+self.processo.year+'.html'
+        """        
+        interf_html = (config['interferencia']['html_prefix']['this']+'_'+
+                       '_'.join([self.processo.number,self.processo.year])+'.html')
         interf_html = os.path.join(self.processo_path, interf_html)
         with open(interf_html, "r", encoding="utf-8") as f:
             htmltxt = f.read()
@@ -207,11 +201,11 @@ class Interferencia:
         self.tabela_interf['Dads'] = 0
         self.tabela_interf['Sons'] = 0
         self.tabela_interf['Ativo'] = 'Sim'
-        self.tabela_interf.loc[:,'Processo'] = self.tabela_interf.Processo.apply(lambda x: util.fmtPname(x))
+        self.tabela_interf.loc[:,'Processo'] = self.tabela_interf.Processo.apply(lambda x: fmtPname(x))
         # tabela c/ processos associadoas aos processos interferentes
         self.tabela_assoc = pd.DataFrame()
         self.interferentes = {}
-        for name in self.list(set(self.tabela_interf.Processo)): # Unique Process Only
+        for name in list(set(self.tabela_interf.Processo)): # Unique Process Only
             processo  = Processo.Get(name, 
                             self.wpage, SCM_SEARCH.PRIORIDADE, self.verbose)
             self.interferentes[name] = processo # store Processo object
@@ -229,7 +223,7 @@ class Interferencia:
                 self.tabela_assoc = pd.concat([self.tabela_assoc, assoc_items], sort=False, ignore_index=True, axis=0, join='outer')                
         return True
 
-    def createTabelaInterferenciaMaster(self):
+    def createTableMaster(self):
         """
         Create `tabela_interf_eventos` from `self.tabela_interf` previouly parsed,        
         Uses 'tabela de eventos' of processes 'interferentes'. 
@@ -237,12 +231,12 @@ class Interferencia:
         return False if no 'interferencia'          
         """
         if not hasattr(self, 'tabela_interf'):
-            if self.parseTabelaInterferencia(): # there is no interference !
+            if self.createTable(): # there is no interference !
                 return False
         if hasattr(self, 'tabela_interf_eventos'):
-            return self.tabela_interf_eventos
+            return self.tabela_interf_master
 
-        self.tabela_interf_eventos = pd.DataFrame()
+        self.tabela_interf_master = pd.DataFrame()
         for _,row in self.tabela_interf.iterrows():
             # cannot remove getEventosSimples and extract everything from dados basicos
             # dados basico scm data nao inclui hora! cant use only scm
@@ -274,18 +268,18 @@ class Interferencia:
             # use only what we have rest will be empty
             #processo_events['SICOP FISICO PRINCIPAL MOVIMENTACAO']
             # DATA:HORA	SITUAÇÃO	UF	ÓRGÃO	PRIORIDADE	MOVIMENTADO	RECEBIDO	DATA REC.	REC. POR	GUIA
-            self.tabela_interf_eventos = pd.concat([self.tabela_interf_eventos, processo_events], axis=0, join='outer')
+            self.tabela_interf_master = pd.concat([self.tabela_interf_master, processo_events], axis=0, join='outer')
             #self.tabela_interf_eventos = self.tabela_interf_eventos.append(processo_events)
 
-        self.tabela_interf_eventos.reset_index(inplace=True,drop=True)
+        self.tabela_interf_master.reset_index(inplace=True,drop=True)
         # rearrange collumns in more meaningfully viewing
         columns_order = ['Ativo','Processo', 'Evento', 'EvSeq', 'Descrição', 'Data', 'Obs', 'DOU', 'Dads', 'Sons']
-        self.tabela_interf_eventos = self.tabela_interf_eventos[columns_order]
+        self.tabela_interf_master = self.tabela_interf_master[columns_order]
         ### Todos os eventos posteriores a data de prioridade são marcados
         # como 0 na coluna Prioridade otherwise 1
-        self.tabela_interf_eventos['DataPrior'] = self.processo['prioridadec']
-        self.tabela_interf_eventos['EvPrior'] = 0 # 1 prioritario 0 otherwise
-        self.tabela_interf_eventos['EvPrior'] = self.tabela_interf_eventos.apply(
+        self.tabela_interf_master['DataPrior'] = self.processo['prioridadec']
+        self.tabela_interf_master['EvPrior'] = 0 # 1 prioritario 0 otherwise
+        self.tabela_interf_master['EvPrior'] = self.tabela_interf_master.apply(
             lambda row: 1 if row['Data'] <= self.processo['prioridadec'] else 0, axis=1)
         ### fill-in column with inativam or ativam processo for each event
         ### using excel 'eventos_scm_09102019.xls'
@@ -293,13 +287,13 @@ class Interferencia:
         eventos.drop(columns=['nome'],inplace=True)
         eventos.columns = ['Evento', 'Inativ'] # rename columns
         # join Inativ column -1/1 inativam or ativam processo
-        self.tabela_interf_eventos = self.tabela_interf_eventos.join(eventos.set_index('Evento'), on='Evento')
-        self.tabela_interf_eventos.Inativ = self.tabela_interf_eventos.Inativ.fillna(0) # not an important event
+        self.tabela_interf_master = self.tabela_interf_master.join(eventos.set_index('Evento'), on='Evento')
+        self.tabela_interf_master.Inativ = self.tabela_interf_master.Inativ.fillna(0) # not an important event
         # Add a 'Prior' (Prioridade) Collumn At the Beggining
-        self.tabela_interf_eventos['Prior'] = 1
+        self.tabela_interf_master['Prior'] = 1
         # Prioridade considerando quando houve evento de inativação
         # se antes do atual não é prioritário
-        for process, events in self.tabela_interf_eventos.groupby('Processo', sort=False):
+        for process, events in self.tabela_interf_master.groupby('Processo', sort=False):
             # assume prioritário ou não pela data do primeiro evento
             # ou 0 se não se sabe
             prior = 1 if events.iloc[-1]['EvPrior'] > 0 else 0
@@ -309,54 +303,49 @@ class Interferencia:
                 if data_inativ  <= np.datetime64(self.processo['prioridadec']):
                     # morreu antes do atual, não é prioritário
                     prior = -1
-            self.tabela_interf_eventos.loc[
-                self.tabela_interf_eventos.Processo == process, 'Prior'] = prior
+            self.tabela_interf_master.loc[
+                self.tabela_interf_master.Processo == process, 'Prior'] = prior
             #self.tabela_interf_eventos.loc[self.tabela_interf_eventos.Processo == name, 'Prior'] = (
             #1*(events.EvPrior.sum() > 0 and events.Inativ.sum() > -1))
         # re-rearrange columns
         cols_order = ['Prior', 'Ativo', 'Processo', 'Evento', 'EvSeq', 'Descrição', 'Data', 
         'DataPrior', 'EvPrior', 'Inativ', 'Obs', 'DOU', 'Dads', 'Sons']
-        self.tabela_interf_eventos = self.tabela_interf_eventos[cols_order]    
-        return True
-    
+        self.tabela_interf_master = self.tabela_interf_master[cols_order]    
+        return True    
         
-    def interferencia_to_json(self):
+    def to_json(self):
         """pretty print to json file tabela interferencia master"""
         if not hasattr(self, 'tabela_interf_eventos'):
-            if not self.createTabelaInterferenciaMaster():
+            if not self.createTableMaster():
                 return False
-        table = prettyTabelaInterferenciaMaster(self.tabela_interf_eventos)
-        json_file = os.path.join(self.processo_path, '_'.join('eventos_prioridade', 
-                        self.processo.number, self.processo.year)+'.json')
-        table.to_json(json_file)
+        table = self.tabela_interf_master.copy()
+        file = os.path.join(self.processo_path, config['interferencia']['file_prefix'] + '_' +
+                '_'.join([self.processo.number,self.processo.year])+'.json')  
+        table.to_json(file)
 
-
-    def interferencia_to_excel(self):
+    def to_excel(self):
         """pretty print to excel file tabela interferencia master"""
         if not hasattr(self, 'tabela_interf_eventos'):
-            if not self.createTabelaInterferenciaMaster():
+            if not self.createTableMaster():
                 return False
-        interf_eventos = self.tabela_interf_eventos.copy() # needed due to str conversion
-        dataformat = (lambda x: x.strftime("%d/%m/%Y %H:%M:%S"))
-        interf_eventos.Data = interf_eventos.Data.apply(dataformat)
-        interf_eventos.DataPrior = interf_eventos.DataPrior.apply(dataformat)
-        excelfile = os.path.join(self.processo_path, '_'.join('eventos_prioridade', 
-                self.processo.number, self.processo.year)+'.xlsx')        
+        table = self.tabela_interf_master.copy()
+        excelfile = os.path.join(self.processo_path, config['interferencia']['file_prefix'] + '_' +
+                '_'.join([self.processo.number,self.processo.year])+'.xlsx')        
         # Get max string size each collum for setting excel width column
-        txt_table = interf_eventos.values.astype(str).T
+        txt_table = table.values.astype(str).T
         minsize = np.apply_along_axis(lambda array: np.max([ len(string) for string in array ] ),
                             arr=txt_table, axis=-1) # maximum string size in each column
-        headers = np.array([ len(string) for string in interf_eventos.columns ]) # maximum string size each header
+        headers = np.array([ len(string) for string in table.columns ]) # maximum string size each header
         colwidths = np.maximum(minsize, headers) + 5 # 5 characters of space more
         # Observação / DOU set size to header size - due a lot of text
-        colwidths[-1] = headers[-1] + 10 # Observação
-        colwidths[-2] = headers[-2] + 10 # DOU
+        colwidths[-4] = headers[-4] + 10 # Observação
+        colwidths[-3] = headers[-3] + 10 # DOU
         # number of rows
-        nrows = len(interf_eventos)
+        nrows = len(table)
         # Create a Pandas Excel writer using XlsxWriter as the engine.
         writer = pd.ExcelWriter(excelfile, engine='xlsxwriter')
         # Convert the dataframe to an XlsxWriter Excel object.
-        interf_eventos.to_excel(writer, sheet_name='Sheet1', index=False)
+        table.to_excel(writer, sheet_name='Sheet1', index=False)
         # Get the xlsxwriter workbook and worksheet objects.
         workbook  = writer.book
         worksheet = writer.sheets['Sheet1']
@@ -393,7 +382,7 @@ class Interferencia:
             return excel_fmt
         #######################################
         i=0 # each process row share the same bg color
-        for process, events in interf_eventos.groupby('Processo', sort=False):
+        for process, events in table.groupby('Processo', sort=False):
             # prioritário ou não pela coluna 'Prior' primeiro value
             prior = events['Prior'].values[0] >= 0 # prioritário ou unknown
             dead = events['Ativo'].values[0] == r'Não'
@@ -409,20 +398,13 @@ class Interferencia:
         # Set column width
         for i in range(len(colwidths)):
             # set_column(first_col, last_col, width, cell_format, options)
-            worksheet.set_column(i, i, colwidths[i])
-        # Close the Pandas Excel writer and output the Excel file.
+            worksheet.set_column(i, i, colwidths[i])                            
+        # processos associados
+        if self.tabela_assoc.size > 0:
+            self.tabela_assoc.to_excel(writer, sheet_name='Sheet2', index=False)        
+        # close the pandas excel writer and output the Excel file.
         writer.close()
-        self.excelInterferenciaAssociados()
-
-    def excelInterferenciaAssociados(self):
-        """Processos interferentes com processos associados"""
-        if not hasattr(self, 'tabela_assoc'):
-            return
-        excelname = ('eventos_prioridade_assoc_' + self.processo.number + '_'
-                          + self.processo.year+'.xlsx')
-        excelname = os.path.join(self.processo_path, excelname)
-        self.tabela_assoc.to_excel(excelname, index=False)
-
+        
 
 # something else not sure will be usefull someday
 # def salvaEstudoOpcaoDeAreaHtml(self, html_path):
