@@ -48,8 +48,10 @@ def findPnames(pross_str):
     """
     return regex_process.findall(pross_str)
 
-def yearNumber(pross_str):
-    """unique number for process that can be easily sorted
+def processUniqueNumber(pross_str):
+    """
+    Unique number from process name
+    That can be easily sorted.
     eg. 2537/1942 -> 1942002537
     """
     number, year = numberyearPname(pross_str)
