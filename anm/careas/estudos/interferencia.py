@@ -23,6 +23,8 @@ from .scraping import (
 interferencia_fases = ['Requerimento de Pesquisa', 'Direito de Requerer a Lavra', 
 'Requerimento de Lavra', 'Requerimento de Licenciamento', 'Requerimento de Lavra Garimpeira'] 
 
+ 
+
 def inFaseRInterferencia(fase_str):
     for fase in interferencia_fases:
         if fase.find(fase_str.strip()) != -1:
@@ -69,17 +71,18 @@ class DownloadInterferenciaFailed(Exception):
 
 class Interferencia:
     """Estudo de Retirada de Interferência SIGAREAS"""
-    def __init__(self, wpage, processostr, dados=SCM_SEARCH.PRIORIDADE, verbose=True, processoget=True):
+    def __init__(self, wpage, processostr, task=SCM_SEARCH.PRIORIDADE, verbose=True, getprocesso=True):
         """        
         wpage : wPage html webpage scraping class com login e passwd preenchidos
         processostr : numero processo format xxx.xxx/ano
         """
         self.processo = None 
-        if processoget:
-            self.processo = Processo.Get(processostr, wpage, dados, verbose)
+        self.processo_path = None 
+        if getprocesso:
+            self.processo = Processo.Get(processostr, wpage, task, verbose)
+            self.processo_path = Interferencia.processPath(self.processo)
         self.wpage = wpage
         self.verbose = verbose       
-        self.processo_path = Interferencia.processPath(self.processo)
         self.tabela_interf_master = None 
         self.tabela_assoc = None 
         self.tabela_interf = None        
@@ -115,7 +118,7 @@ class Interferencia:
         * exceptions: 
             `DownloadInterferenciaFailed`, `CancelaUltimoEstudoFailed`
         """
-        estudo = Interferencia(wpage, processostr, dados=SCM_SEARCH.PRIORIDADE, verbose=verbose)
+        estudo = Interferencia(wpage, processostr, task=SCM_SEARCH.PRIORIDADE, verbose=verbose)
         estudo.processo.salvaDadosBasicosHtml(estudo.processo_path)
         estudo.processo.salvaDadosPoligonalHtml(estudo.processo_path)                    
         # if fase correct MUST have access to retirada de 
@@ -134,40 +137,6 @@ class Interferencia:
                         raise CancelaUltimoEstudoFailed()
         return estudo
     
-    @staticmethod
-    def from_html():
-        pass 
-
-    @staticmethod
-    def from_excel(dir='.'):        
-        processo = Processo.fromHtml(dir, 'False')
-        estudo = Interferencia(None, processo.name, verbose=False, processoget=False)        
-        file_path = pathlib.Path('.').glob(config['interferencia']['file_prefix']+'*.xlsx')
-        if not file_path: 
-            raise RuntimeError("Legacy Excel prioridade not found, something like eventos_prioridade_*.xlsx")
-        estudo.tabela_interf_master = pd.read_excel(list(file_path)[0])          
-        return estudo
-        
-    @staticmethod
-    def from_json(dir='.'):
-        processo = Processo.fromHtml(dir, 'False')
-        estudo = Interferencia(None, processo.name, verbose=False, processoget=False)        
-        file_path = pathlib.Path('.').glob(config['interferencia']['file_prefix'] +'*.xlsx')
-        if not file_path: 
-            raise RuntimeError("Json file not found, something like eventos_prioridade*.json")
-        estudo.tabela_interf_master = pd.read_json(list(file_path)[0])          
-        return estudo 
-    
-    def saveHtml(self, download=True):
-        """fetch and save html interferencia"""
-        if download:
-            html_file = (config['interferencia']['html_prefix']['this']+'_'+
-                '_'.join([self.processo.number, self.processo.year]))  
-            html_file = os.path.join(self.processo_path, html_file)
-            return fetch_save_Html(self.wpage, self.processo.number, self.processo.year, 
-                            html_file, download)
-        return True
-
     def cancelLast(self):
         """
         Cancela ultimo estudo em aberto. ('opção', 'interferencia' etc..)
@@ -315,16 +284,6 @@ class Interferencia:
         self.tabela_interf_master = self.tabela_interf_master[cols_order]    
         return True    
         
-    def to_json(self):
-        """pretty print to json file tabela interferencia master"""
-        if not hasattr(self, 'tabela_interf_eventos'):
-            if not self.createTableMaster():
-                return False
-        table = self.tabela_interf_master.copy()
-        file = os.path.join(self.processo_path, config['interferencia']['file_prefix'] + '_' +
-                '_'.join([self.processo.number,self.processo.year])+'.json')  
-        table.to_json(file)
-
     def to_excel(self):
         """pretty print to excel file tabela interferencia master"""
         if not hasattr(self, 'tabela_interf_eventos'):
@@ -407,7 +366,55 @@ class Interferencia:
             self.tabela_assoc.to_excel(writer, sheet_name='Sheet2', index=False)        
         # close the pandas excel writer and output the Excel file.
         writer.close()
+      
+    def to_json(self):
+        """pretty print to json file tabela interferencia master"""
+        if not hasattr(self, 'tabela_interf_eventos'):
+            if not self.createTableMaster():
+                return False
+        table = self.tabela_interf_master.copy()
+        table = prettyTabelaInterferenciaMaster(table, view=False)
+        file = os.path.join(self.processo_path, config['interferencia']['file_prefix'] + '_' +
+        '_'.join([self.processo.number,self.processo.year])+'.json')  
+        table.to_json(file)
+          
+    @staticmethod
+    def from_html():
+        pass 
+
+    @staticmethod
+    def from_excel(dir='.'):        
+        processo = Processo.fromHtml(dir, verbose=False)
+        estudo = Interferencia(None, processo.name, verbose=False, getprocesso=False)     
+        estudo.processo = processo 
+        estudo.processo_path = estudo.processPath(processo)      
+        file_path = list(pathlib.Path(dir).glob(config['interferencia']['file_prefix']+'*.xlsx'))
+        if not file_path: 
+            raise RuntimeError("Legacy Excel prioridade not found, something like eventos_prioridade_*.xlsx")
+        estudo.tabela_interf_master = pd.read_excel(file_path[0])          
+        return estudo
         
+    @staticmethod
+    def from_json(dir='.'):
+        processo = Processo.fromHtml(dir, verbose=False)
+        estudo = Interferencia(None, processo.name, verbose=False, getprocesso=False)     
+        estudo.processo = processo 
+        estudo.processo_path = estudo.processPath(processo)     
+        file_path = list(pathlib.Path(dir).glob(config['interferencia']['file_prefix'] +'*.json'))        
+        if not file_path: 
+            raise RuntimeError("Json file not found, something like eventos_prioridade*.json")
+        estudo.tabela_interf_master = pd.read_json(file_path[0])          
+        return estudo 
+    
+    def saveHtml(self, download=True):
+        """fetch and save html interferencia"""
+        if download:
+            html_file = (config['interferencia']['html_prefix']['this']+'_'+
+                '_'.join([self.processo.number, self.processo.year]))  
+            html_file = os.path.join(self.processo_path, html_file)
+            return fetch_save_Html(self.wpage, self.processo.number, self.processo.year, 
+                            html_file, download)
+        return True
 
 # something else not sure will be usefull someday
 # def salvaEstudoOpcaoDeAreaHtml(self, html_path):
