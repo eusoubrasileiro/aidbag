@@ -1,16 +1,16 @@
-from ctypes.wintypes import SC_HANDLE
 import sys, os, copy
 import datetime, zlib
 import glob, json, traceback
 import concurrent.futures
 import threading
 import enum
+import tempfile
+import functools
 
 from ....general import progressbar 
 from ....web.htmlscrap import wPageNtlm
 from . import requests 
 from . import ancestry
-
 
 from .util import (
     fmtPname,
@@ -26,10 +26,6 @@ from .parsing import (
     getMissingTagsBasicos
 )
 
-
-mutex = threading.Lock()
-"""`threading.Lock` exists due 'associados' search with multiple threads"""
-
 class SCM_SEARCH(enum.Flag):
     """what to search to fill in a `Processo` class"""
     NONE = enum.auto()
@@ -38,6 +34,20 @@ class SCM_SEARCH(enum.Flag):
     PRIORIDADE = enum.auto()
     POLIGONAL = enum.auto()    
     ALL = BASICOS | ASSOCIADOS | PRIORIDADE | POLIGONAL
+    
+
+def thread_safe(function):
+    """Decorator for methods of `Processo` or `ProcessStorage` needing thread safe execution using self->threading.RLock
+    Only one Thread can execute that method at time.
+    Classes must have self.lock field"""
+    @functools.wraps(function)
+    def wrapper(self, *args, **kwargs):            
+        if not self.lock.acquire(timeout=60.*2):
+            raise TimeoutError(f"Wait time-out in function {function.__name__} for process { self.name }")
+        result = function(self, *args, **kwargs)            
+        self.lock.release() # make it free
+        return result 
+    return wrapper
 
 
 """
@@ -61,8 +71,8 @@ class Processo:
         self._associados_run = False
         self._ancestry_run = False
         self._dadospoly_run = False
-        self._thev_isfree = threading.Event()
-        self._thev_isfree.set() # make it free right now so it can execute
+        self.lock = threading.RLock() # re-entrant can be acquired by same thread multiple times
+        """`threading.RLock` exists due 'associados' search with multiple threads"""
         self._dados = {} 
         """dados parsed and processed """
         # web pages are 'dadosbasicos' and 'poligonal'
@@ -85,40 +95,25 @@ class Processo:
     def pages(self):
         return self._pages
 
-    def runTask(self, dados=SCM_SEARCH.BASICOS, task=None, wpage=None):
+    @thread_safe
+    def runTask(self, task=SCM_SEARCH.BASICOS, wpage=None):
         """
-        Run task thread safely. Due multiple threads only one can be running on a process.
+        Run task from enum SCM_SEARCH desired data.
         
-        * task : tupple (optional)  
-            (function, dict of keyword args) 
-
-        * dados : enum
+        * task : enum
             SCM_SEARCH
         """
         if self._wpage is None: # to support being called without wp set 
             self._wpage = wpage
-
-        # check if some thread is running. Only ONE can have this process at time        
-        if not self._thev_isfree.wait(60.*2):
-            raise Exception("runtask - wait time-out for process: ", self.name)
-        self._thev_isfree.clear() # make it busy
-        if dados in SCM_SEARCH: # passed argument to perform a default call without args
-            if SCM_SEARCH.BASICOS in dados and not self._dadosbasicos_run:
-                task = (self._dadosBasicosGet, {})
-            elif SCM_SEARCH.ASSOCIADOS in dados and not self._associados_run:
-                task = (self._expandAssociados, {})
-            elif SCM_SEARCH.PRIORIDADE in dados and not self._ancestry_run:
-                task = (self._ancestry, {})
-            elif SCM_SEARCH.POLIGONAL in dados and not self._dadospoly_run:
-                task = (self._dadosPoligonalGet, {})
-        if task:
-            task, params = task
-            if self._verbose:
-                with mutex:
-                    print('task to run: ', task.__name__, ' params: ', params,
-                    ' - process: ', self.name, file=sys.stderr)
-            task(**params)
-        self._thev_isfree.set() # make it free
+        if task in SCM_SEARCH: # passed argument to perform a default call without args
+            if SCM_SEARCH.BASICOS in task and not self._dadosbasicos_run:
+                self._dadosBasicosGet()
+            elif SCM_SEARCH.ASSOCIADOS in task and not self._associados_run:
+                self._expandAssociados()
+            elif SCM_SEARCH.PRIORIDADE in task and not self._ancestry_run:
+                self._ancestry()
+            elif SCM_SEARCH.POLIGONAL in task and not self._dadospoly_run:
+                self._dadosPoligonalGet()
 
     def _pageRequest(self, name):
         """python requests page and get response unicode str decoded"""
@@ -129,6 +124,7 @@ class Processo:
             self._pages[name]['html'] = response.text # str unicode page             
             return self._pages[name]['html']
 
+    @thread_safe
     def _expandAssociados(self, ass_ignore=''):
         """
         Search and Load on `ProcessStorage` all processes associated with this. 
@@ -149,76 +145,74 @@ class Processo:
         if self._associados_run: 
             return self.associados       
 
-        if self.associados:
-            if self._verbose:
-                with mutex:
-                    print("expandAssociados - getting associados: ", self.name,
-                    ' - ass_ignore: ', ass_ignore, file=sys.stderr)
-            # local copy for object search -> removing circular reference
-            associados = copy.copy(self.associados)      
-            if ass_ignore: # equivalent to ass_ignore != ''
-                # if its going to be ignored it's because it already exists 
-                # being associated with someone 
-                # !inconsistency! bug situations identified where A -> B but B !-> A on 
-                # each of A and B SCM page -> SO check if ass_ignore exists on self.associados
-                if ass_ignore in self.associados:                                
-                    self.associados[ass_ignore].update({'obj' : ProcessStorage[ass_ignore]})  
-                    # for outward search ignore this process
-                    del associados[ass_ignore] # removing circular reference    
-                else: # !inconsistency! bug situation identified where A -> B but B !-> A 
-                    # encontrada em grupamento mineiro 
-                    # processo em mais de um grupamento mineiro
-                    # sendo que um dos grupamentos havia sido cancelado mas a associação não removida                    
-                    inconsistency = ["Process {0} associado to this process but this is NOT associado to {0} on SCM".format(
-                        ass_ignore)]
-                    self._dados['inconsistencies'] = self._dados['inconsistencies'] + inconsistency 
-                    if self._verbose:
-                        with mutex:
-                            print("expandAssociados - inconsistency: ", self.name,
-                            ' : ', inconsistency, file=sys.stderr)
-            # helper function to search outward only
-            def _expandAssociados(name, wp, ignore, verbosity):
-                """ *ass_ignore : must be set to avoid being waiting for parent-source 
-                    Also make the search spread outward only"""
-                proc = Processo.Get(name, wp, SCM_SEARCH.NONE, verbosity, run=False)
-                # must use runtask due multiple threads running
-                proc.runTask(SCM_SEARCH.BASICOS)
-                proc.runTask(task=(proc._expandAssociados, {'ass_ignore':ignore}))
-                return proc
-            # ignoring empty lists 
-            if associados:
-                with concurrent.futures.ThreadPoolExecutor() as executor: # thread number optimal       
-                    # use a dict to map { process name : future_wrapped_Processo }             
-                    # due possibility of exception on Thread and to know which process was responsible for that
-                    #future_processes = {process_name : executor.submit(Processo.Get, process_name, self.wpage, 1, self.verbose) 
-                    #    for process_name in assprocesses_name}
-                    future_processes = {process_name : executor.submit(_expandAssociados, 
-                        process_name, self._wpage, self.name, self._verbose) 
-                        for process_name in associados}
-                    concurrent.futures.wait(future_processes.values())
-                    #for future in concurrent.futures.as_completed(future_processes):         
-                    for process_name, future_process in future_processes.items():               
-                        try:
-                            # add to process name, property 'obj' process objects                            
-                            self.associados[process_name].update({'obj': future_process.result()})
-                        except Exception as e:                            
-                            print(f"Exception raised while running expandAssociados thread for process {process_name}",
-                                file=sys.stderr)     
-                            if type(e) is requests.ErrorProcessSCM:
-                                # MUST delete process if did not get scm page
-                                # since basic data wont be on it, will break ancestry search etc... 
-                                del ProcessStorage[process_name]
-                                del self.associados[process_name]
-                                print(str(e) + f" Removed from associados. Exception ignored!",
-                                    file=sys.stderr)
-                            else:
-                                print(traceback.format_exc(), file=sys.stderr, flush=True)     
-                                raise # re-raise                  
-            if self._verbose:
-                with mutex:
-                    print("expandAssociados - finished associados: ", self.name, file=sys.stderr)
-        self._associados_run = True
-        return self.associados
+        if not self.associados:
+            self._associados_run = True
+            return
+        
+        if self._verbose:
+            print("expandAssociados - getting associados: ", self.name,
+            ' - ass_ignore: ', ass_ignore, file=sys.stderr)
+        # local copy for object search -> removing circular reference
+        associados = copy.copy(self.associados)      
+        if ass_ignore: # equivalent to ass_ignore != ''
+            # if its going to be ignored it's because it already exists 
+            # being associated with someone 
+            # !inconsistency! bug situations identified where A -> B but B !-> A on 
+            # each of A and B SCM page -> SO check if ass_ignore exists on self.associados
+            if ass_ignore in self.associados:                                
+                self.associados[ass_ignore].update({'obj' : ProcessStorage[ass_ignore]})  
+                # for outward search ignore this process
+                del associados[ass_ignore] # removing circular reference    
+            else: # !inconsistency! bug situation identified where A -> B but B !-> A 
+                # encontrada em grupamento mineiro 
+                # processo em mais de um grupamento mineiro
+                # sendo que um dos grupamentos havia sido cancelado mas a associação não removida                    
+                inconsistency = ["Process {0} associado to this process but this is NOT associado to {0} on SCM".format(
+                    ass_ignore)]
+                self._dados['inconsistencies'] = self._dados['inconsistencies'] + inconsistency 
+                if self._verbose:
+                    print("expandAssociados - inconsistency: ", self.name,
+                    ' : ', inconsistency, file=sys.stderr)
+        # helper function to search outward only
+        def _expandassociados(name, wp, ignore, verbosity):
+            """ *ass_ignore : must be set to avoid being waiting for parent-source 
+                Also make the search spread outward only"""
+            proc = Processo.Get(name, wp, SCM_SEARCH.BASICOS, verbosity)                
+            proc._expandAssociados(ignore)
+            return proc
+        # ignoring empty lists 
+        if associados:
+            with concurrent.futures.ThreadPoolExecutor() as executor: # thread number optimal       
+                # use a dict to map { process name : future_wrapped_Processo }             
+                # due possibility of exception on Thread and to know which process was responsible for that
+                #future_processes = {process_name : executor.submit(Processo.Get, process_name, self.wpage, 1, self.verbose) 
+                #    for process_name in assprocesses_name}
+                future_processes = {process_name : executor.submit(_expandassociados, 
+                    process_name, self._wpage, self.name, self._verbose) 
+                    for process_name in associados}
+                concurrent.futures.wait(future_processes.values())
+                #for future in concurrent.futures.as_completed(future_processes):         
+                for process_name, future_process in future_processes.items():               
+                    try:
+                        # add to process name, property 'obj' process objects                            
+                        self.associados[process_name].update({'obj': future_process.result()})
+                    except Exception as e:                            
+                        print(f"Exception raised while running expandAssociados thread for process {process_name}",
+                            file=sys.stderr)     
+                        if type(e) is requests.ErrorProcessSCM:
+                            # MUST delete process if did not get scm page
+                            # since basic data wont be on it, will break ancestry search etc... 
+                            del ProcessStorage[process_name]
+                            del self.associados[process_name]
+                            print(str(e) + f" Removed from associados. Exception ignored!",
+                                file=sys.stderr)
+                        else:
+                            print(traceback.format_exc(), file=sys.stderr, flush=True)     
+                            raise # re-raise                  
+        if self._verbose:
+            print("expandAssociados - finished associados: ", self.name, file=sys.stderr)
+            
+        self._associados_run = True        
 
     def _ancestry(self):
         """
@@ -228,12 +222,17 @@ class Processo:
         if self._ancestry_run:
             return self['prioridadec']
 
-        if not self._associados_run:
+        if not self._dadosbasicos_run:
+            self._dadosBasicosGet()
+
+        if self._associados_run: 
+            return self.associados       
+        
+        if not self._associados_run and self.associados:
             self._expandAssociados()
 
         if self._verbose:
-            with mutex:
-                print("ancestrySearch - building graph: ", self.name, file=sys.stderr)
+            print("ancestrySearch - building graph: ", self.name, file=sys.stderr)
         
         self._dados['prioridadec'] = self['prioridade']
         if self.associados: # not dealing with grupamento many parents yet
@@ -255,11 +254,10 @@ class Processo:
             if download: # download get with python.requests page html response            
                 self._pageRequest('dadosbasicos')        
             if self._verbose:
-                with mutex:
-                    print("dadosBasicosGet - parsing: ", self.name, file=sys.stderr)        
+                print("dadosBasicosGet - parsing: ", self.name, file=sys.stderr)        
             # using class field directly       
             dados, dados_raw = parseDadosBasicos(self._pages['dadosbasicos']['html'], 
-                self.name, self._verbose, mutex, data_tags)
+                self.name, self._verbose, data_tags)
             self._pages['dadosbasicos']['data_raw'] = dados_raw
             self._dados.update(dados)
             self._dadosbasicos_run = True 
@@ -276,8 +274,7 @@ class Processo:
                 self._pageRequest('poligonal')
             # dont need to retrieve anything
             if self._verbose:
-                with mutex:
-                    print("dadosPoligonalGet - parsing: ", self.name, file=sys.stderr)   
+                print("dadosPoligonalGet - parsing: ", self.name, file=sys.stderr)   
             dados = parseDadosPoligonal(self._pages['poligonal']['html'])
             self._dados.update({'poligonal' : dados })
             self._pages['poligonal']['data_raw'] = dados             
@@ -374,7 +371,7 @@ class Processo:
                 directly from a request.response.content string previouly saved  
                 `processostr` must be set
         """
-        processo = Processo.Get(processostr, None, verbose=verbose, dados=SCM_SEARCH.NONE, run=False)
+        processo = Processo.Get(processostr, None, verbose=verbose, task=SCM_SEARCH.NONE, run=False)
         processo._pages['dadosbasicos']['html'] = html_basicos
         processo._dadosBasicosGet(download=False) 
         if html_poligonal:
@@ -411,7 +408,7 @@ class Processo:
         return Processo.fromStrHtml(processostr, main_html, poligon_html, verbose=verbose)
 
     @staticmethod
-    def Get(processostr, wpagentlm, dados=SCM_SEARCH.ALL, verbose=True, run=True):
+    def Get(processostr, wpagentlm, task=SCM_SEARCH.ALL, verbose=True, run=True):
         """
         Create a new or get a Processo from ProcessStorage
 
@@ -422,33 +419,39 @@ class Processo:
         processostr = fmtPname(processostr)
         if processostr in ProcessStorage:
             if verbose: # only for pretty printing
-                with mutex:
-                    print("Processo __new___ getting from storage ", processostr, file=sys.stderr)
+                print("Processo __new___ getting from storage ", processostr, file=sys.stderr)
             processo = ProcessStorage[processostr]
         else:
             if verbose: # only for pretty printing
-                with mutex:
-                    print("Processo __new___ placing on storage ", processostr, file=sys.stderr)
+                print("Processo __new___ placing on storage ", processostr, file=sys.stderr)
         processo = Processo(processostr, wpagentlm,  verbose)
         ProcessStorage[processostr] = processo   # store this new guy 
         if run: # wether run the task, dont run when loading from file/str
-            processo.runTask(dados)
+            processo.runTask(task)
         return processo
 
 
 # Inherits from dict since it is:
 # 1. the recommended global approach 
 # 2. thread safe for 'simple set/get'
-class ProcessStorageClass(dict):
+class ProcessFactoryStorageClass(dict):
     """Container of processes to avoid 
     1. connecting/open page of SCM again
     2. parsing all information again    
     * If it was already parsed save it in here { key : value }
     * key : unique `fmtPname` process string
     * value : `scm.Processo` object
-    """
+    """    
+    def __init__(self, store_at_every=5): 
+        """
+        * store_at_every: save on disk at every 
+        """
+        super().__init__()  
+        self.store_at_every = store_at_every
+        self.tempdir = tempfile.gettempdir()
+    
     def runTask(self, wp, *args, **kwargs):
-        """run `runTask` on every process on storage 
+        """run `runTask` on every process on storage    
 
         * wp : wPageNtlm
             must be provided   
@@ -457,7 +460,6 @@ class ProcessStorageClass(dict):
 
         Like dados=Processo.SCM_SEARCH.BASICOS or any tuple (function, args) pair
         """
-
         for pname in progressbar(ProcessStorage):
             #must be one independent requests.Session for each process otherwise mess            
             ProcessStorage[pname]._wpage = wPageNtlm(wp.user, wp.passwd, ssl=True)             
@@ -506,7 +508,7 @@ class ProcessStorageClass(dict):
         for keys in iterator:
             Processo.fromJSON(processes[keys], verbose)
 
-    
+ 
 
 
 # # from many saved JSON processes locally
@@ -521,22 +523,15 @@ class ProcessStorageClass(dict):
 # running runTask on all process on storage
 # import tqdm 
 
-
-
 # for k in scm.ProcessStorage:
 #     if scm.ProcessStorage[k].associados:
 #         print(scm.ProcessStorage[k].associados)
 
-ProcessStorage = ProcessStorageClass()
-"""Container of processes to avoid 
+ProcessStorage = ProcessFactoryStorageClass()
+"""Container and Factory of processes to avoid 
 1. connecting/open page of SCM again
 2. parsing all information again    
 * If it was already parsed save it in here { key : value }
 * key : unique `fmtPname` process string
 * value : `scm.Processo` object
 """
-
-
-
-
-

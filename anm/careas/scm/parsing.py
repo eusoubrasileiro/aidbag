@@ -32,15 +32,14 @@ def parseNUP(basicos_page):
     return soup.select_one('[id=ctl00_conteudo_lblNup]').text   
 
 
-def parseDadosBasicos(basicos_page, name, verbose, mutex, data_tags=scm_data_tags):    
+def parseDadosBasicos(basicos_page, name, verbose, data_tags=scm_data_tags):    
     soup = BeautifulSoup(basicos_page, "html.parser")
     dados = htmlscrap.dictDataText(soup, data_tags)
     dados_raw = copy.deepcopy(dados) # must be deep otherwise references will be kepts
     if dados['data_protocolo'] == '': # might happen
         dados['data_protocolo'] = dados['prioridade']
         if verbose:
-            with mutex:
-                print('parseDadosBasicos - missing <data_protocolo>: ', file=sys.stderr)    
+            print('parseDadosBasicos - missing <data_protocolo>: ', file=sys.stderr)    
     # prioridade pode estar errada, por exemplo, quando uma cessão gera processos 300
     # a prioridade desses 300 acaba errada ao esquecer do avô
     # protocolo pode estar errado ou ausente também
