@@ -41,17 +41,19 @@ def htmlTable(table):
     table['group'] = table.Processo # which process group it belongs
     table['evindex'] = None 
     table['evn'] = None 
-    for name, group in table.groupby(table.Processo):
+    if 'style' not in table.columns: # legay table or jsons
+        table['style'] = '' # missing column for display porpouses     
+    for _, group in table.groupby(table.Processo):
         table.loc[group.index, 'evn'] = len(group) 
         table.loc[group.index, 'evindex'] = list(range(len(group)))
     table = prettyTabelaInterferenciaMaster(table, view=True)  # some prettify 
     # for backward compatibility rearrange columns
     table = table[['Prior', 'Ativo', 'Processo', 'Evento', 'EvSeq', 'Descrição', 'Data', 
             'DataPrior', 'EvPrior', 'Inativ', 'Obs', 'DOU', 'Dads', 'Sons',
-            'group', 'evindex', 'evn']] 
-    row_attrs = ['Ativo', 'group', 'evindex', 'evn'] # List of columns to write as attributes in row element.
+            'group', 'evindex', 'evn', 'style']] 
+    row_attrs = ['Ativo', 'group', 'evindex', 'evn', 'style'] # List of columns to write as attributes in row element.
     row_cols = table.columns.to_list() # List of columns to write as children in row element. By default, all columns
-    row_cols = [ v for v in row_cols if v not in ['group', 'evindex', 'evn'] ]        
+    row_cols = [ v for v in row_cols if v not in ['group', 'evindex', 'evn', 'style'] ]        
     html_table = dataframe_to_html(table, row_attrs, row_cols)
     # insert checkboxes on first row of each process 'Prior' column for click-check prioridade
     for main_row in html_table.findall(".//tbody/tr[@evindex='0']"):                    
@@ -60,7 +62,8 @@ def htmlTable(table):
         else:
             etree.SubElement(main_row[0], "input", { 'type': 'checkbox'})  
         main_row[0].text = ''   
-    html_table = etree.tostring(html_table, encoding='unicode', method='xml')       
+    html_table = etree.tostring(html_table, encoding='unicode', method='xml')     
+    print(f"code is {html_table[:2000]}", file=sys.stderr)  
     return html_table   
 
    
@@ -96,7 +99,6 @@ def select():
     cache.set('table', table)
     response = make_response(render_template('index.html', processo=key,
                 pandas_table=htmlTable(table)) )
-    response.headers['X-Parachutes'] = 'parachutes are cool'
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
@@ -105,15 +107,23 @@ def select():
     
 @app.route('/update', methods=['POST'])
 def update():
-    data = request.get_json()    
-    Thread(target=save, args=(data['process'], data['state'])).start()
+    data = request.get_json()        
+    if 'state' in data: # checkbox state        
+        save(data['process'], data['state'], 'state ')
+    elif 'style' in data: # toggle style state
+        save(data['process'], data['style'], 'style')
     return Response(status=204)
 
-def save(processo, state):    
+def save(processo, data, what='state'):    
     """update cached estudo table and estudo file on disk"""    
     table = cache.get('table')      
-    if table is not None:  
-        table.loc[table.Processo == processo, 'Prior'] = '1' if state else '0'    
+    print(f'process is {processo} what is {what} data is {data} table is {table is None}', file=sys.stderr)
+    if table is not None:          
+        if 'state' in what:
+            table.loc[table.Processo == processo, 'Prior'] = '1' if data else '0'                
+        if 'style' in what:                        
+            table.loc[table.loc[table.Processo == processo].index[1:], 'style'] = f'display: {data}' 
+        cache.set('table', table)
         table = prettyTabelaInterferenciaMaster(table, view=False)
         with open(cache.get('json_path'), 'w') as f:
             table.to_json(f)

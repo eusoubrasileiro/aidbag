@@ -25,8 +25,24 @@
         if( event.target.tagName != 'INPUT' ){ /* to avoid colapse on click on checkbox */
           //open up the events - toggle from the process atribute 
           pgroup = $(this).attr('group');  
-          events = $("tr[group='" + pgroup + "']:not([evindex='0'])")
-          events.slideToggle();              
+          events = $("tr[group='" + pgroup + "']:not([evindex='0'])")                    
+          nenv = events.length;
+          events.each(function(index, event){         
+            /* toogle slide up/down for all event rows except last */
+            if(index < nenv-1)
+              $(event).slideToggle('slow');             
+          });
+          /* triggers POST to save on last one on json table */
+          events.last().slideToggle('slow', function(){
+            var data = {};
+            data['process'] = pgroup;
+            data['style'] = $(this).css('display'); 
+            fetch("/update", {
+              method: "POST",
+              headers: {'Content-Type': 'application/json'}, 
+              body: JSON.stringify(data)
+            });   
+          }); 
         }        
       });
 
@@ -34,7 +50,7 @@
         var data = {};        
         parent = event.target.parentElement.parentElement.getAttribute('group');          
         data['process'] = parent;
-        data['state'] = event.target.checked
+        data['state'] = event.target.checked;
         fetch("/update", {
           method: "POST",
           headers: {'Content-Type': 'application/json'}, 
@@ -67,9 +83,6 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-    }
-    tbody tr:not([evindex='0']) { /* hide older events - after you finish working */
-        display: true;        
     }
     tr[evindex='0']:not([evn='1']) { /* has events - mark bold */
       font-weight: bold;
