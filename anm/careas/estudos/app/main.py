@@ -62,8 +62,7 @@ def htmlTable(table):
         else:
             etree.SubElement(main_row[0], "input", { 'type': 'checkbox'})  
         main_row[0].text = ''   
-    html_table = etree.tostring(html_table, encoding='unicode', method='xml')     
-    print(f"code is {html_table[:2000]}", file=sys.stderr)  
+    html_table = etree.tostring(html_table, encoding='unicode', method='xml')         
     return html_table   
 
    
@@ -93,7 +92,7 @@ def select():
     try: # json first         
         table = pd.read_json(json_path)
     except Exception as e: # legacy then        
-        print("Not using local json!", file=sys.stderr)
+        print("Not using local json! Loading from legacy excel table.", file=sys.stderr)
         estudo = Interferencia.from_excel(wf.ProcessPathStorage[key])
         table = estudo.tabela_interf_master
     cache.set('table', table)
@@ -116,8 +115,7 @@ def update():
 
 def save(processo, data, what='state'):    
     """update cached estudo table and estudo file on disk"""    
-    table = cache.get('table')      
-    print(f'process is {processo} what is {what} data is {data} table is {table is None}', file=sys.stderr)
+    table = cache.get('table')          
     if table is not None:          
         if 'state' in what:
             table.loc[table.Processo == processo, 'Prior'] = '1' if data else '0'                
