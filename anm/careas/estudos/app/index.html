@@ -23,6 +23,7 @@
 
       $("tr[evindex='0']:not([evn='1'])").click(function(event) {
         if( event.target.tagName != 'INPUT' ){ /* to avoid colapse on click on checkbox */
+          $("body").css("cursor", "progress"); /* wait cursor */
           //open up the events - toggle from the process atribute 
           pgroup = $(this).attr('group');  
           events = $("tr[group='" + pgroup + "']:not([evindex='0'])")                    
@@ -30,10 +31,10 @@
           events.each(function(index, event){         
             /* toogle slide up/down for all event rows except last */
             if(index < nenv-1)
-              $(event).slideToggle('slow');             
+              $(event).slideToggle();             
           });
-          /* triggers POST to save on last one on json table */
-          events.last().slideToggle('slow', function(){
+          /* triggers POST to save on last one on json table */          
+          events.last().slideToggle(function(){
             var data = {};
             data['process'] = pgroup;
             data['style'] = $(this).css('display'); 
@@ -41,22 +42,28 @@
               method: "POST",
               headers: {'Content-Type': 'application/json'}, 
               body: JSON.stringify(data)
-            });   
+            }).then(function(response) {
+              $("body").css("cursor", "default"); /* default cursor */
+            });     
           }); 
         }        
       });
-
       $("input[type='checkbox']").click(function(event) {
+        $("body").css("cursor", "progress"); /* wait cursor */
         var data = {};        
         parent = event.target.parentElement.parentElement.getAttribute('group');          
         data['process'] = parent;
-        data['state'] = event.target.checked;
+        data['state'] = event.target.checked;        
         fetch("/update", {
           method: "POST",
           headers: {'Content-Type': 'application/json'}, 
           body: JSON.stringify(data)
-        });
+        }).then(function(response) {
+          $("body").css("cursor", "default"); /* default cursor */
+        });        
       });
+
+      document.title = "{{ processo }}"; /* set window name to easy work */
 
     });
   </script>
@@ -116,14 +123,14 @@
 </head> 
 <body>
   {% if processos_list %}
-    <h2>Select a process</h2>
-    <ul>
+    <h2>Pick a process</h2>
+    <ol>
     {% for process in processos_list %}  
       <li><a href="/select?selected={{ process.replace('/','-') }}">{{ process }}</a></li>
       {% endfor %}
-    </ul>
+    </ol>
   {% else %}    
-    <p style="text-align:center;font-size: medium;font-weight: bold;display: block;">{{ processo }} prioridade analysis </p  >  
+    <p style="text-align:center;font-size: medium;font-weight: bold;display: block;">Prioridade {{ processo }}  </p  >  
     {{ pandas_table|safe }}     
   {% endif %}    
 </body>

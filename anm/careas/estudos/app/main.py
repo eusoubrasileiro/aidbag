@@ -3,13 +3,14 @@ Flask app to analyse interferencia table
 and save it's 'prioridade' results direct from browser.add()
 Run from ~/Projects 
 python -m aidbag.anm.careas.estudos.app.main
+or to run on background
+nohup python -m aidbag.anm.careas.estudos.app.main 
 """
 from inspect import trace
 import os, sys 
 import pandas as pd 
 import argparse
 import pathlib
-import traceback
 from threading import Thread
 import xml.etree.ElementTree as etree
 
@@ -68,12 +69,13 @@ def htmlTable(table):
    
 app = Flask(__name__, template_folder=curpath)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 30*60 # 30 mins in seconds
-app.config['CACHE_TYPE'] = 'SimpleCache'  # only 1 thread connection
+app.config['CACHE_TYPE'] = 'SimpleCache'  # only 1 connection (1 thread/session/client)
 cache = Cache(app)
 cache.set('processos_list', wf.currentProcessGet())
 cache.set('selected', None)
 cache.set('table', None)
 cache.set('json_path', None)
+cache.set('done', False)
 
 
 @app.route('/')
@@ -91,13 +93,14 @@ def select():
     cache.set('json_path', json_path)
     try: # json first         
         table = pd.read_json(json_path)
-    except Exception as e: # legacy then        
+    except Exception as e: # legacy then         
         print("Not using local json! Loading from legacy excel table.", file=sys.stderr)
-        estudo = Interferencia.from_excel(wf.ProcessPathStorage[key])
+        estudo = Interferencia.from_excel(wf.ProcessPathStorage[key])        
         table = estudo.tabela_interf_master
     cache.set('table', table)
     response = make_response(render_template('index.html', processo=key,
                 pandas_table=htmlTable(table)) )
+    # disable cache so checkbox and display hidden dont get cached
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
@@ -131,4 +134,5 @@ if __name__ == "__main__":
     parser.add_argument('-d','--debug', default=True, action='store_true')    
     args = parser.parse_args()    
     app.config['Debug'] = args.debug
-    app.run(host='0.0.0.0', debug=args.debug)       
+    app.run(host='0.0.0.0', debug=args.debug)
+    
