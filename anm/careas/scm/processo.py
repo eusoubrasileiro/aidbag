@@ -1,4 +1,4 @@
-import sys, os, copy
+import sys, os, copy, pathlib  
 import datetime, zlib
 import glob, json, traceback
 import concurrent.futures
@@ -385,26 +385,20 @@ class Processo:
     def fromHtml(path='.', processostr=None, verbose=True):
         """Try create a `Processo` from a html's of basicos and poligonal (optional)       
         """
-        curdir = os.getcwd()
-        os.chdir(path)
-        path_main_html = glob.glob('*basicos*.html')[0] # html file on folder
-        path_poligon_html = glob.glob('*poligonal*.html') # html file on folder
+        path = pathlib.Path(path)        
+        path_main_html = list(path.glob('*basicos*.html'))[0] # html file on folder
+        path_poligon_html = list(path.glob('*poligonal*.html')) # html file on folder
         main_html = None        
         poligon_html = None
         if not processostr: # get process str name by file name
-            processostr= fmtPname(glob.glob('*basicos*.html')[0])
-
-        with open(path_main_html, 'r', encoding='utf-8') as f: # read html scm
+            processostr= fmtPname(str(path_main_html))
+        with path_main_html.open('r', encoding='utf-8') as f: # read html scm
             main_html = f.read()
-
         if path_poligon_html: # if present
-            path_poligon_html = path_poligon_html[0]
-            with open(path_poligon_html, 'r', encoding='utf-8') as f: # read html scm
+            with path_poligon_html[0].open('r', encoding='utf-8') as f: # read html scm
                 poligon_html = f.read()
         elif verbose:            
-            print('Didnt find a poligonal page html saved', file=sys.stderr)
-        os.chdir(curdir) # go back
-        
+            print('Didnt find a poligonal page html saved', file=sys.stderr)                
         return Processo.fromStrHtml(processostr, main_html, poligon_html, verbose=verbose)
 
     @staticmethod
@@ -415,8 +409,8 @@ class Processo:
         processostr : numero processo format xxx.xxx/ano
         wpage : wPage html webpage scraping class com login e passwd preenchidos
         """
-        processo = None
-        processostr = fmtPname(processostr)
+        processo = None                
+        processostr = fmtPname(processostr)        
         if processostr in ProcessStorage:
             if verbose: # only for pretty printing
                 print("Processo __new___ getting from storage ", processostr, file=sys.stderr)
@@ -445,10 +439,16 @@ class ProcessFactoryStorageClass(dict):
     def __init__(self, store_at_every=5): 
         """
         * store_at_every: save on disk at every 
-        """
+        """        
         super().__init__()  
+        #TODO implement get most recent version saved on 
+        # temp folder if not create a new 
+        tempfile.mkstemp(prefix='ProcessStored', suffix='.json') 
+        # folder is 
+        self.tempdir = tempfile.gettempdir()      
         self.store_at_every = store_at_every
-        self.tempdir = tempfile.gettempdir()
+        
+        
     
     def runTask(self, wp, *args, **kwargs):
         """run `runTask` on every process on storage    
