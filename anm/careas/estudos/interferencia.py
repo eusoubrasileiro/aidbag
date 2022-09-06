@@ -130,8 +130,7 @@ class Interferencia:
                 try:               
                     if estudo.createTable(): # sometimes there is no interferences 
                         estudo.createTableMaster()
-                        estudo.to_excel()
-                        estudo.associados_to_excel()                
+                        estudo.to_excel()  
                 finally: # if there was an exception cancela ultimo estudo
                     if not estudo.cancelLast():
                         raise CancelaUltimoEstudoFailed()

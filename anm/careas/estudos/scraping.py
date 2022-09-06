@@ -46,8 +46,8 @@ def cancelaUltimo(wpage, number, year):
     formdata = htmlscrap.formdataPostAspNet(wpage.response, formcontrols)
     wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/CancelarEstudo.aspx', data=formdata)
     if 'Estudo excluído com sucesso.' in wpage.response.text:
-        return False 
-    return True
+        return True 
+    return False
 
 def getEventosSimples(wpage, processostr):
     """ Retorna tabela de eventos simples para processo especificado
