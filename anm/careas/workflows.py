@@ -32,13 +32,14 @@ from .estudos.util import downloadMinuta
 # that means that workflows.py probably should be a package 
 # with this being another .py 
 
-ProcessPathStorage = {} # stores paths for current process being worked on 
+ProcessPathStorage = {} 
+"""stores paths for current process being worked on """
 
-try: # Read paths for current process being worked on from file 
-    with open(config['wf_processpath_json'], "r") as f:
-        ProcessPathStorage = json.load(f)
-except:
-    pass 
+# try: # Read paths for current process being worked on from file 
+#     with open(config['wf_processpath_json'], "r") as f:
+#         ProcessPathStorage = json.load(f)
+# except:
+#     pass 
 
 def currentProcessGet(path=None, sort='name', clear=False):
     """
