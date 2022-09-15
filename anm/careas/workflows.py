@@ -256,7 +256,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, infer=True, sei_doc=No
     # Inclui termo de abertura de processo eletronico se data < 2020 (protocolo digital nov/2019)
     # to avoid placing IncluiTermoAberturaPE on processos puro digitais 
     if process['data_protocolo'].year < 2020:  
-        psei.InsereTermoAberturaProcessoEletronico(process['NUP'])
+        psei.InsereTermoAberturaProcessoEletronico()
 
     if infer: # infer from tipo, fase 
         processo_tipo=None

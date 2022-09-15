@@ -164,6 +164,8 @@ class Interferencia:
             raise ConnectionError('Did not connect to sigareas r-interferencia')
         interf_table = soup.find("table", {"id" : "ctl00_cphConteudo_gvLowerRight"})
         if interf_table is None: # possible! no interferencia at all
+            ## empty data frame, not yet possible 
+            # self.tabela_interf = pd.DataFrame(columns=['Incluir', 'Processo', 'Evento', 'Descrição', 'Data'])
             return False # nenhuma interferencia SHOW!!
         rows = htmlscrap.tableDataText(interf_table)
         self.tabela_interf = pd.DataFrame(rows[1:], columns=rows[0])
