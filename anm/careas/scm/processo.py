@@ -1,5 +1,5 @@
 import sys, os, copy, pathlib  
-import datetime, zlib
+import datetime, gzip
 import glob, json, traceback
 import concurrent.futures
 import threading
@@ -9,8 +9,10 @@ import functools
 
 from ....general import progressbar 
 from ....web.htmlscrap import wPageNtlm
+from ....web.io import try_read_html
 from . import requests 
 from . import ancestry
+from ..config import config
 
 from .util import (
     fmtPname,
@@ -50,6 +52,9 @@ def thread_safe(function):
     return wrapper
 
 
+process_expire = config['scm']['process_expire']  
+"""how long to keep a process on ProcessStorage"""
+
 """
 Use `Processo.Get` to avoid creating duplicate Processo's
 """
@@ -79,7 +84,9 @@ class Processo:
         # data_raw must be json serializable
         self._pages = { 'dadosbasicos'   : {'html' : None, 'data_raw' : {} },
                         'poligonal'      : {'html' : None, 'data_raw' : {} } 
-                      } # 'html' is the request.response.text property : bytes unicode decoded or infered       
+                      } # 'html' is the request.response.text property : bytes unicode decoded or infered      
+        self.birth = datetime.datetime.now() 
+        """when this process was requested for the first time"""
 
     def __getitem__(self, key):
         """get an property from the dados dictionary `dadosbasicos_run` must have run"""        
@@ -319,8 +326,10 @@ class Processo:
         """
         # create a dict of the object and then to json 
         # 'data_raw' must be json serializable 
-        pdict = { 'name'   : self.name,                  
-                  '_pages' : self._pages }
+        pdict = { 'name'   : self.name,                                     
+                  'birth' : self.birth.strftime("%d %m %y %H %M %S"),
+                  '_pages' : self._pages
+                }
         return json.dumps(pdict)
 
     def toJSONfile(self, fname=None):
@@ -341,6 +350,7 @@ class Processo:
         """
         jsondict = json.loads(strJSON)
         process = Processo.Get(jsondict['name'], None, SCM_SEARCH.NONE, False, False)
+        process.birth = datetime.datetime.strptime(jsondict['birth'], "%d %m %y %H %M %S")
         for k in jsondict['_pages']:
             process._pages.update({k : jsondict['_pages'][k]})        
         process._dadosBasicosGet(download=False)
@@ -386,17 +396,16 @@ class Processo:
         """Try create a `Processo` from a html's of basicos and poligonal (optional)       
         """
         path = pathlib.Path(path)        
-        path_main_html = list(path.glob('*basicos*.html'))[0] # html file on folder
+        path_main_html = list(path.glob('*basicos*.html')) # html file on folder
         path_poligon_html = list(path.glob('*poligonal*.html')) # html file on folder
-        main_html = None        
-        poligon_html = None
+        if not path_main_html:
+            raise FileNotFoundError(".fromHtml main scm html file not found!")
         if not processostr: # get process str name by file name
-            processostr= fmtPname(str(path_main_html))
-        with path_main_html.open('r', encoding='utf-8') as f: # read html scm
-            main_html = f.read()
+            processostr= fmtPname(str(path_main_html[0]))
+        poligon_html = None
+        main_html = try_read_html(path_main_html[0])
         if path_poligon_html: # if present
-            with path_poligon_html[0].open('r', encoding='utf-8') as f: # read html scm
-                poligon_html = f.read()
+            path_poligon_html = try_read_html(path_poligon_html[0])
         elif verbose:            
             print('Didnt find a poligonal page html saved', file=sys.stderr)                
         return Processo.fromStrHtml(processostr, main_html, poligon_html, verbose=verbose)
@@ -404,7 +413,7 @@ class Processo:
     @staticmethod
     def Get(processostr, wpagentlm, task=SCM_SEARCH.ALL, verbose=True, run=True):
         """
-        Create a new or get a Processo from ProcessStorage
+        Create a new or get a Processo from ProcessStorage if it has not expired. (config['scm']['process_expire'])
 
         processostr : numero processo format xxx.xxx/ano
         wpage : wPage html webpage scraping class com login e passwd preenchidos
@@ -412,14 +421,20 @@ class Processo:
         processo = None                
         processostr = fmtPname(processostr)        
         if processostr in ProcessStorage:
-            if verbose: # only for pretty printing
-                print("Processo __new___ getting from storage ", processostr, file=sys.stderr)
             processo = ProcessStorage[processostr]
+            if processo.birth + process_expire > datetime.datetime.now():         
+                if verbose:       
+                    print("Processo __new___ placing on storage ", processostr, file=sys.stderr)
+                processo = Processo(processostr, wpagentlm,  verbose)  # store newer guy             
+                ProcessStorage[processostr] = processo
+            else:
+                if verbose: 
+                    print("Processo __new___ getting from storage ", processostr, file=sys.stderr)            
         else:
-            if verbose: # only for pretty printing
+            if verbose: 
                 print("Processo __new___ placing on storage ", processostr, file=sys.stderr)
-        processo = Processo(processostr, wpagentlm,  verbose)
-        ProcessStorage[processostr] = processo   # store this new guy 
+            processo = Processo(processostr, wpagentlm,  verbose)  # store new guy
+            ProcessStorage[processostr] = processo
         if run: # wether run the task, dont run when loading from file/str
             processo.runTask(task)
         return processo
@@ -436,19 +451,21 @@ class ProcessFactoryStorageClass(dict):
     * key : unique `fmtPname` process string
     * value : `scm.Processo` object
     """    
-    def __init__(self, store_at_every=5): 
+    def __init__(self, save_at_every=5): 
         """
         * store_at_every: save on disk at every 
         """        
-        super().__init__()  
-        #TODO implement get most recent version saved on 
-        # temp folder if not create a new 
-        tempfile.mkstemp(prefix='ProcessStored', suffix='.json') 
-        # folder is 
-        self.tempdir = tempfile.gettempdir()      
-        self.store_at_every = store_at_every
+        super().__init__()      
+        self.save_at_every = save_at_every   
+        self.count = 5       
+        self.save_on_set = True
         
-        
+    def __setitem__(self, key, value):        
+        if self.save_on_set:
+            if self.count == 0: # save on a new thread
+                threading.Thread(target=self.toJSONfile).start()
+            self.count = self.count%self.save_at_every
+        return super().__setitem__(key, value)        
     
     def runTask(self, wp, *args, **kwargs):
         """run `runTask` on every process on storage    
@@ -468,66 +485,43 @@ class ProcessFactoryStorageClass(dict):
     def toJSON(self):
         """Create dict of processes JSON serialized
         after `.toJSON` for each process stored"""
-        processes = {}
-        for k, v in self.items():
+        processes = {}        
+        for k, v in dict(self).items():
             processes.update({k : v.toJSON()})
         return json.dumps(processes)
 
-    def toJSONfile(self, fname=None, zip=True):
+    def toJSONfile(self, fname=None):
         """Create dict of processes JSON serialized 
-        than compress dict with `zlib`        
+        than compress dict with `gzip`        
         """
         JSONstr = self.toJSON().encode('utf-8')
         if not fname:            
-            ext = 'JSON.zip' if zip else '.JSON'
-            fname =  'ProcessStored'+datetime.datetime.now().strftime('_%Y_%m_%d_h%Hm%M_') + ext
-        if zip:
-            JSONstr = zlib.compress(JSONstr)            
-        with open(fname, 'wb') as f:
+            fname =  config['scm']['process_storage_file'] + 'JSON.gz'        
+        with gzip.open(fname, 'wb') as f:
             f.write(JSONstr)
         return fname
 
-    @staticmethod
-    def fromJSONfile(fname=None, zip=True, verbose=False):
-        """Create a `ProcessStorageClass` from a JSON str create with `toJSONfile` method saved on file fname.
-        * zip : 
-            default assumed to be zipped
+    def fromJSONfile(self, fname=None, verbose=False):
+        """Fill `ProcessStorageClass` from a JSON str create with `toJSONfile` method saved on file fname.
         """
-        if not fname: # use default storage file first found
-            fname = glob.glob('ProcessStored_*_JSON.zip')[0]
-
+        if not fname: # use default storage file first found            
+            fname = config['scm']['process_storage_file'] + 'JSON.gz'          
+        if not os.path.exists(fname):
+            print(f"Process Storage file not found {fname}", file=sys.stderr)
+            return 
         processesJSON = ''
-        with open(fname, 'rb') as f:
-            processesJSON = f.read()
-        if zip:
-            processesJSON = zlib.decompress(processesJSON)
-        else:
-            processesJSON = processesJSON.decode('utf-8')
+        with gzip.open(fname, 'rb') as f:
+            processesJSON = f.read().decode('utf-8')            
         processes = json.loads(processesJSON) # recreat dict { process-name : JSON-str } 
         iterator = processes if not verbose else progressbar(processes, "Loading: ")
+        self.save_on_set = False # disable writing on file being read (corruption)        
         for keys in iterator:
             Processo.fromJSON(processes[keys], verbose)
-
- 
-
-
-# # from many saved JSON processes locally
-# import glob 
-
-# for k, v in scm.ProcessStorage.items():
-#     v.toJSONfile()
-# jsonprocesses = glob.glob("*.JSON")
-# for jsonprocess in jsonprocesses:
-#     scm.Processo.fromJSONfile(jsonprocess, True)        
-
-# running runTask on all process on storage
-# import tqdm 
-
-# for k in scm.ProcessStorage:
-#     if scm.ProcessStorage[k].associados:
-#         print(scm.ProcessStorage[k].associados)
-
+        self.save_on_set = True # restore value 
+        
+            
 ProcessStorage = ProcessFactoryStorageClass()
+ProcessStorage.fromJSONfile() # load processes saved on start      
 """Container and Factory of processes to avoid 
 1. connecting/open page of SCM again
 2. parsing all information again    

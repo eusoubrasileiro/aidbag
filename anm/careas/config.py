@@ -1,9 +1,14 @@
 from glob import glob
 from pathlib import Path 
 import os
+import datetime 
 
 config = {}
 config['secor_timeout'] = 4*60 # sometimes sigareas server/r. interferncia takes a long long time to answer 
+
+# when to replace the process stored on the ProcessStorage after this amount of time 
+config['scm'] = {} 
+config['scm']['process_expire'] = datetime.timedelta(hours=8)
 
 # sei module configurations
 config['sei'] = {}
@@ -22,5 +27,5 @@ def SetHomeCareasPath(home=str(Path.home())): # default get userhome folder
     config['sei']['doc_templates'] = os.path.join(config['secor_path'], 'Secorpy', 'docs_models')  # os independent 
     config['processos_path'] = os.path.join(config['secor_path'], 'Processos')  # os independent   
     config['wf_processpath_json'] = os.path.join(config['processos_path'], 'wf_processpath_json.jsons')
-
+    config['scm']['process_storage_file'] = os.path.join(config['processos_path'], 'ProcessesStored')
 SetHomeCareasPath() # set config path defaults
