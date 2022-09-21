@@ -79,24 +79,16 @@ def currentProcessGet(path=None, sort='name', clear=False):
     with open(config['wf_processpath_json'], "w") as f: # Serialize data into file
         json.dump(ProcessPathStorage, f)
     return ProcessPathStorage
-
-
-def currentProcessFromHtml():
-    """load `scm.ProcessStorage` using `Processo.fromHtml` from paths in `ProcessPathStorage`"""
-    for _, process_path in tqdm.tqdm(ProcessPathStorage.items()): 
-        try:   
-            scm.Processo.fromHtml(process_path, verbose=False)
-        except FileNotFoundError:
-            print(f"Did not find process html at {process_path}", file=sys.stderr)    
     
     
-def restoreProcessStorageFromHtml(path=pathlib.Path(config['processos_path'])/"Concluidos"):    
-    """restore `scm.ProcessStorage` using html from folders of processes"""
-    scm.ProcessStorage.save_on_set = False
+def ProcessStorageFromHtml(path=None):    
+    """fill in `scm.ProcessStorage` using html from folders of processes"""    
+    if not path:
+        path = pathlib.Path(config['processos_path']).joinpath("Concluidos")    
     currentProcessGet(path)
-    currentProcessFromHtml()
-    scm.ProcessStorage.save_on_set = True
+    scm.ProcessStorage.fromHtmls(ProcessPathStorage.values())
     scm.ProcessStorage.toJSONfile()
+    
 
 def folder_process(process_str):
     """get folder name used to store a process from NUP or whatever other form like 
