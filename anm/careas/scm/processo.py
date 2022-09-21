@@ -521,8 +521,8 @@ class ProcessFactoryStorageClass(dict):
             processesJSON = f.read().decode('utf-8')            
         processes = json.loads(processesJSON) # recreat dict { process-name : JSON-str } 
         processes = list(processes.values())
-        if verbose:
-            print("Loading processes", file=sys.stderr)                
+        # if verbose:
+        #     print("Loading processes", file=sys.stderr)                
         # disable writing on file being read (corruption)          
         # uses a ProcessPool to load and reparse the processes faster   
         # _exception TypeError: cannot pickle '_thread.RLock' object
@@ -532,10 +532,8 @@ class ProcessFactoryStorageClass(dict):
         #         processes = executor.map(Processo.fromJSON, processes, chunksize=200)      
         #         storage.update({process.name : process for process in processes })                   
         # threading.Thread(target=load_processes, args=(self, processes)).start()     
-        iterator = processes if not verbose else progressbar(processes, "Loading: ")        
-        for process in iterator:
-            process = Processo.fromJSON(process)        
-            self.update({process.name : process })      
+        iterator = processes if not verbose else progressbar(processes, "Loading Processes: ")        
+        self.update({process.name : process for process in map(Processo.fromJSON, iterator)})      
     
     def fromHtmls(self, paths, verbose=False):        
         for process_path in tqdm.tqdm(paths):
