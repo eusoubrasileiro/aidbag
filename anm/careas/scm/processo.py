@@ -1,15 +1,20 @@
+from asyncio import as_completed
 import sys, os, copy, pathlib  
 import datetime, gzip
-import glob, json, traceback
-import concurrent.futures
+import json, traceback
+from concurrent import futures
 import threading
 import enum
-import tempfile
 import functools
+import tqdm
 
 from ....general import progressbar 
 from ....web.htmlscrap import wPageNtlm
 from ....web.io import try_read_html
+from ....web.json import (
+    datetime_to_json,
+    json_to_datetime
+)
 from . import requests 
 from . import ancestry
 from ..config import config
@@ -82,8 +87,8 @@ class Processo:
         """dados parsed and processed """
         # web pages are 'dadosbasicos' and 'poligonal'
         # data_raw must be json serializable
-        self._pages = { 'dadosbasicos'   : {'html' : None, 'data_raw' : {} },
-                        'poligonal'      : {'html' : None, 'data_raw' : {} } 
+        self._pages = { 'dadosbasicos'   : {'html' : None },
+                        'poligonal'      : {'html' : None } 
                       } # 'html' is the request.response.text property : bytes unicode decoded or infered      
         self.birth = datetime.datetime.now() 
         """when this process was requested for the first time"""
@@ -189,7 +194,7 @@ class Processo:
             return proc
         # ignoring empty lists 
         if associados:
-            with concurrent.futures.ThreadPoolExecutor() as executor: # thread number optimal       
+            with futures.ThreadPoolExecutor() as executor: # thread number optimal       
                 # use a dict to map { process name : future_wrapped_Processo }             
                 # due possibility of exception on Thread and to know which process was responsible for that
                 #future_processes = {process_name : executor.submit(Processo.Get, process_name, self.wpage, 1, self.verbose) 
@@ -197,7 +202,7 @@ class Processo:
                 future_processes = {process_name : executor.submit(_expandassociados, 
                     process_name, self._wpage, self.name, self._verbose) 
                     for process_name in associados}
-                concurrent.futures.wait(future_processes.values())
+                futures.wait(future_processes.values())
                 #for future in concurrent.futures.as_completed(future_processes):         
                 for process_name, future_process in future_processes.items():               
                     try:
@@ -251,7 +256,7 @@ class Processo:
 
     def _dadosBasicosGet(self, data_tags=None, download=True):
         """dowload the dados basicos scm main html page or 
-        use the existing one stored at `self.html_dbasicospage` 
+        use the existing one stored at `self._pages` 
         than parse all data_tags passed storing the resulting in `self.dados`
         return True if succeed on parsing every tag False ortherwise
         """
@@ -263,16 +268,15 @@ class Processo:
             if self._verbose:
                 print("dadosBasicosGet - parsing: ", self.name, file=sys.stderr)        
             # using class field directly       
-            dados, dados_raw = parseDadosBasicos(self._pages['dadosbasicos']['html'], 
-                self.name, self._verbose, data_tags)
-            self._pages['dadosbasicos']['data_raw'] = dados_raw
+            dados = parseDadosBasicos(self._pages['dadosbasicos']['html'], 
+                self.name, self._verbose, data_tags)            
             self._dados.update(dados)
             self._dadosbasicos_run = True 
 
     def _dadosPoligonalGet(self, download=True):
         """dowload the dados scm poligonal html page or 
-        use the existing one stored at `self.html_poligonpage` 
-        than parse all data_tags passed storing the resulting in `self.polydata`
+        use the existing one stored at `self._pages` 
+        than parse all data_tags passed storing the resulting in `self.dados['poligonal']`
         return True           
           * note: not used by self.run!
         """
@@ -283,8 +287,7 @@ class Processo:
             if self._verbose:
                 print("dadosPoligonalGet - parsing: ", self.name, file=sys.stderr)   
             dados = parseDadosPoligonal(self._pages['poligonal']['html'])
-            self._dados.update({'poligonal' : dados })
-            self._pages['poligonal']['data_raw'] = dados             
+            self._dados.update({'poligonal' : dados })                       
             self._dadospoly_run = True
 
     def _dadosBasicosFillMissing(self):
@@ -327,10 +330,11 @@ class Processo:
         # create a dict of the object and then to json 
         # 'data_raw' must be json serializable 
         pdict = { 'name'   : self.name,                                     
-                  'birth' : self.birth.strftime("%d %m %y %H %M %S"),
-                  '_pages' : self._pages
+                  'birth' : self.birth,
+                  '_pages' : self._pages,
+                  '_dados' : self._dados
                 }
-        return json.dumps(pdict)
+        return json.dumps(pdict, default=datetime_to_json)
 
     def toJSONfile(self, fname=None):
         """
@@ -344,20 +348,24 @@ class Processo:
         return fname
 
     @staticmethod
-    def fromJSON(strJSON, verbose=True):
+    def fromJSON(strJSON, verbose=False, reparse=False):
         """Create a `Processo` from a JSON str create with `toJSON` method.
            only 'dados basicos' are parsed associados, ancestry need to be run
+           
+           * reparse : to parse data from html overwritting existing `._dados`
         """
-        jsondict = json.loads(strJSON)
-        process = Processo.Get(jsondict['name'], None, SCM_SEARCH.NONE, False, False)
-        process.birth = datetime.datetime.strptime(jsondict['birth'], "%d %m %y %H %M %S")
-        for k in jsondict['_pages']:
-            process._pages.update({k : jsondict['_pages'][k]})        
-        process._dadosBasicosGet(download=False)
-        if process._pages['poligonal']['html']:
-             if not process._dadosPoligonalGet(download=False):
-                if verbose:
+        jsondict = json.loads(strJSON, object_hook=json_to_datetime)            
+        process = Processo(jsondict['name'], None, False)
+        process.birth = jsondict['birth']        
+        process._dados = jsondict['_dados']        
+        process._pages = jsondict['_pages']                        
+        if reparse:
+            process._dadosBasicosGet(download=False)
+            if process._pages['poligonal']['html']:            
+                if not process._dadosPoligonalGet(download=False) and verbose:
                     print('Some error on poligonal page cant read poligonal table', file=sys.stderr)           
+        process._dadosbasicos_run = True  
+        process._dadospoly_run = True
         return process
 
     @staticmethod
@@ -367,7 +375,7 @@ class Processo:
         pJSON = ''
         with open(fname, 'r', encoding='utf-8') as f:
             pJSON = f.read()
-        Processo.fromJSON(pJSON, verbose)
+        return Processo.fromJSON(pJSON, verbose)
 
     @staticmethod
     def getNUP(processostr, wpagentlm):
@@ -381,14 +389,13 @@ class Processo:
                 directly from a request.response.content string previouly saved  
                 `processostr` must be set
         """
-        processo = Processo.Get(processostr, None, verbose=verbose, task=SCM_SEARCH.NONE, run=False)
+        processo = Processo(processostr, None, verbose=verbose)
         processo._pages['dadosbasicos']['html'] = html_basicos
+        processo._pages['poligonal']['html'] = html_poligonal
         processo._dadosBasicosGet(download=False) 
-        if html_poligonal:
-            processo._pages['poligonal']['html'] = html_poligonal
-            if not processo._dadosPoligonalGet(download=False):
-                if verbose:
-                    print('Some error on poligonal page cant read poligonal table', file=sys.stderr)
+        if html_poligonal:            
+            if not processo._dadosPoligonalGet(download=False) and verbose:
+                print('Some error on poligonal page cant read poligonal table', file=sys.stderr)
         return processo
 
     @staticmethod
@@ -513,15 +520,35 @@ class ProcessFactoryStorageClass(dict):
         with gzip.open(fname, 'rb') as f:
             processesJSON = f.read().decode('utf-8')            
         processes = json.loads(processesJSON) # recreat dict { process-name : JSON-str } 
-        iterator = processes if not verbose else progressbar(processes, "Loading: ")
-        self.save_on_set = False # disable writing on file being read (corruption)        
-        for keys in iterator:
-            Processo.fromJSON(processes[keys], verbose)
-        self.save_on_set = True # restore value 
+        processes = list(processes.values())
+        if verbose:
+            print("Loading processes", file=sys.stderr)                
+        # disable writing on file being read (corruption)          
+        # uses a ProcessPool to load and reparse the processes faster   
+        # _exception TypeError: cannot pickle '_thread.RLock' object
+        # TODO: dummy Process class to inheret with RLock?
+        # def load_processes(storage, processes):             
+        #     with futures.ProcessPoolExecutor() as executor:            
+        #         processes = executor.map(Processo.fromJSON, processes, chunksize=200)      
+        #         storage.update({process.name : process for process in processes })                   
+        # threading.Thread(target=load_processes, args=(self, processes)).start()     
+        iterator = processes if not verbose else progressbar(processes, "Loading: ")        
+        for process in iterator:
+            process = Processo.fromJSON(process)        
+            self.update({process.name : process })      
+    
+    def fromHtmls(self, paths, verbose=False):        
+        for process_path in tqdm.tqdm(paths):
+            try:   
+                processo = Processo.fromHtml(process_path, verbose=False)
+                self.update({processo.name : processo})
+            except FileNotFoundError:
+                if verbose:
+                    print(f"Did not find process html at {process_path}", file=sys.stderr)   
         
             
 ProcessStorage = ProcessFactoryStorageClass()
-ProcessStorage.fromJSONfile() # load processes saved on start      
+ProcessStorage.fromJSONfile(verbose=True) # load processes saved on start      
 """Container and Factory of processes to avoid 
 1. connecting/open page of SCM again
 2. parsing all information again    
