@@ -155,13 +155,12 @@ def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False):
         else:
             succeed_NUPs.append(proc['NUP'])  
     # print all NUPS
-    if verbose:
-        print('SEI NUPs sucess:')
-        for nup in succeed_NUPs:
-            print(nup)
-        print('SEI NUPs failed:')
-        for nup in failed_NUPS:
-            print(nup)
+    print('SEI NUPs sucess:')
+    for nup in succeed_NUPs:
+        print(nup)
+    print('SEI NUPs failed:')
+    for nup in failed_NUPS:
+        print(nup)
     return succeed_NUPs, failed_NUPS
 
 
