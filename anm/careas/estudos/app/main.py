@@ -26,6 +26,7 @@ from flask import (
 from ...config import config
 from ... import workflows as wf 
 from .....web.pandas_html import dataframe_to_html 
+from ...scm import ProcessStorage
 from ...scm.util import fmtPname, numberyearPname
 from ...estudos.interferencia import (
         Interferencia, 
@@ -94,18 +95,29 @@ def select():
     try: # json first         
         table = pd.read_json(json_path)
     except Exception as e: # legacy then         
-        print("Not using local json! Loading from legacy excel table.", file=sys.stderr)
-        estudo = Interferencia.from_excel(wf.ProcessPathStorage[key])        
-        table = estudo.tabela_interf_master
-    cache.set('table', table)
+        try:
+            print("Not using local json! Loading from legacy excel table.", file=sys.stderr)
+            estudo = Interferencia.from_excel(wf.ProcessPathStorage[key])        
+            table = estudo.tabela_interf_master
+        except RuntimeError:
+            table = None
+    cache.set('table', table)    
+    html_table = htmlTable(table) if table is not None else 'No table!'
     response = make_response(render_template('index.html', processo=key,
-                pandas_table=htmlTable(table)) )
+                pandas_table=html_table) )
     # disable cache so checkbox and display hidden dont get cached
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
     response.headers['Cache-Control'] = 'public, max-age=0'
     return response
+
+@app.route('/process', methods=['GET'])
+def details():
+    key = request.args.get('process')
+    print(f'process is {key}', file=sys.stderr)
+    return ProcessStorage[key]._pages['dadosbasicos']['html']    
+
     
 @app.route('/update', methods=['POST'])
 def update():
