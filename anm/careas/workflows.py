@@ -149,8 +149,13 @@ def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False):
             elif tipo == 'opção':
                 proc = scm.Processo.Get(processo, wpage, dados=scm.SCM_SEARCH.BASICOS,verbose=False)
                 proc.salvaDadosBasicosHtml(config.processPathSecor(proc))
-        except Exception as e:  # too generic is masking errors that I don't care for??             
-            print("Process {:} Exception: ".format(processo), traceback.format_exc(), file=sys.stderr)                       
+        except estudos.DownloadInterferenciaFailed:            
+            failed_NUPS.append(scm.ProcessStorage[scm.fmtPname(processo)]['NUP'])            
+            if verbose:
+                print(f"DownloadInterferenciaFailed {processo}", file=sys.stderr)
+            continue
+        except Exception as e:              
+            print(f"Process {processo} Exception: {traceback.format_exc()}", file=sys.stderr)                       
             failed_NUPS.append(scm.ProcessStorage[scm.fmtPname(processo)]['NUP'])            
         else:
             succeed_NUPs.append(proc['NUP'])  
