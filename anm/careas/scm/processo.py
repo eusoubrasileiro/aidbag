@@ -305,18 +305,32 @@ class Processo:
         else:
             return False
 
-    def salvaDadosBasicosHtml(self, html_path):
+    def salvaDadosBasicosHtml(self, html_path, overwrite=False):
         """not thread safe"""
+        path = pathlib.Path(html_path).joinpath('scm_basicos_'+self.number+'_'+self.year)
+        if not overwrite and path.with_suffix('.html').exists():
+            return 
         if not self._pages['dadosbasicos']['html']:
-            self._pageRequest('dadosbasicos') # get/fill-in self.wpage.reponse
-        self._wpage.save(os.path.join(html_path, 'scm_basicos_'+self.number+'_'+self.year),
+            self._pageRequest('dadosbasicos') # get/fill-in self.wpage.response
+        if not hasattr(self._wpage, 'response'):
+            if self._verbose:
+                print("Ignore saving the html page since wpage.response doesn't exist", file=sys.stderr)
+            return         
+        self._wpage.save(str(path),
                         self._pages['dadosbasicos']['html']) 
 
-    def salvaDadosPoligonalHtml(self, html_path):
+    def salvaDadosPoligonalHtml(self, html_path, overwrite=False):
         """not thread safe"""
+        path = pathlib.Path(html_path).joinpath('scm_poligonal_'+self.number+'_'+self.year)
+        if not overwrite and path.with_suffix('.html').exists():
+            return 
         if not self._pages['poligonal']['html']:
             self._pageRequest('poligonal') # get/fill-in self.wpage.reponse
-        self._wpage.save(os.path.join(html_path, 'scm_poligonal_'+self.number+'_'+self.year),
+        if not hasattr(self._wpage, 'response'):
+            if self._verbose:
+                print("Ignore saving the html page since wpage.response doesn't exist", file=sys.stderr)
+            return    
+        self._wpage.save(str(path),
                         self._pages['poligonal']['html']) 
 
     def toJSON(self):
@@ -428,7 +442,8 @@ class Processo:
         processo = None                
         processostr = fmtPname(processostr)        
         if processostr in ProcessStorage:
-            processo = ProcessStorage[processostr]
+            processo = ProcessStorage[processostr] #  storage doesn't keep wpage
+            processo._wpage = wPageNtlm(wpagentlm.user, wpagentlm.passwd)
             if processo.birth + process_expire > datetime.datetime.now():         
                 if verbose:       
                     print("Processo __new___ placing on storage ", processostr, file=sys.stderr)
@@ -441,7 +456,7 @@ class Processo:
             if verbose: 
                 print("Processo __new___ placing on storage ", processostr, file=sys.stderr)
             processo = Processo(processostr, wpagentlm,  verbose)  # store new guy
-            ProcessStorage[processostr] = processo
+            ProcessStorage[processostr] = processo            
         if run: # wether run the task, dont run when loading from file/str
             processo.runTask(task)
         return processo
