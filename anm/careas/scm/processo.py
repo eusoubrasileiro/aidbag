@@ -10,7 +10,10 @@ import tqdm
 
 from ....general import progressbar 
 from ....web.htmlscrap import wPageNtlm
-from ....web.io import try_read_html
+from ....web.io import (
+    saveHtmlPage, 
+    try_read_html
+    )
 from ....web.json import (
     datetime_to_json,
     json_to_datetime
@@ -313,11 +316,9 @@ class Processo:
         if not self._pages['dadosbasicos']['html']:
             self._pageRequest('dadosbasicos') # get/fill-in self.wpage.response
         if not hasattr(self._wpage, 'response'):
-            if self._verbose:
-                print("Ignore saving the html page since wpage.response doesn't exist", file=sys.stderr)
-            return         
-        self._wpage.save(str(path),
-                        self._pages['dadosbasicos']['html']) 
+            saveHtmlPage(str(path), self._pages['dadosbasicos']['html'])
+        else: # save html and page contents - full page
+            self._wpage.save(str(path), self._pages['dadosbasicos']['html']) 
 
     def salvaDadosPoligonalHtml(self, html_path, overwrite=False):
         """not thread safe"""
@@ -326,12 +327,10 @@ class Processo:
             return 
         if not self._pages['poligonal']['html']:
             self._pageRequest('poligonal') # get/fill-in self.wpage.reponse
-        if not hasattr(self._wpage, 'response'):
-            if self._verbose:
-                print("Ignore saving the html page since wpage.response doesn't exist", file=sys.stderr)
-            return    
-        self._wpage.save(str(path),
-                        self._pages['poligonal']['html']) 
+        if not hasattr(self._wpage, 'response'): # save only the html
+            saveHtmlPage(str(path), self._pages['poligonal']['html'])
+        else: # save html and page contents - full page
+            self._wpage.save(str(path), self._pages['poligonal']['html']) 
 
     def toJSON(self):
         """

@@ -1,12 +1,11 @@
 #html web-scraping
 from requests_ntlm import HttpNtlmAuth
-import re
-import os, sys
+import os
 import requests
 from urllib3.util.retry import Retry
-from urllib.parse import urljoin
 from requests import adapters
 from bs4 import BeautifulSoup
+from .io import saveFullHtmlPage
 
 # to disable warnings when ssl is False
 from urllib3.exceptions import InsecureRequestWarning
@@ -50,41 +49,9 @@ class wPage: # html  webpage scraping with soup and requests
         using last page accessed (or 'html' str passed)
         save its html and supported contents        
         * pagepath : path-to-page   
-        It will create a file  `'path-to-page'.html` and a folder `'path-to-page'_files`
-        https://stackoverflow.com/a/62207356/1207193
-        """        
-        def savenRename(soup, pagefolder, session, url, tag, inner):
-            if not os.path.exists(pagefolder): # create only once
-                os.mkdir(pagefolder)
-            for res in soup.findAll(tag):   # images, css, etc..
-                if res.has_attr(inner): # check inner tag (file object) MUST exists     
-                    try:                  
-                        filename, ext = os.path.splitext(os.path.basename(res[inner])) # get name and extension
-                        filename = re.sub('\W+', '', filename) + ext # clean special chars from name
-                        fileurl = urljoin(url, res.get(inner))
-                        filepath = os.path.join(pagefolder, filename)
-                        # rename html ref so can move html and folder of files anywhere
-                        res[inner] = os.path.join(os.path.basename(pagefolder), filename)
-                        if not os.path.isfile(filepath): # was not downloaded
-                            with open(filepath, 'wb') as file:
-                                filebin = session.get(fileurl)
-                                file.write(filebin.content)
-                    except Exception as exc:
-                        if verbose:
-                            print(exc, '\n', file=sys.stderr)
-        session = self.session
-        #... whatever other requests config you need here        
-        if not html: # if not passed must be in self.reponse.text
-            html = self.response.text
-        #... whatever other requests config you need here    
-        soup = BeautifulSoup(html, "html.parser")
-        path, _ = os.path.splitext(pagepath)
-        pagefolder = path+'_files' # page contents folder
-        tags_inner = {'img': 'src', 'link': 'href', 'script': 'src'} # tag&inner tags to grab
-        for tag, inner in tags_inner.items():
-            savenRename(soup, pagefolder, session, self.response.url, tag, inner)
-        with open(path+'.html', 'wb') as file:
-            file.write(soup.prettify('utf-8'))
+        """       
+        saveFullHtmlPage(self.response.url, pagepath, 
+                     self.session, self.response.text)
 
     def post(self, arg, save=True, **kwargs):
         """save : save response overwriting the last"""
