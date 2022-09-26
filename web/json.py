@@ -1,12 +1,13 @@
 from datetime import datetime
 import sys 
 
-def datetime_to_json(obj):
+def datetime_to_json(obj, verbose=False):
     """json.dumps default function to use to json from datetime conversion"""
     if isinstance(obj, datetime):
         return { '_isoformat': obj.isoformat() }
     else:
-        print(f"object of type {type(obj)} converted to '' in JSON file", file=sys.stderr) 
+        if verbose:
+            print(f"object of type {type(obj)} converted to '' in JSON file", file=sys.stderr) 
         return ''        
 
 def json_to_datetime(obj):
