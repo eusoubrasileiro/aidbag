@@ -20,9 +20,11 @@ def fetch_save_Html(wpage, number, year, html_file, download=True):
         wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1',
                 data=formdata, timeout=config['secor_timeout'])
         if not ( wpage.response.url == r'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'):
-            return False             # Falhou salvar Retirada de Interferencia # provavelmente estudo aberto            
+            soup = BeautifulSoup(wpage.response.text, 'html.parser')                        
+            # falhou salvar Retirada de Interferencia return error message                        
+            return  soup.find('span', { 'class' : 'MensagemErro' }).text.strip() 
         wpage.save(html_file)
-    return True
+    return ''    
 
 def cancelaUltimo(wpage, number, year):
     """Danger Zone - cancela ultimo estudo em aberto sem perguntar mais nada:

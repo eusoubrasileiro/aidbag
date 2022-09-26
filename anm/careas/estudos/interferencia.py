@@ -121,19 +121,15 @@ class Interferencia:
         estudo = Interferencia(wpage, processostr, task=SCM_SEARCH.PRIORIDADE, verbose=verbose)
         estudo.processo.salvaDadosBasicosHtml(estudo.processo_path)
         estudo.processo.salvaDadosPoligonalHtml(estudo.processo_path)                    
-        # if fase correct MUST have access to retirada de 
-        if inFaseRInterferencia(estudo.processo['fase']):
-            if not estudo.saveHtml(download):
-                raise DownloadInterferenciaFailed()
-            else:
-                # only if retirada interferencia html is saved we can create spreadsheets
-                try:               
-                    if estudo.createTable(): # sometimes there is no interferences 
-                        estudo.createTableMaster()
-                        estudo.to_excel()  
-                finally: # if there was an exception cancela ultimo estudo
-                    if not estudo.cancelLast():
-                        raise CancelaUltimoEstudoFailed()
+        estudo.saveHtml(download)
+        # only if retirada interferencia html is saved we can create spreadsheets
+        try:               
+            if estudo.createTable(): # sometimes there is no interferences 
+                estudo.createTableMaster()
+                estudo.to_excel()  
+        finally: # if there was an exception cancela ultimo estudo
+            if not estudo.cancelLast():
+                raise CancelaUltimoEstudoFailed()
         return estudo
     
     def cancelLast(self):
@@ -408,14 +404,15 @@ class Interferencia:
         return estudo 
     
     def saveHtml(self, download=True):
-        """fetch and save html interferencia"""
+        """fetch and save html interferencia raises DownloadInterferenciaFailed on fail"""
         if download:
             html_file = (config['interferencia']['html_prefix']['this']+'_'+
                 '_'.join([self.processo.number, self.processo.year]))  
             html_file = os.path.join(self.processo_path, html_file)
-            return fetch_save_Html(self.wpage, self.processo.number, self.processo.year, 
+            error_status = fetch_save_Html(self.wpage, self.processo.number, self.processo.year, 
                             html_file, download)
-        return True
+            if error_status:
+                raise DownloadInterferenciaFailed(error_status)
 
 # something else not sure will be usefull someday
 # def salvaEstudoOpcaoDeAreaHtml(self, html_path):
