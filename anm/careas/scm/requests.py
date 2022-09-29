@@ -11,8 +11,8 @@ from .util import (
 scm_dados_processo_main_url='https://sistemas.anm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx'
 scm_timeout=(2*60)
 
-urls = { 'dadosbasicos' : scm_dados_processo_main_url,
-         'poligonal' : scm_dados_processo_main_url } 
+urls = { 'basic' : scm_dados_processo_main_url,
+         'poligon' : scm_dados_processo_main_url } 
 
 class ErrorProcessSCM(Exception):
     """Object reference not set to an instance of an object. 
@@ -32,8 +32,8 @@ def pageRequest(pagename, processostr, wpage, fmtName=True):
     """
     if fmtName:
         processostr = fmtPname(processostr)
-    if pagename == 'dadosbasicos': 
-        wpage.get(urls['dadosbasicos'])
+    if pagename == 'basic': 
+        wpage.get(urls['basic'])
         formcontrols = {
             'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnConsultarProcesso',
             'ctl00$conteudo$txtNumeroProcesso': processostr,
@@ -49,8 +49,8 @@ def pageRequest(pagename, processostr, wpage, fmtName=True):
             else: # connection, authentication errors or others... must re-raise
                 raise
         return wpage.response
-    if pagename == 'poligonal': # first connection to 'dadosbasicos' above MUST have been made before
-        pageRequest('dadosbasicos', processostr, wpage) # ask basicos first
+    if pagename == 'poligon': # first connection to 'dadosbasicos' above MUST have been made before
+        pageRequest('basic', processostr, wpage) # ask basicos first
         formcontrols = {
             'ctl00$conteudo$btnPoligonal': 'Poligonal',
             'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnPoligonal'}

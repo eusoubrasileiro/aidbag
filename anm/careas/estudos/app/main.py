@@ -116,7 +116,7 @@ def select():
 def details():
     key = request.args.get('process')
     print(f'process is {key}', file=sys.stderr)
-    return ProcessStorage[key]._pages['dadosbasicos']['html']    
+    return ProcessStorage[key]._pages['basic']['html']    
 
     
 @app.route('/update', methods=['POST'])

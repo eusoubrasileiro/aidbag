@@ -1,11 +1,11 @@
-from asyncio import as_completed
-import sys, os, copy, pathlib  
-import datetime, gzip
+import sys, copy, pathlib  
+import datetime, zlib, os 
 import json, traceback
 from concurrent import futures
 import threading
 import enum
 import functools
+import time
 import tqdm
 
 from ....general import progressbar 
@@ -89,12 +89,15 @@ class Processo:
         self._dados = {} 
         """dados parsed and processed """
         # web pages are 'dadosbasicos' and 'poligonal'
-        # data_raw must be json serializable
-        self._pages = { 'dadosbasicos'   : {'html' : None },
-                        'poligonal'      : {'html' : None } 
+        self._pages = { 'basic'   : {'html' : '' },
+                        'poligon' : {'html' : '' } 
                       } # 'html' is the request.response.text property : bytes unicode decoded or infered      
         self.birth = datetime.datetime.now() 
         """when this process was requested for the first time"""
+        self.onchange = None
+        """pointer to function - called when process changes either _pages or _dados
+           receives one argument the calling process (self)
+        """
 
     def __getitem__(self, key):
         """get an property from the dados dictionary `dadosbasicos_run` must have run"""        
@@ -136,7 +139,8 @@ class Processo:
             raise Exception('Invalid `wPage` instance!')
         if not self._pages[name]['html']:
             response = requests.pageRequest(name, self.name, self._wpage, False)
-            self._pages[name]['html'] = response.text # str unicode page             
+            self._pages[name]['html'] = response.text # str unicode page       
+            self.__changed()              
             return self._pages[name]['html']
 
     @thread_safe
@@ -227,7 +231,8 @@ class Processo:
         if self._verbose:
             print("expandAssociados - finished associados: ", self.name, file=sys.stderr)
             
-        self._associados_run = True        
+        self._associados_run = True
+        self.__changed()        
 
     def _ancestry(self):
         """
@@ -267,14 +272,15 @@ class Processo:
             if data_tags is None: # data tags to fill in 'dados' with
                 data_tags = scm_data_tags.copy()
             if download: # download get with python.requests page html response            
-                self._pageRequest('dadosbasicos')        
+                self._pageRequest('basic')        
             if self._verbose:
                 print("dadosBasicosGet - parsing: ", self.name, file=sys.stderr)        
             # using class field directly       
-            dados = parseDadosBasicos(self._pages['dadosbasicos']['html'], 
+            dados = parseDadosBasicos(self._pages['basic']['html'], 
                 self.name, self._verbose, data_tags)            
             self._dados.update(dados)
             self._dadosbasicos_run = True 
+            self.__changed()        
 
     def _dadosPoligonalGet(self, download=True):
         """dowload the dados scm poligonal html page or 
@@ -285,13 +291,14 @@ class Processo:
         """
         if not self._dadospoly_run: 
             if download: # download get with python.requests page html response  
-                self._pageRequest('poligonal')
+                self._pageRequest('poligon')
             # dont need to retrieve anything
             if self._verbose:
                 print("dadosPoligonalGet - parsing: ", self.name, file=sys.stderr)   
-            dados = parseDadosPoligonal(self._pages['poligonal']['html'])
-            self._dados.update({'poligonal' : dados })                       
+            dados = parseDadosPoligonal(self._pages['poligon']['html'])
+            self._dados.update({'poligon' : dados })                       
             self._dadospoly_run = True
+            self.__changed()        
 
     def _dadosBasicosFillMissing(self):
         """try fill dados faltantes pelo processo associado (pai) 1. UF 2. substancias
@@ -304,6 +311,7 @@ class Processo:
             father = Processo.Get(self._dados['parents'][0], self._wpage, verbose=self._verbose, run=False)
             father._dadosBasicosGet(miss_data_tags)
             self._dados.update(father._dados)
+            self.__changed()        
             return True
         else:
             return False
@@ -313,25 +321,57 @@ class Processo:
         path = pathlib.Path(html_path).joinpath('scm_basicos_'+self.number+'_'+self.year)
         if not overwrite and path.with_suffix('.html').exists():
             return 
-        if not self._pages['dadosbasicos']['html']:
-            self._pageRequest('dadosbasicos') # get/fill-in self.wpage.response
+        if not self._pages['basic']['html']:
+            self._pageRequest('basic') # get/fill-in self.wpage.response
         if not hasattr(self._wpage, 'response'):
-            saveHtmlPage(str(path), self._pages['dadosbasicos']['html'])
+            saveHtmlPage(str(path), self._pages['basic']['html'])
         else: # save html and page contents - full page
-            self._wpage.save(str(path), self._pages['dadosbasicos']['html']) 
+            self._wpage.save(str(path), self._pages['basic']['html']) 
 
     def salvaDadosPoligonalHtml(self, html_path, overwrite=False):
         """not thread safe"""
         path = pathlib.Path(html_path).joinpath('scm_poligonal_'+self.number+'_'+self.year)
         if not overwrite and path.with_suffix('.html').exists():
             return 
-        if not self._pages['poligonal']['html']:
-            self._pageRequest('poligonal') # get/fill-in self.wpage.reponse
+        if not self._pages['poligon']['html']:
+            self._pageRequest('poligon') # get/fill-in self.wpage.reponse
         if not hasattr(self._wpage, 'response'): # save only the html
-            saveHtmlPage(str(path), self._pages['poligonal']['html'])
+            saveHtmlPage(str(path), self._pages['poligon']['html'])
         else: # save html and page contents - full page
-            self._wpage.save(str(path), self._pages['poligonal']['html']) 
-
+            self._wpage.save(str(path), self._pages['poligon']['html']) 
+            
+    def toSqliteTuple(self):
+        """Create a tuple of this process with complexes fields as json strings
+        to save on sqlite database"""
+        basicos = self._pages['basic']['html'] 
+        basicos = basicos if basicos is not None else ''        
+        poligon = self._pages['poligon']['html']
+        poligon = poligon if poligon is not None else ''        
+        return (  self.name,                                     
+                  self.birth.isoformat(),
+                  # datetime convertion default function to JSON string                  
+                  json.dumps(self._dados, default=datetime_to_json),
+                  zlib.compress(basicos.encode('utf-8')),
+                  zlib.compress(poligon.encode('utf-8'))
+                )    
+    
+    @staticmethod
+    def fromSqliteTuple(tuplesqlite, reparse=False, verbose=False):
+        name, birth, _dados, page_basicos, page_poligon = tuplesqlite
+        process = Processo(name, None, False)
+        process.birth = datetime.datetime.fromisoformat(birth)      
+        process._dados = json.loads(_dados, object_hook=json_to_datetime)        
+        process._pages['basic']['html'] = zlib.decompress(page_basicos).decode('utf-8')
+        process._pages['poligon']['html'] = zlib.decompress(page_poligon).decode('utf-8')
+        if reparse:
+            process._dadosBasicosGet(download=False)
+            if process._pages['poligon']['html']:            
+                if not process._dadosPoligonalGet(download=False) and verbose:
+                    print('Some error on poligonal page cant read poligonal table', file=sys.stderr)           
+        process._dadosbasicos_run = True  
+        process._dadospoly_run = True
+        return process            
+            
     def toJSON(self):
         """
         JSON serialize this process
@@ -341,7 +381,6 @@ class Processo:
         saving the parsed, processed data that might change in the future.
         """
         # create a dict of the object and then to json 
-        # 'data_raw' must be json serializable 
         pdict = { 'name'   : self.name,                                     
                   'birth' : self.birth,
                   '_pages' : self._pages,
@@ -359,6 +398,10 @@ class Processo:
         with open(fname, 'w', encoding='utf-8') as f:
             f.write(self.toJSON())
         return fname
+    
+    def __changed(self):
+        if self.onchange is not None:
+            self.onchange(self)
 
     @staticmethod
     def fromJSON(strJSON, verbose=False, reparse=False):
@@ -374,7 +417,7 @@ class Processo:
         process._pages = jsondict['_pages']                        
         if reparse:
             process._dadosBasicosGet(download=False)
-            if process._pages['poligonal']['html']:            
+            if process._pages['poligon']['html']:            
                 if not process._dadosPoligonalGet(download=False) and verbose:
                     print('Some error on poligonal page cant read poligonal table', file=sys.stderr)           
         process._dadosbasicos_run = True  
@@ -392,7 +435,7 @@ class Processo:
 
     @staticmethod
     def getNUP(processostr, wpagentlm):
-        response = requests.pageRequest('dadosbasicos', processostr, wpagentlm, True)
+        response = requests.pageRequest('basic', processostr, wpagentlm, True)
         return parseNUP(response.content)
 
     @staticmethod
@@ -403,8 +446,8 @@ class Processo:
                 `processostr` must be set
         """
         processo = Processo(processostr, None, verbose=verbose)
-        processo._pages['dadosbasicos']['html'] = html_basicos
-        processo._pages['poligonal']['html'] = html_poligonal
+        processo._pages['basic']['html'] = html_basicos
+        processo._pages['poligon']['html'] = html_poligonal
         processo._dadosBasicosGet(download=False) 
         if html_poligonal:            
             if not processo._dadosPoligonalGet(download=False) and verbose:
@@ -440,7 +483,7 @@ class Processo:
         """
         processo = None                
         processostr = fmtPname(processostr)        
-        if processostr in ProcessStorage:
+        if ProcessStorage.get(processostr) is not None:
             processo = ProcessStorage[processostr] #  storage doesn't keep wpage
             processo._wpage = wPageNtlm(wpagentlm.user, wpagentlm.passwd)
             if processo.birth + process_expire > datetime.datetime.now():         
@@ -461,6 +504,22 @@ class Processo:
         return processo
 
 
+
+# create the sqlite database for processes
+# with sqlite3.connect('process_storage.db') as conn: # already commits and closes
+#    sql = f"""CREATE TABLE STORAGE(
+#       NAME CHAR(12) NOT NULL,   
+#       BIRTH TIMESTAMP,
+#       DADOS TEXT,
+#       PAGE_BASIC BLOB, 
+#       PAGE_POLIGON BLOB,
+#       UNIQUE(NAME) ON CONFLICT REPLACE
+#    )"""
+#    conn.execute(sql)
+
+import sqlite3
+    
+
 # Inherits from dict since it is:
 # 1. the recommended global approach 
 # 2. thread safe for 'simple set/get'
@@ -472,21 +531,79 @@ class ProcessFactoryStorageClass(dict):
     * key : unique `fmtPname` process string
     * value : `scm.Processo` object
     """    
-    def __init__(self, save_at_every=5): 
+    def __init__(self, save_on_set=True): 
         """
-        * store_at_every: save on disk at every 
+        * save_on_set: save on database on set 
         """        
         super().__init__()      
-        self.save_at_every = save_at_every   
-        self.count = 5       
-        self.save_on_set = True
-        
+        self.save_on_set = save_on_set        
+        with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn: # context manager already commits and closes connection
+            self.ondb = conn.execute("SELECT name FROM storage").fetchall()             
+
+       
+    def __insert_to_sqlite(self, key):
+        with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn: # context manager already commits and closes connection
+            cursor = conn.cursor()    
+            # cursor.execute("SELECT * FROM storage WHERE name = ?", key)
+            # process_row = cursor.fetchone()
+            # if process_row:
+            cursor.execute("INSERT INTO storage VALUES (?,?,?,?,?)", self[key].toSqliteTuple())      
+            
+    def __select_from_sqlite(self, key):
+        with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn:
+            cursor = conn.cursor()    
+            cursor.execute("SELECT * FROM storage WHERE name='{:}'".format(key))
+            process_row = cursor.fetchone()
+            if process_row:
+                return Processo.fromSqliteTuple(process_row)
+            return None
+                   
     def __setitem__(self, key, value):        
+        super().__setitem__(key, value)     
+        value.onchange = ProcessStorage.__process_changed
         if self.save_on_set:
-            if self.count == 0: # save on a new thread
-                threading.Thread(target=self.toJSONfile).start()
-            self.count = self.count%self.save_at_every
-        return super().__setitem__(key, value)        
+            threading.Thread(target=self.__insert_to_sqlite, args=(key,)).start()        
+    
+    def get(self, key):
+        try:
+            result = self[key]
+        except KeyError:
+            return None 
+        return result    
+    
+    # def __contains__(self, __o: object) -> bool:
+    #     return super().__contains__(__o)         
+    
+    @staticmethod
+    def __process_changed(process):
+        """update process on database"""
+        ProcessStorage[process.name] = process
+        
+    def __getitem__(self, key):
+        if key in self:
+            return super().__getitem__(key)   
+        process = self.__select_from_sqlite(key)        
+        if not process:
+            raise KeyError()
+        self[key] = process # store here for faster access        
+        # add event listener when changed will get updated on database 
+        process.onchange = ProcessStorage.__process_changed
+        return process
+        
+    def loadAll(self, verbose=False):        
+        """Load all processes from sqlite database on self"""
+        fname = config['scm']['process_storage_file'] + '.db'          
+        if not os.path.exists(fname):
+            print(f"Process Storage database file not found {fname}", file=sys.stderr)
+            return 
+        with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn:
+            start = time.time()
+            self.update( { row[0] : Processo.fromSqliteTuple(row) 
+                          for row in conn.execute(f"SELECT * FROM storage").fetchall() } )
+            if verbose:
+                print(f"Loading and creating {len(self)} processes from database took {time.time()-start:.2f} seconds")
+        #iterator = processes if not verbose else progressbar(processes, "Loading Processes: ")        
+        #self.update({process.name : process for process in map(Processo.fromJSON, iterator)})  
     
     def runTask(self, wp, *args, **kwargs):
         """run `runTask` on every process on storage    
@@ -502,52 +619,6 @@ class ProcessFactoryStorageClass(dict):
             #must be one independent requests.Session for each process otherwise mess            
             ProcessStorage[pname]._wpage = wPageNtlm(wp.user, wp.passwd, ssl=True)             
             ProcessStorage[pname].runTask(*args, **kwargs)
-
-    def toJSON(self):
-        """Create dict of processes JSON serialized
-        after `.toJSON` for each process stored"""
-        processes = {}        
-        for k, v in dict(self).items():
-            processes.update({k : v.toJSON()})
-        return json.dumps(processes)
-
-    def toJSONfile(self, fname=None):
-        """Create dict of processes JSON serialized 
-        than compress dict with `gzip`        
-        """
-        JSONstr = self.toJSON().encode('utf-8')
-        if not fname:            
-            fname =  config['scm']['process_storage_file'] + 'JSON.gz'        
-        with gzip.open(fname, 'wb') as f:
-            f.write(JSONstr)
-        return fname
-
-    def fromJSONfile(self, fname=None, verbose=False):
-        """Fill `ProcessStorageClass` from a JSON str create with `toJSONfile` method saved on file fname.
-        """
-        if not fname: # use default storage file first found            
-            fname = config['scm']['process_storage_file'] + 'JSON.gz'          
-        if not os.path.exists(fname):
-            print(f"Process Storage file not found {fname}", file=sys.stderr)
-            return 
-        processesJSON = ''
-        with gzip.open(fname, 'rb') as f:
-            processesJSON = f.read().decode('utf-8')            
-        processes = json.loads(processesJSON) # recreat dict { process-name : JSON-str } 
-        processes = list(processes.values())
-        # if verbose:
-        #     print("Loading processes", file=sys.stderr)                
-        # disable writing on file being read (corruption)          
-        # uses a ProcessPool to load and reparse the processes faster   
-        # _exception TypeError: cannot pickle '_thread.RLock' object
-        # TODO: dummy Process class to inheret with RLock?
-        # def load_processes(storage, processes):             
-        #     with futures.ProcessPoolExecutor() as executor:            
-        #         processes = executor.map(Processo.fromJSON, processes, chunksize=200)      
-        #         storage.update({process.name : process for process in processes })                   
-        # threading.Thread(target=load_processes, args=(self, processes)).start()     
-        iterator = processes if not verbose else progressbar(processes, "Loading Processes: ")        
-        self.update({process.name : process for process in map(Processo.fromJSON, iterator)})      
     
     def fromHtmls(self, paths, verbose=False):        
         for process_path in tqdm.tqdm(paths):
@@ -560,7 +631,7 @@ class ProcessFactoryStorageClass(dict):
         
             
 ProcessStorage = ProcessFactoryStorageClass()
-ProcessStorage.fromJSONfile(verbose=True) # load processes saved on start      
+ProcessStorage.loadAll(verbose=True) # load processes saved on start      
 """Container and Factory of processes to avoid 
 1. connecting/open page of SCM again
 2. parsing all information again    
