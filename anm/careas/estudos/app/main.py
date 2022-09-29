@@ -103,7 +103,7 @@ def select():
             table = None
     cache.set('table', table)    
     html_table = htmlTable(table) if table is not None else 'No table!'
-    response = make_response(render_template('index.html', processo=key,
+    response = make_response(render_template('index.html', processo=key, nup=ProcessStorage[key]['NUP'],
                 pandas_table=html_table) )
     # disable cache so checkbox and display hidden dont get cached
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"

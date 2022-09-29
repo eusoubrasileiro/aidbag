@@ -68,7 +68,11 @@
         return "<a href='/process?process="+$(this).text()+"'/></a>";
       });
 
-      
+      $("#copyprocess").click(function(event) {
+        event.preventDefault();
+        navigator.clipboard.writeText($(this).text());
+      })
+
       document.title = "{{ processo }}"; /* set window name to easy work */
 
     });
@@ -139,8 +143,10 @@
       <li><a href="/select?selected={{ process.replace('/','-') }}">{{ process }}</a></li>
       {% endfor %}
     </ol>
-  {% else %}    
-    <p style="text-align:center;font-size: medium;font-weight: bold;display: block;">Prioridade {{ processo }}  </p  >  
+  {% else %}
+    <div style="text-align:center;font-size: medium;font-weight: bold;display: block;">
+      Prioridade <a id="copyprocess" href="/copynup" >{{ nup }} </a> 
+    </div> 
     {{ pandas_table|safe }}     
   {% endif %}    
 </body>
