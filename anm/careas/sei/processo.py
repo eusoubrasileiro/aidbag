@@ -227,6 +227,7 @@ class Processo(Sei):
         click(self.driver, 'button#btnSalvar')   
         # alert may sometimes show for 'duplicated' documents     
         try_accept_alerts(self.driver)   
+        self.closeOtherWindows()
         self.driver.switch_to.default_content() # go back to main document        
         
     def insereNotaTecnicaRequerimento(self, template_name, assinar=True, tipo='pesquisa', **kwargs):

@@ -48,11 +48,13 @@ def htmlTable(table):
     for _, group in table.groupby(table.Processo):
         table.loc[group.index, 'evn'] = len(group) 
         table.loc[group.index, 'evindex'] = list(range(len(group)))
-    table = prettyTabelaInterferenciaMaster(table, view=True)  # some prettify 
+    table = prettyTabelaInterferenciaMaster(table, view=True)  # some prettify     
     # for backward compatibility rearrange columns
     table = table[['Prior', 'Ativo', 'Processo', 'Evento', 'EvSeq', 'Descrição', 'Data', 
             'DataPrior', 'EvPrior', 'Inativ', 'Obs', 'DOU', 'Dads', 'Sons',
             'group', 'evindex', 'evn', 'style']] 
+    # rename columns 
+    table.rename(columns={'DataPrior' : 'Protocolo'}, inplace=True)
     row_attrs = ['Ativo', 'group', 'evindex', 'evn', 'style'] # List of columns to write as attributes in row element.
     row_cols = table.columns.to_list() # List of columns to write as children in row element. By default, all columns
     row_cols = [ v for v in row_cols if v not in ['group', 'evindex', 'evn', 'style'] ]        

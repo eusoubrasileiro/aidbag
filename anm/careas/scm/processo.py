@@ -631,7 +631,7 @@ class ProcessFactoryStorageClass(dict):
         
             
 ProcessStorage = ProcessFactoryStorageClass()
-ProcessStorage.loadAll(verbose=True) # load processes saved on start      
+threading.Thread(target=ProcessStorage.loadAll, args=(True,)).start() # load processes saved on start      
 """Container and Factory of processes to avoid 
 1. connecting/open page of SCM again
 2. parsing all information again    

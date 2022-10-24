@@ -149,11 +149,8 @@ def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False):
             elif tipo == 'opção':
                 proc = scm.Processo.Get(processo, wpage, dados=scm.SCM_SEARCH.BASICOS,verbose=False)
                 proc.salvaDadosBasicosHtml(config.processPathSecor(proc))
-        except estudos.DownloadInterferenciaFailed:            
-            failed_NUPS.append(scm.ProcessStorage[scm.fmtPname(processo)]['NUP'])            
-            if verbose:
-                print(f"DownloadInterferenciaFailed {processo}", file=sys.stderr)
-            continue
+        except estudos.DownloadInterferenciaFailed as e:            
+            failed_NUPS.append(scm.ProcessStorage[scm.fmtPname(processo)]['NUP'] + f" Message: {str(e)}")                       
         except Exception as e:              
             print(f"Process {processo} Exception: {traceback.format_exc()}", file=sys.stderr)                       
             failed_NUPS.append(scm.ProcessStorage[scm.fmtPname(processo)]['NUP'])            
@@ -264,7 +261,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, infer=True, sei_doc=No
         processo_tipo=None
         if 'requerimento' in process['tipo'].lower(): 
             if 'requerimento de lavra' in process['fase'].lower():
-                raise NotImplementedError() 
+                psei.insereNotaTecnicaRequerimento("interferência_total", tipo=processo_tipo) 
                 #Formulário 1            
             if 'requerimento de pesquisa' in process['fase'].lower():
                 processo_tipo = 'pesquisa' 
