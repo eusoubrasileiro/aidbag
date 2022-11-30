@@ -101,8 +101,12 @@ class Processo:
 
     def __getitem__(self, key):
         """get an property from the dados dictionary `dadosbasicos_run` must have run"""        
-        return self._dados[key]        
-
+        return self._dados[key]           
+    
+    def __contains__(self, key):
+        """check if property exist on self._dados"""
+        return key in self._dados
+         
     @property
     def associados(self):
         """key : value - processo name : {attributes}

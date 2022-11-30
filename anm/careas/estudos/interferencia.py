@@ -225,11 +225,14 @@ class Interferencia:
                 lambda strdate: datetime.strptime(strdate, "%d/%m/%Y %H:%M:%S"))
             # to add an additional row caso a primeira data dos eventos diferente
             # da prioritária correta
-            processo_prioridadec = processo_scm['prioridadec']
-            if processo_events['Data'].values[-1] > np.datetime64(processo_prioridadec):
+            if 'prioridadec' in processo_scm:
+                processo_prioridade = processo_scm['prioridadec']
+            else: 
+                processo_prioridade = processo_scm['prioridade']
+            if processo_events['Data'].values[-1] > np.datetime64(processo_prioridade):
                 #processo_events = processo_events.append(processo_events.tail(1), ignore_index=True) # repeat the last/or first
                 processo_events = pd.concat([processo_events, processo_events.tail(1)], ignore_index=True, axis=0, join='outer')
-                processo_events.loc[processo_events.index[-1], 'Data'] = np.datetime64(processo_prioridadec)
+                processo_events.loc[processo_events.index[-1], 'Data'] = np.datetime64(processo_prioridade)
                 processo_events.loc[processo_events.index[-1], 'EvSeq'] = -3 # represents added by here
             # SICOP parte if fisico main available
             # might have more or less lines than SCM eventos
