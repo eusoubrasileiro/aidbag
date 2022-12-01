@@ -41,7 +41,7 @@ ProcessPathStorage = {}
 # except:
 #     pass 
 
-def currentProcessGet(path=None, sort='name', clear=False):
+def currentProcessGet(path=None, sort='name', clear=True):
     """
     Return dict of processes paths currently on work folder.
     Update `ProcessPathStorage` dict with process names and paths.

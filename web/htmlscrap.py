@@ -25,6 +25,8 @@ from urllib3.exceptions import InsecureRequestWarning
 
 class wPage: # html  webpage scraping with soup and requests
     def __init__(self, nretries=10, ssl=True): # requests session
+        self.nretries = nretries    
+        self.ssl = ssl 
         self.session = requests.Session()
         if not ssl: # disable ssl verification certificates
             self.session.verify = False 
@@ -38,7 +40,7 @@ class wPage: # html  webpage scraping with soup and requests
                         status_forcelist=[ 500, 502, 503, 504 ])
         # https://stackoverflow.com/a/35504626/1207193
         self.session.mount('http://', adapters.HTTPAdapter(max_retries=retries))
-        self.session.mount('https://', adapters.HTTPAdapter(max_retries=retries))        
+        self.session.mount('https://', adapters.HTTPAdapter(max_retries=retries)) 
 
     # testing with 
     # wp = wPage()
@@ -87,7 +89,11 @@ class wPageNtlm(wPage): # overwrites original class for ntlm authentication
     def dummy(cls):
         """wPage without password or username"""
         return cls('', '')
+    
+    def copy(self):
+        return wPageNtlm(self.user, self.passwd, self.nretries, self.ssl)
 
+    __copy__ = copy # Now works with copy.copy too
 
 
 def formdataPostAspNet(response, formcontrols):

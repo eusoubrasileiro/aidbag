@@ -372,8 +372,9 @@ class Processo:
             if process._pages['poligon']['html']:            
                 if not process._dadosPoligonalGet(download=False) and verbose:
                     print('Some error on poligonal page cant read poligonal table', file=sys.stderr)           
-        process._dadosbasicos_run = True  
-        process._dadospoly_run = True
+                else:
+                    process._dadospoly_run = True
+        process._dadosbasicos_run = True          
         return process            
             
     def toJSON(self):
