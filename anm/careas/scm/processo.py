@@ -129,23 +129,22 @@ class Processo:
             self._wpage = wpage
         if task in SCM_SEARCH: # passed argument to perform a default call without args
             if SCM_SEARCH.BASICOS in task and not self._dadosbasicos_run:
-                self._dadosBasicosGet()
+                self._dadosBasicosGetIf()
             elif SCM_SEARCH.ASSOCIADOS in task and not self._associados_run:
                 self._expandAssociados()
             elif SCM_SEARCH.PRIORIDADE in task and not self._ancestry_run:
                 self._ancestry()
             elif SCM_SEARCH.POLIGONAL in task and not self._dadospoly_run:
-                self._dadosPoligonalGet()
+                self._dadosPoligonalGetIf()
 
     def _pageRequest(self, name):
         """python requests page and get response unicode str decoded"""
         if not isinstance(self._wpage, wPageNtlm):
             raise Exception('Invalid `wPage` instance!')
-        if not self._pages[name]['html']:
-            response = requests.pageRequest(name, self.name, self._wpage, False)
-            self._pages[name]['html'] = response.text # str unicode page       
-            self.__changed()              
-            return self._pages[name]['html']
+        response = requests.pageRequest(name, self.name, self._wpage, False)
+        self._pages[name]['html'] = response.text # str unicode page       
+        self.__changed()              
+        return self._pages[name]['html']
 
     @thread_safe
     def _expandAssociados(self, ass_ignore=''):
@@ -163,7 +162,7 @@ class Processo:
 
         """
         if not self._dadosbasicos_run:
-            self._dadosBasicosGet()
+            self._dadosBasicosGetIf()
 
         if self._associados_run: 
             return self.associados       
@@ -247,7 +246,7 @@ class Processo:
             return self['prioridadec']
 
         if not self._dadosbasicos_run:
-            self._dadosBasicosGet()
+            self._dadosBasicosGetIf()
 
         if self._associados_run: 
             return self.associados       
@@ -265,6 +264,14 @@ class Processo:
 
         self._ancestry_run = True
         return self['prioridadec']
+    
+    def _dadosBasicosGetIf(self, **kwargs):
+        """wrap around `_dadosBasicosGet`to download only if page html
+        was not downloaded yet"""
+        if not self._pages['basic']['html']:
+            self._dadosBasicosGet(**kwargs)
+        else: 
+            self._dadosBasicosGet(download=False, **kwargs)    
 
     def _dadosBasicosGet(self, data_tags=None, download=True):
         """dowload the dados basicos scm main html page or 
@@ -277,14 +284,23 @@ class Processo:
                 data_tags = scm_data_tags.copy()
             if download: # download get with python.requests page html response            
                 self._pageRequest('basic')        
-            if self._verbose:
-                print("dadosBasicosGet - parsing: ", self.name, file=sys.stderr)        
-            # using class field directly       
-            dados = parseDadosBasicos(self._pages['basic']['html'], 
-                self.name, self._verbose, data_tags)            
-            self._dados.update(dados)
-            self._dadosbasicos_run = True 
-            self.__changed()        
+            if self._pages['basic']['html']:
+                if self._verbose:
+                    print("dadosBasicosGet - parsing: ", self.name, file=sys.stderr)        
+                # using class field directly       
+                dados = parseDadosBasicos(self._pages['basic']['html'], 
+                    self.name, self._verbose, data_tags)            
+                self._dados.update(dados)
+                self._dadosbasicos_run = True 
+                self.__changed()   
+                
+    def _dadosPoligonalGetIf(self, **kwargs):
+        """wrap around `_dadosPoligonalGet`to download only if page html
+        was not downloaded yet"""
+        if not self._pages['poligon']['html']:
+            self._dadosBasicosGet(**kwargs)
+        else: 
+            self._dadosBasicosGet(download=False, **kwargs)         
 
     def _dadosPoligonalGet(self, download=True):
         """dowload the dados scm poligonal html page or 
@@ -296,13 +312,13 @@ class Processo:
         if not self._dadospoly_run: 
             if download: # download get with python.requests page html response  
                 self._pageRequest('poligon')
-            # dont need to retrieve anything
-            if self._verbose:
-                print("dadosPoligonalGet - parsing: ", self.name, file=sys.stderr)   
-            dados = parseDadosPoligonal(self._pages['poligon']['html'])
-            self._dados.update({'poligon' : dados })                       
-            self._dadospoly_run = True
-            self.__changed()        
+            if self._pages['poligon']['html']:
+                if self._verbose:
+                    print("dadosPoligonalGet - parsing: ", self.name, file=sys.stderr)   
+                dados = parseDadosPoligonal(self._pages['poligon']['html'])
+                self._dados.update({'poligon' : dados })                       
+                self._dadospoly_run = True
+                self.__changed()        
 
     def _dadosBasicosFillMissing(self):
         """try fill dados faltantes pelo processo associado (pai) 1. UF 2. substancias
@@ -313,7 +329,7 @@ class Processo:
         if self.associados:
             miss_data_tags = getMissingTagsBasicos(self._dados)        
             father = Processo.Get(self._dados['parents'][0], self._wpage, verbose=self._verbose, run=False)
-            father._dadosBasicosGet(miss_data_tags)
+            father._dadosBasicosGetIf(data_tags=miss_data_tags)
             self._dados.update(father._dados)
             self.__changed()        
             return True
