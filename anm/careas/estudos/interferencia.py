@@ -118,7 +118,7 @@ class Interferencia:
         * exceptions: 
             `DownloadInterferenciaFailed`, `CancelaUltimoEstudoFailed`
         """
-        estudo = Interferencia(wpage, processostr, task=SCM_SEARCH.PRIORIDADE, verbose=verbose)
+        estudo = Interferencia(wpage, processostr, task=SCM_SEARCH.ALL, verbose=verbose)
         estudo.processo.salvaDadosBasicosHtml(estudo.processo_path)
         estudo.processo.salvaDadosPoligonalHtml(estudo.processo_path)                    
         estudo.saveHtml(download)

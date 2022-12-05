@@ -298,9 +298,9 @@ class Processo:
         """wrap around `_dadosPoligonalGet`to download only if page html
         was not downloaded yet"""
         if not self._pages['poligon']['html']:
-            self._dadosBasicosGet(**kwargs)
+            self._dadosPoligonalGet(**kwargs)
         else: 
-            self._dadosBasicosGet(download=False, **kwargs)         
+            self._dadosPoligonalGet(download=False, **kwargs)         
 
     def _dadosPoligonalGet(self, download=True):
         """dowload the dados scm poligonal html page or 
