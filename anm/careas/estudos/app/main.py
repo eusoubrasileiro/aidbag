@@ -74,7 +74,10 @@ app = Flask(__name__, template_folder=curpath)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 30*60 # 30 mins in seconds
 app.config['CACHE_TYPE'] = 'SimpleCache'  # only 1 connection (1 thread/session/client)
 cache = Cache(app)
-cache.set('processos_list', wf.currentProcessGet())
+processos = [] 
+for process in wf.currentProcessGet():
+    processos.append((process, ProcessStorage[process]._dados.copy()))
+cache.set('processos_list', processos)
 cache.set('selected', None)
 cache.set('table', None)
 cache.set('json_path', None)
@@ -84,7 +87,7 @@ cache.set('done', False)
 @app.route('/')
 def chooseProcess():    
     return render_template('index.html', 
-                processos_list=cache.get('processos_list'))
+                processos_list=cache.get('processos_list'), dados=None, processo=None)
 
 @app.route('/select', methods=['GET'])
 def select():    
@@ -105,7 +108,7 @@ def select():
             table = None
     cache.set('table', table)    
     html_table = htmlTable(table) if table is not None else 'No table!'
-    response = make_response(render_template('index.html', processo=key, nup=ProcessStorage[key]['NUP'],
+    response = make_response(render_template('index.html', processo=key, dados=ProcessStorage[key]._dados,
                 pandas_table=html_table) )
     # disable cache so checkbox and display hidden dont get cached
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"

@@ -23,8 +23,8 @@ config['interferencia']['file_prefix'] = 'eventos_prioridade'
 def SetHomeCareasPath(home=str(Path.home())): # default get userhome folder
     """for mounted disk on linux, set windows home user path"""
     config['secor_path'] = os.path.join(home, 'Documents', 'Controle_Areas')  # os independent     
-    config['eventos_scm'] = os.path.join(config['secor_path'], 'Secorpy', 'eventos_scm_12032020.xls')    
-    config['sei']['doc_templates'] = os.path.join(config['secor_path'], 'Secorpy', 'docs_models')  # os independent 
+    config['eventos_scm'] = os.path.join(config['secor_path'], 'secorpy', 'eventos_scm_12032020.xls')    
+    config['sei']['doc_templates'] = os.path.join(config['secor_path'], 'secorpy', 'docs_models')  # os independent 
     config['processos_path'] = os.path.join(config['secor_path'], 'Processos')  # os independent   
     config['wf_processpath_json'] = os.path.join(config['processos_path'], 'wf_processpath_json.jsons')
     config['scm']['process_storage_file'] = os.path.join(config['processos_path'], 'ProcessesStored')

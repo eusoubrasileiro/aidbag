@@ -265,7 +265,11 @@ class Processo(Sei):
                                         **kwargs)  # area_porcentagem must be passed as kwargs  
         elif 'sem_redução' in template_name:
             template = templateEnv.get_template("req_sem_redução.html")                
-            html_text = template.render(interferencia_sei=interferencia_np, minuta_sei=minuta_np, tipo=tipo, minuta_de=minuta_de)  
+            html_text = template.render(interferencia_sei=interferencia_np, minuta_sei=minuta_np, tipo=tipo, minuta_de=minuta_de) 
+        elif 'edital' in template_name:
+            template = templateEnv.get_template("req_edital_son.html")                
+            html_text = template.render(interferencia_sei=interferencia_np, minuta_sei=minuta_np,    
+                                        **kwargs)  #           
                                      
         self.insereNotaTecnica(html_text)
         

@@ -139,14 +139,21 @@
   {% if processos_list %}
     <h2>Pick a process</h2>
     <ol>
-    {% for process in processos_list %}  
-      <li><a href="/select?selected={{ process.replace('/','-') }}">{{ process }}</a></li>
+    {% for process_, dados_ in processos_list %}  
+      <li><a href="/select?selected={{ process_.replace('/','-') }}">{{ process_ }}</a> &#9830; <a id="copyprocess" href="/copynup" >SEI: {{ dados_['NUP'] }} </a> &#9830; <a href='/process?process={{ process_ }}'>SCM</a></li>
       {% endfor %}
     </ol>
-  {% else %}
+  {% else %}    
     <div style="text-align:center;font-size: medium;font-weight: bold;display: block;">
-      Prioridade <a id="copyprocess" href="/copynup" >{{ nup }} </a> 
-    </div> 
+      <a style="color:rgb(43, 50, 36);">Prioridade: {{ dados['prioridade'] }}</a> <a href='/process?process={{ processo }}'>SCM</a> <a id="copyprocess" href="/copynup" >SEI: {{ dados['NUP'] }} </a> 
+      <a>1<sup>st</sup> parent: 
+        {% if dados['parents'] %}
+          {{ dados['parents'][0] }}
+        {% else %}
+          {{ '-' }}
+        {% endif %}
+      </a>       
+    </div>     
     {{ pandas_table|safe }}     
   {% endif %}    
 </body>
