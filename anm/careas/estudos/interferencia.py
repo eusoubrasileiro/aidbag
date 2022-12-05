@@ -1,4 +1,5 @@
 import os
+import sys 
 import pathlib 
 import numpy as np
 from datetime import datetime
@@ -119,8 +120,8 @@ class Interferencia:
             `DownloadInterferenciaFailed`, `CancelaUltimoEstudoFailed`
         """
         estudo = Interferencia(wpage, processostr, task=SCM_SEARCH.ALL, verbose=verbose)
-        estudo.processo.salvaDadosBasicosHtml(estudo.processo_path)
-        estudo.processo.salvaDadosPoligonalHtml(estudo.processo_path)                    
+        estudo.processo.salvaDadosBasicosHtml(estudo.processo_path, overwrite=download)
+        estudo.processo.salvaDadosPoligonalHtml(estudo.processo_path, overwrite=download)                    
         estudo.saveHtml(download)
         # only if retirada interferencia html is saved we can create spreadsheets
         try:               
@@ -128,8 +129,9 @@ class Interferencia:
                 estudo.createTableMaster()
                 estudo.to_excel()  
         finally: # if there was an exception cancela ultimo estudo
-            if not estudo.cancelLast():
-                raise CancelaUltimoEstudoFailed()
+            if download:
+                if not estudo.cancelLast():
+                    raise CancelaUltimoEstudoFailed()
         return estudo
     
     def cancelLast(self):
@@ -174,6 +176,8 @@ class Interferencia:
         self.tabela_assoc = pd.DataFrame()
         self.interferentes = {}
         for name in list(set(self.tabela_interf.Processo)): # Unique Process Only
+            if self.verbose:
+                print(f"createTable: fetching data for associado {name} ", file=sys.stderr)                                
             processo  = Processo.Get(name, 
                             self.wpage, SCM_SEARCH.ALL, self.verbose)
             self.interferentes[name] = processo # store Processo object
@@ -248,10 +252,14 @@ class Interferencia:
         self.tabela_interf_master = self.tabela_interf_master[columns_order]
         ### Todos os eventos posteriores a data de prioridade são marcados
         # como 0 na coluna Prioridade otherwise 1
-        self.tabela_interf_master['DataPrior'] = self.processo['prioridadec']
+        if 'prioridadec' in self.processo:
+            processo_prioridade = processo_scm['prioridadec']
+        else: 
+            processo_prioridade = processo_scm['prioridade']
+        self.tabela_interf_master['DataPrior'] = processo_prioridade
         self.tabela_interf_master['EvPrior'] = 0 # 1 prioritario 0 otherwise
         self.tabela_interf_master['EvPrior'] = self.tabela_interf_master.apply(
-            lambda row: 1 if row['Data'] <= self.processo['prioridadec'] else 0, axis=1)
+            lambda row: 1 if row['Data'] <= processo_prioridade else 0, axis=1)
         ### fill-in column with inativam or ativam processo for each event
         ### using excel 'eventos_scm_09102019.xls'
         eventos = pd.read_excel(config['eventos_scm'])
@@ -271,7 +279,7 @@ class Interferencia:
             alive = np.sum(events.Inativ.values) # alive or dead
             if alive < 0: # DEAD - get by data da última inativação
                 data_inativ = events.loc[events.Inativ == -1]['Data'].values[0]
-                if data_inativ  <= np.datetime64(self.processo['prioridadec']):
+                if data_inativ  <= np.datetime64(processo_prioridade):
                     # morreu antes do atual, não é prioritário
                     prior = -1
             self.tabela_interf_master.loc[
@@ -408,14 +416,19 @@ class Interferencia:
     
     def saveHtml(self, download=True):
         """fetch and save html interferencia raises DownloadInterferenciaFailed on fail"""
+        html_file = (config['interferencia']['html_prefix']['this']+'_'+
+            '_'.join([self.processo.number, self.processo.year]))  
+        html_file = os.path.join(self.processo_path, html_file)        
         if download:
-            html_file = (config['interferencia']['html_prefix']['this']+'_'+
-                '_'.join([self.processo.number, self.processo.year]))  
-            html_file = os.path.join(self.processo_path, html_file)
             error_status = fetch_save_Html(self.wpage, self.processo.number, self.processo.year, 
                             html_file, download)
             if error_status:
                 raise DownloadInterferenciaFailed(error_status)
+        else:
+            if os.path.exists(html_file+'.html'):
+                return True
+            raise DownloadInterferenciaFailed("interferencia html not found")
+            
 
 # something else not sure will be usefull someday
 # def salvaEstudoOpcaoDeAreaHtml(self, html_path):

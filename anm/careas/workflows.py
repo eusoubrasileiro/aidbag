@@ -129,7 +129,7 @@ def readPdfText(filename):
 __debugging__ = False
 
 
-def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False):
+def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False, overwrite=False):
     """
     * tipo : str
         'interferencia' - Analise de Requerimento de Pesquisa  
@@ -144,10 +144,10 @@ def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False):
     for processo in tqdm.tqdm(processos):        
         try:            
             if tipo == 'interferencia':
-                estudo = estudos.Interferencia.make(wpage, processo, verbose=verbose)   
+                estudo = estudos.Interferencia.make(wpage, processo, verbose=verbose, download=overwrite)   
                 proc = estudo.processo              
             elif tipo == 'opção':
-                proc = scm.Processo.Get(processo, wpage, dados=scm.SCM_SEARCH.BASICOS,verbose=False)
+                proc = scm.Processo.Get(processo, wpage, dados=scm.SCM_SEARCH.ALL, verbose=verbose)
                 proc.salvaDadosBasicosHtml(config.processPathSecor(proc))
         except estudos.DownloadInterferenciaFailed as e:            
             failed_NUPS.append((scm.ProcessStorage[scm.fmtPname(processo)]['NUP'], f" Message: {str(e)}"))                       
