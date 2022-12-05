@@ -62,6 +62,8 @@ def thread_safe(function):
 
 process_expire = config['scm']['process_expire']  
 """how long to keep a process on ProcessStorage"""
+default_run_state = { 'run' : { 'basicos': False, 'associados': False, 'ancestry': False, 'polygonal': False } }
+""" start state of running parsing processes of process """
 
 """
 Use `Processo.Get` to avoid creating duplicate Processo's
@@ -79,14 +81,11 @@ class Processo:
         else: # might be None in case loading from JSON, html etc...
             self._wpage = None 
         self._verbose = verbose
-        # control to prevent from running again
-        self._dadosbasicos_run = False
-        self._associados_run = False
-        self._ancestry_run = False
-        self._dadospoly_run = False
         self.lock = threading.RLock() # re-entrant can be acquired by same thread multiple times
         """`threading.RLock` exists due 'associados' search with multiple threads"""
         self._dados = {} 
+        # control to avoid from running again        
+        self._dados.update(default_run_state)                           
         """dados parsed and processed """
         # web pages are 'dadosbasicos' and 'poligonal'
         self._pages = { 'basic'   : {'html' : '' },
@@ -100,7 +99,7 @@ class Processo:
         """
 
     def __getitem__(self, key):
-        """get an property from the dados dictionary `dadosbasicos_run` must have run"""        
+        """get an property from the dados dictionary if exists"""        
         return self._dados[key]           
     
     def __contains__(self, key):
@@ -128,13 +127,13 @@ class Processo:
         if self._wpage is None: # to support being called without wp set 
             self._wpage = wpage
         if task in SCM_SEARCH: # passed argument to perform a default call without args
-            if SCM_SEARCH.BASICOS in task and not self._dadosbasicos_run:
+            if SCM_SEARCH.BASICOS in task and not self['run']['basicos']:
                 self._dadosBasicosGetIf()
-            if SCM_SEARCH.ASSOCIADOS in task and not self._associados_run:
+            if SCM_SEARCH.ASSOCIADOS in task and not self['run']['associados']:
                 self._expandAssociados()
-            if SCM_SEARCH.PRIORIDADE in task and not self._ancestry_run:
+            if SCM_SEARCH.PRIORIDADE in task and not self['run']['ancestry']:
                 self._ancestry()
-            if SCM_SEARCH.POLIGONAL in task and not self._dadospoly_run:
+            if SCM_SEARCH.POLIGONAL in task and not self['run']['polygonal']:
                 self._dadosPoligonalGetIf()
 
     def _pageRequest(self, name):
@@ -161,14 +160,14 @@ class Processo:
         the source of the search is always passed to be ignored on the next search.
 
         """
-        if not self._dadosbasicos_run:
+        if not self['run']['basicos']:
             self._dadosBasicosGetIf()
 
-        if self._associados_run: 
+        if self['run']['associados']: 
             return self.associados       
 
         if not self.associados:
-            self._associados_run = True
+            self['run']['associados'] = True
             return
         
         if self._verbose:
@@ -234,7 +233,7 @@ class Processo:
         if self._verbose:
             print("expandAssociados - finished associados: ", self.name, file=sys.stderr)
             
-        self._associados_run = True
+        self._dados['run']['associados'] = True
         self.__changed()        
 
     def _ancestry(self):
@@ -242,16 +241,16 @@ class Processo:
         Build graph of all associados.
         Get root node or older parent.               
         """
-        if self._ancestry_run:
+        if self['run']['ancestry']:
             return self['prioridadec']
 
-        if not self._dadosbasicos_run:
+        if not self['run']['basicos']:
             self._dadosBasicosGetIf()
 
-        if self._associados_run: 
+        if self['run']['associados']: 
             return self.associados       
         
-        if not self._associados_run and self.associados:
+        if not self['run']['associados'] and self.associados:
             self._expandAssociados()
 
         if self._verbose:
@@ -262,7 +261,7 @@ class Processo:
             graph, root = ancestry.createGraphAssociados(self)
             self._dados['prioridadec'] = ProcessStorage[root]['prioridade']
 
-        self._ancestry_run = True
+        self._dados['run']['ancestry'] = True
         return self['prioridadec']
     
     def _dadosBasicosGetIf(self, **kwargs):
@@ -279,7 +278,7 @@ class Processo:
         than parse all data_tags passed storing the resulting in `self.dados`
         return True if succeed on parsing every tag False ortherwise
         """
-        if not self._dadosbasicos_run: # if not done yet
+        if not self['run']['basicos']: # if not done yet
             if data_tags is None: # data tags to fill in 'dados' with
                 data_tags = scm_data_tags.copy()
             if download: # download get with python.requests page html response            
@@ -291,7 +290,7 @@ class Processo:
                 dados = parseDadosBasicos(self._pages['basic']['html'], 
                     self.name, self._verbose, data_tags)            
                 self._dados.update(dados)
-                self._dadosbasicos_run = True 
+                self._dados['run']['basicos'] = True 
                 self.__changed()   
                 
     def _dadosPoligonalGetIf(self, **kwargs):
@@ -309,7 +308,7 @@ class Processo:
         return True           
           * note: not used by self.run!
         """
-        if not self._dadospoly_run: 
+        if not self['run']['polygonal']: 
             if download: # download get with python.requests page html response  
                 self._pageRequest('poligon')
             if self._pages['poligon']['html']:
@@ -317,14 +316,14 @@ class Processo:
                     print("dadosPoligonalGet - parsing: ", self.name, file=sys.stderr)   
                 dados = parseDadosPoligonal(self._pages['poligon']['html'])
                 self._dados.update({'poligon' : dados })                       
-                self._dadospoly_run = True
+                self._dados['run']['polygonal'] = True
                 self.__changed()        
 
     def _dadosBasicosFillMissing(self):
         """try fill dados faltantes pelo processo associado (pai) 1. UF 2. substancias
             need to be reviewed, wrong assumption about parent process   
         """
-        if not self._associados_run:
+        if not self['run']['associados']:
             self._expandAssociados()
         if self.associados:
             miss_data_tags = getMissingTagsBasicos(self._dados)        
@@ -383,14 +382,15 @@ class Processo:
         process._dados = json.loads(_dados, object_hook=json_to_datetime)        
         process._pages['basic']['html'] = zlib.decompress(page_basicos).decode('utf-8')
         process._pages['poligon']['html'] = zlib.decompress(page_poligon).decode('utf-8')
+        if 'run' not in process: # backward compatibility
+            process._dados.update(default_run_state)   
         if reparse:
             process._dadosBasicosGet(download=False)
             if process._pages['poligon']['html']:            
                 if not process._dadosPoligonalGet(download=False) and verbose:
                     print('Some error on poligonal page cant read poligonal table', file=sys.stderr)           
                 else:
-                    process._dadospoly_run = True
-        process._dadosbasicos_run = True          
+                    process._dados['run']['polygonal'] = True                  
         return process            
             
     def toJSON(self):
@@ -436,13 +436,15 @@ class Processo:
         process.birth = jsondict['birth']        
         process._dados = jsondict['_dados']        
         process._pages = jsondict['_pages']                        
+        if 'run' not in process: # backward compatibility
+            process._dados.update(default_run_state)  
         if reparse:
             process._dadosBasicosGet(download=False)
             if process._pages['poligon']['html']:            
                 if not process._dadosPoligonalGet(download=False) and verbose:
                     print('Some error on poligonal page cant read poligonal table', file=sys.stderr)           
-        process._dadosbasicos_run = True  
-        process._dadospoly_run = True
+        process._dados['run']['basicos'] = True  
+        process._dados['run']['polygonal'] = True
         return process
 
     @staticmethod
@@ -507,7 +509,7 @@ class Processo:
         if ProcessStorage.get(processostr) is not None:
             processo = ProcessStorage[processostr] #  storage doesn't keep wpage
             processo._wpage = wPageNtlm(wpagentlm.user, wpagentlm.passwd)
-            if processo.birth + process_expire > datetime.datetime.now():         
+            if processo.birth + process_expire < datetime.datetime.now():         
                 if verbose:       
                     print("Processo __new___ placing on storage ", processostr, file=sys.stderr)
                 processo = Processo(processostr, wpagentlm,  verbose)  # store newer guy             
