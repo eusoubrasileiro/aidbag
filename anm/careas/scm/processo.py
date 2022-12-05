@@ -130,11 +130,11 @@ class Processo:
         if task in SCM_SEARCH: # passed argument to perform a default call without args
             if SCM_SEARCH.BASICOS in task and not self._dadosbasicos_run:
                 self._dadosBasicosGetIf()
-            elif SCM_SEARCH.ASSOCIADOS in task and not self._associados_run:
+            if SCM_SEARCH.ASSOCIADOS in task and not self._associados_run:
                 self._expandAssociados()
-            elif SCM_SEARCH.PRIORIDADE in task and not self._ancestry_run:
+            if SCM_SEARCH.PRIORIDADE in task and not self._ancestry_run:
                 self._ancestry()
-            elif SCM_SEARCH.POLIGONAL in task and not self._dadospoly_run:
+            if SCM_SEARCH.POLIGONAL in task and not self._dadospoly_run:
                 self._dadosPoligonalGetIf()
 
     def _pageRequest(self, name):

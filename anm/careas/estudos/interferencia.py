@@ -175,7 +175,7 @@ class Interferencia:
         self.interferentes = {}
         for name in list(set(self.tabela_interf.Processo)): # Unique Process Only
             processo  = Processo.Get(name, 
-                            self.wpage, SCM_SEARCH.PRIORIDADE, self.verbose)
+                            self.wpage, SCM_SEARCH.ALL, self.verbose)
             self.interferentes[name] = processo # store Processo object
             indexes = (self.tabela_interf.Processo == name)
             self.tabela_interf.loc[indexes, 'Ativo'] = processo['ativo']
