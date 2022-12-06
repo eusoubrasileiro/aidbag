@@ -8,22 +8,21 @@ from ..scm import (
     fmtPname
 )
 
-def fetch_save_Html(wpage, number, year, html_file, download=True):
-    if not os.path.exists(html_file) or download:
-        wpage.get('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1')
-        formcontrols = {
-            'ctl00$cphConteudo$txtNumProc': number,
-            'ctl00$cphConteudo$txtAnoProc': year,
-            'ctl00$cphConteudo$btnEnviarUmProcesso': 'Processar'
-        }
-        formdata = htmlscrap.formdataPostAspNet(wpage.response, formcontrols)
-        wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1',
-                data=formdata, timeout=config['secor_timeout'])
-        if not ( wpage.response.url == r'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'):
-            soup = BeautifulSoup(wpage.response.text, 'html.parser')                        
-            # falhou salvar Retirada de Interferencia return error message                        
-            return  soup.find('span', { 'class' : 'MensagemErro' }).text.strip() 
-        wpage.save(html_file)
+def fetch_save_Html(wpage, number, year, html_file):
+    wpage.get('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1')
+    formcontrols = {
+        'ctl00$cphConteudo$txtNumProc': number,
+        'ctl00$cphConteudo$txtAnoProc': year,
+        'ctl00$cphConteudo$btnEnviarUmProcesso': 'Processar'
+    }
+    formdata = htmlscrap.formdataPostAspNet(wpage.response, formcontrols)
+    wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1',
+            data=formdata, timeout=config['secor_timeout'])
+    if not ( wpage.response.url == r'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'):
+        soup = BeautifulSoup(wpage.response.text, 'html.parser')                        
+        # falhou salvar Retirada de Interferencia return error message                        
+        return  soup.find('span', { 'class' : 'MensagemErro' }).text.strip() 
+    wpage.save(html_file)
     return ''    
 
 def cancelaUltimo(wpage, number, year):

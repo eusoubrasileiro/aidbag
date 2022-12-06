@@ -101,7 +101,7 @@ class Interferencia:
         return processo_path    
     
     @staticmethod
-    def make(wpage, processostr, verbose=False, download=True):
+    def make(wpage, processostr, verbose=False, overwrite=False):
         """
         make folders and spreadsheets for specified process
         to aid on priority analysis
@@ -110,9 +110,9 @@ class Interferencia:
             numero processo format xxx.xxx/ano
         * wpage : wPage html 
             webpage scraping class com login e passwd preenchidos
-        * download: bool
-            default to allways download instead of using files saved on folder  
-            Only works for retirada interferencia html
+        * overwrite: bool
+            default to allways use using files saved on folder  
+            instead of downloading again
 
         * returns: instance `Interferencia`
 
@@ -120,18 +120,17 @@ class Interferencia:
             `DownloadInterferenciaFailed`, `CancelaUltimoEstudoFailed`
         """
         estudo = Interferencia(wpage, processostr, task=SCM_SEARCH.ALL, verbose=verbose)
-        estudo.processo.salvaDadosBasicosHtml(estudo.processo_path, overwrite=download)
-        estudo.processo.salvaDadosPoligonalHtml(estudo.processo_path, overwrite=download)                    
-        estudo.saveHtml(download)
+        estudo.processo.salvaDadosBasicosHtml(estudo.processo_path, overwrite)
+        estudo.processo.salvaDadosPoligonalHtml(estudo.processo_path, overwrite)                    
+        estudo.saveHtml(overwrite)
         # only if retirada interferencia html is saved we can create spreadsheets
         try:               
             if estudo.createTable(): # sometimes there is no interferences 
                 estudo.createTableMaster()
                 estudo.to_excel()  
         finally: # if there was an exception cancela ultimo estudo
-            if download:
-                if not estudo.cancelLast():
-                    raise CancelaUltimoEstudoFailed()
+            if overwrite and not estudo.cancelLast():
+                raise CancelaUltimoEstudoFailed()
         return estudo
     
     def cancelLast(self):
@@ -414,20 +413,17 @@ class Interferencia:
         estudo.tabela_interf_master = pd.read_json(file_path[0])          
         return estudo 
     
-    def saveHtml(self, download=True):
+    def saveHtml(self, overwrite=False):
         """fetch and save html interferencia raises DownloadInterferenciaFailed on fail"""
         html_file = (config['interferencia']['html_prefix']['this']+'_'+
             '_'.join([self.processo.number, self.processo.year]))  
         html_file = os.path.join(self.processo_path, html_file)        
-        if download:
-            error_status = fetch_save_Html(self.wpage, self.processo.number, self.processo.year, 
-                            html_file, download)
-            if error_status:
-                raise DownloadInterferenciaFailed(error_status)
-        else:
+        if not overwrite:
             if os.path.exists(html_file+'.html'):
-                return True
-            raise DownloadInterferenciaFailed("interferencia html not found")
+                return        
+        error_status = fetch_save_Html(self.wpage, self.processo.number, self.processo.year, html_file)
+        if error_status:
+            raise DownloadInterferenciaFailed(error_status)
             
 
 # something else not sure will be usefull someday
