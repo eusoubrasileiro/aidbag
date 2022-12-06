@@ -73,7 +73,7 @@ def currentProcessGet(path=None, sort='name', clear=True):
     if clear: # ignore json file 
         ProcessPathStorage.clear()
     for cur_path in paths: # remove what is NOT a process folder
-        if scm.util.regex_process.search(str(cur_path)) and cur_path.is_dir():
+        if regex_process.search(str(cur_path)) and cur_path.is_dir():
             process_folders.append(cur_path.absolute())   
             ProcessPathStorage.update({ scm.fmtPname(str(cur_path)) : str(cur_path.absolute())})        
     with open(config['wf_processpath_json'], "w") as f: # Serialize data into file
@@ -209,8 +209,9 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, infer=True, sei_doc=No
         print("Process path: ", process_folder.absolute())
         print("Current dir: ", os.getcwd())
 
-    # get nup, fase, tipo etc... 
-    process = scm.Processo.fromHtml(verbose=False) # default from current folder
+    # get process from folder name    
+    name = scm.findfmtPnames(process_folder.absolute().stem)[0]
+    process = scm.ProcessStorage[name]
 
     pdf_adicional = None
     pdf_interferencia = None            
@@ -263,40 +264,41 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, infer=True, sei_doc=No
             if 'requerimento de lavra' in process['fase'].lower():
                 # Formulário 1  : TODO
                 #psei.insereNotaTecnicaRequerimento("interferência_total", tipo=processo_tipo)                 
-                pass 
-            else:
-                if 'requerimento de pesquisa' in process['fase'].lower():              
-                    def editalGetDadNUP(processo):
-                        if len(processo['parents'] + processo['sons']) > 1:
-                            raise Exception('Something wrong! Mais de um associado! Àrea Menor no Leilão? ', processo.name)   
-                        return scm.ProcessStorage[processo['parents'][0]]['NUP']
-                    # advindos de editais de disponibilidade (leilão ou oferta pública)
-                    if 'leilão' in process['tipo'].lower():                                        
-                        psei.insereNotaTecnicaRequerimento("edital", edital='Leilão', 
-                                                           processo_pai=editalGetDadNUP(process))  
-                    elif 'oferta pública' in process['tipo'].lower():                    
-                        psei.insereNotaTecnicaRequerimento("edital", edital='Oferta Pública', 
-                                                           processo_pai=editalGetDadNUP(process))
+                pass             
+            elif 'requerimento de pesquisa' in process['fase'].lower():              
+                #only works for sons
+                def editalGetDadNUP(processo):
+                    if len(processo['parents'] + processo['sons']) > 1:
+                        raise Exception('Something wrong! Mais de um associado! Àrea Menor no Leilão? ', processo.name)   
+                    return scm.ProcessStorage[processo['parents'][0]]['NUP']
+                # advindos de editais de disponibilidade (leilão ou oferta pública)
+                psei.insereDocumentoExterno(1, str(pdf_adicional.absolute())) 
+                if 'leilão' in process['tipo'].lower():                                        
+                    psei.insereNotaTecnicaRequerimento("edital", edital='Leilão', 
+                                                        processo_pai=editalGetDadNUP(process))  
+                elif 'oferta pública' in process['tipo'].lower():                    
+                    psei.insereNotaTecnicaRequerimento("edital", edital='Oferta Pública', 
+                                                        processo_pai=editalGetDadNUP(process))
+                else:
+                    requerimento_tipo = 'pesquisa'
+            elif 'requerimento de licenciamento' in process['fase'].lower():
+                requerimento_tipo = 'licenciamento'       
+            if requerimento_tipo: # requerimento novo clássico
+                if pdf_adicional is None:
+                    if p_area == -1:                    
+                        # Recomenda interferencia total
+                        psei.insereNotaTecnicaRequerimento("interferência_total", tipo=requerimento_tipo) 
                     else:
-                        requerimento_tipo = 'pesquisa'
-                elif 'requerimento de licenciamento' in process['fase'].lower():
-                    requerimento_tipo = 'licenciamento'       
-                if requerimento_tipo: # requerimento novo clássico
-                    if pdf_adicional is None:
-                        if p_area == -1:                    
-                            # Recomenda interferencia total
-                            psei.insereNotaTecnicaRequerimento("interferência_total", tipo=requerimento_tipo) 
-                        else:
-                            # Recomenda opção
-                            psei.insereNotaTecnicaRequerimento("opção", tipo=requerimento_tipo)                          
+                        # Recomenda opção
+                        psei.insereNotaTecnicaRequerimento("opção", tipo=requerimento_tipo)                          
+                else:
+                    psei.insereDocumentoExterno(1, str(pdf_adicional.absolute()))   
+                    if p_area < 96.0: # > 4% change notificar 
+                        psei.insereNotaTecnicaRequerimento("com_redução", tipo=requerimento_tipo, # com notificação titular
+                                area_porcentagem=str(p_area).replace('.',',')) 
                     else:
-                        psei.insereDocumentoExterno(1, str(pdf_adicional.absolute()))   
-                        if p_area < 96.0: # > 4% change notificar 
-                            psei.insereNotaTecnicaRequerimento("com_redução", tipo=requerimento_tipo, # com notificação titular
-                                    area_porcentagem=str(p_area).replace('.',',')) 
-                        else:
-                            psei.insereNotaTecnicaRequerimento("sem_redução", tipo=requerimento_tipo) 
-                            # Recomenda Só análise de plano s/ notificação titular (mais comum)
+                        psei.insereNotaTecnicaRequerimento("sem_redução", tipo=requerimento_tipo) 
+                        # Recomenda Só análise de plano s/ notificação titular (mais comum)
         # else:
         #     # tipo - requerimento de cessão parcial ou outros
         #     if 'lavra' in fase.lower(): # minuta portaria de Lavra
