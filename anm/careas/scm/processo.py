@@ -62,8 +62,9 @@ def thread_safe(function):
 
 process_expire = config['scm']['process_expire']  
 """how long to keep a process on ProcessStorage"""
-default_run_state = { 'run' : { 'basicos': False, 'associados': False, 'ancestry': False, 'polygonal': False } }
-""" start state of running parsing processes of process """
+default_run_state = lambda: copy.deepcopy({ 'run' : 
+    { 'basicos': False, 'associados': False, 'ancestry': False, 'polygonal': False } })
+""" start state of running parsing processes of process - without deepcopy all mess expected"""
 
 """
 Use `Processo.Get` to avoid creating duplicate Processo's
@@ -85,7 +86,7 @@ class Processo:
         """`threading.RLock` exists due 'associados' search with multiple threads"""
         self._dados = {} 
         # control to avoid from running again        
-        self._dados.update(default_run_state)                           
+        self._dados.update(default_run_state())                           
         """dados parsed and processed """
         # web pages are 'dadosbasicos' and 'poligonal'
         self._pages = { 'basic'   : {'html' : '' },
@@ -163,6 +164,10 @@ class Processo:
         if not self['run']['basicos']:
             self._dadosBasicosGetIf()
 
+        if self._verbose:
+            print("expandAssociados - getting associados: ", self.name,
+            ' - ass_ignore: ', ass_ignore, file=sys.stderr)
+
         if self['run']['associados']: 
             return self.associados       
 
@@ -170,9 +175,6 @@ class Processo:
             self['run']['associados'] = True
             return
         
-        if self._verbose:
-            print("expandAssociados - getting associados: ", self.name,
-            ' - ass_ignore: ', ass_ignore, file=sys.stderr)
         # local copy for object search -> removing circular reference
         associados = copy.copy(self.associados)      
         if ass_ignore: # equivalent to ass_ignore != ''
@@ -241,22 +243,22 @@ class Processo:
         Build graph of all associados.
         Get root node or older parent.               
         """
-        if self['run']['ancestry']:
-            return self['prioridadec']
-
         if not self['run']['basicos']:
             self._dadosBasicosGetIf()
 
-        if self['run']['associados']: 
-            return self.associados       
-        
-        if not self['run']['associados'] and self.associados:
-            self._expandAssociados()
-
         if self._verbose:
-            print("ancestrySearch - building graph: ", self.name, file=sys.stderr)
-        
+            print("ancestrySearch - building graph: ", self.name, file=sys.stderr)    
+            
+        if self['run']['ancestry']:
+            return self['prioridadec']
+
         self._dados['prioridadec'] = self['prioridade']
+        if not self['run']['associados'] and not self.associados:             
+            self._dados['run']['ancestry'] = True            
+            return self['prioridadec']
+        else:
+            self._expandAssociados()            
+            
         if self.associados: # not dealing with grupamento many parents yet
             graph, root = ancestry.createGraphAssociados(self)
             self._dados['prioridadec'] = ProcessStorage[root]['prioridade']
@@ -383,7 +385,7 @@ class Processo:
         process._pages['basic']['html'] = zlib.decompress(page_basicos).decode('utf-8')
         process._pages['poligon']['html'] = zlib.decompress(page_poligon).decode('utf-8')
         if 'run' not in process: # backward compatibility
-            process._dados.update(default_run_state)   
+            process._dados.update(default_run_state())   
         if reparse:
             process._dadosBasicosGet(download=False)
             if process._pages['poligon']['html']:            
@@ -437,14 +439,14 @@ class Processo:
         process._dados = jsondict['_dados']        
         process._pages = jsondict['_pages']                        
         if 'run' not in process: # backward compatibility
-            process._dados.update(default_run_state)  
+            process._dados.update(default_run_state())  
         if reparse:
             process._dadosBasicosGet(download=False)
+            process._dados['run']['basicos'] = True                  
             if process._pages['poligon']['html']:            
                 if not process._dadosPoligonalGet(download=False) and verbose:
                     print('Some error on poligonal page cant read poligonal table', file=sys.stderr)           
-        process._dados['run']['basicos'] = True  
-        process._dados['run']['polygonal'] = True
+                process._dados['run']['polygonal'] = True        
         return process
 
     @staticmethod
@@ -511,15 +513,15 @@ class Processo:
             processo._wpage = wPageNtlm(wpagentlm.user, wpagentlm.passwd)
             if processo.birth + process_expire < datetime.datetime.now():         
                 if verbose:       
-                    print("Processo __new___ placing on storage ", processostr, file=sys.stderr)
+                    print("Processo placing on storage ", processostr, file=sys.stderr)
                 processo = Processo(processostr, wpagentlm,  verbose)  # store newer guy             
                 ProcessStorage[processostr] = processo
             else:
                 if verbose: 
-                    print("Processo __new___ getting from storage ", processostr, file=sys.stderr)            
+                    print("Processo getting from storage ", processostr, file=sys.stderr)            
         else:
             if verbose: 
-                print("Processo __new___ placing on storage ", processostr, file=sys.stderr)
+                print("Processo placing on storage ", processostr, file=sys.stderr)
             processo = Processo(processostr, wpagentlm,  verbose)  # store new guy
             ProcessStorage[processostr] = processo            
         if run: # wether run the task, dont run when loading from file/str
@@ -583,7 +585,8 @@ class ProcessFactoryStorageClass(dict):
                    
     def __setitem__(self, key, value):        
         super().__setitem__(key, value)     
-        value.onchange = ProcessStorage.__process_changed
+        if not value.onchange: # on change callbcack of process
+            value.onchange = ProcessStorage.__process_changed
         if self.save_on_set:
             threading.Thread(target=self.__insert_to_sqlite, args=(key,)).start()        
     
