@@ -43,6 +43,7 @@ class SCM_SEARCH(enum.Flag):
     ASSOCIADOS = enum.auto()
     PRIORIDADE = enum.auto()
     POLIGONAL = enum.auto()    
+    BASICOS_POLIGONAL = BASICOS | POLIGONAL
     ALL = BASICOS | ASSOCIADOS | PRIORIDADE | POLIGONAL
     
 
@@ -130,12 +131,12 @@ class Processo:
         if task in SCM_SEARCH: # passed argument to perform a default call without args
             if SCM_SEARCH.BASICOS in task and not self['run']['basicos']:
                 self._dadosBasicosGetIf()
+            if SCM_SEARCH.POLIGONAL in task and not self['run']['polygonal']:
+                self._dadosPoligonalGetIf()
             if SCM_SEARCH.ASSOCIADOS in task and not self['run']['associados']:
                 self._expandAssociados()
             if SCM_SEARCH.PRIORIDADE in task and not self['run']['ancestry']:
                 self._ancestry()
-            if SCM_SEARCH.POLIGONAL in task and not self['run']['polygonal']:
-                self._dadosPoligonalGetIf()
 
     def _pageRequest(self, name):
         """python requests page and get response unicode str decoded"""
@@ -143,7 +144,7 @@ class Processo:
             raise Exception('Invalid `wPage` instance!')
         response = requests.pageRequest(name, self.name, self._wpage, False)
         self._pages[name]['html'] = response.text # str unicode page       
-        self.__changed()              
+        self.__changed()
         return self._pages[name]['html']
 
     @thread_safe
@@ -316,7 +317,7 @@ class Processo:
             if self._pages['poligon']['html']:
                 if self._verbose:
                     print("dadosPoligonalGet - parsing: ", self.name, file=sys.stderr)   
-                dados = parseDadosPoligonal(self._pages['poligon']['html'])
+                dados = parseDadosPoligonal(self._pages['poligon']['html'], self._verbose)
                 self._dados.update({'poligon' : dados })                       
                 self._dados['run']['polygonal'] = True
                 self.__changed()        
@@ -343,7 +344,7 @@ class Processo:
         if not overwrite and path.with_suffix('.html').exists():
             return 
         if not self._pages['basic']['html']:
-            self._pageRequest('basic') # get/fill-in self.wpage.response
+            self._pageRequest('basic') # get/fill-in self.wpage.response            
         if not hasattr(self._wpage, 'response'):
             saveHtmlPage(str(path), self._pages['basic']['html'])
         else: # save html and page contents - full page
@@ -423,6 +424,8 @@ class Processo:
         return fname
     
     def __changed(self):
+        """something changed so birth datetime changes"""
+        self.birth = datetime.datetime.now() 
         if self.onchange is not None:
             self.onchange(self)
 
@@ -556,12 +559,13 @@ class ProcessFactoryStorageClass(dict):
     * key : unique `fmtPname` process string
     * value : `scm.Processo` object
     """    
-    def __init__(self, save_on_set=True): 
+    def __init__(self, save_on_set=True, debug=False): 
         """
         * save_on_set: save on database on set 
         """        
         super().__init__()      
         self.save_on_set = save_on_set        
+        self.debug = debug
         with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn: # context manager already commits and closes connection
             self.ondb = conn.execute("SELECT name FROM storage").fetchall()             
 
@@ -572,7 +576,9 @@ class ProcessFactoryStorageClass(dict):
             # cursor.execute("SELECT * FROM storage WHERE name = ?", key)
             # process_row = cursor.fetchone()
             # if process_row:
-            cursor.execute("INSERT INTO storage VALUES (?,?,?,?,?)", self[key].toSqliteTuple())      
+            cursor.execute("INSERT INTO storage VALUES (?,?,?,?,?)", self[key].toSqliteTuple())   
+            if self.debug:
+                print(f"Just inserted or modified {conn.total_changes} rows on database", file=sys.stderr)
             
     def __select_from_sqlite(self, key):
         with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn:
@@ -585,7 +591,7 @@ class ProcessFactoryStorageClass(dict):
                    
     def __setitem__(self, key, value):        
         super().__setitem__(key, value)     
-        if not value.onchange: # on change callbcack of process
+        if not value.onchange: # on change callback of process
             value.onchange = ProcessStorage.__process_changed
         if self.save_on_set:
             threading.Thread(target=self.__insert_to_sqlite, args=(key,)).start()        
@@ -624,8 +630,12 @@ class ProcessFactoryStorageClass(dict):
             return 
         with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn:
             start = time.time()
-            self.update( { row[0] : Processo.fromSqliteTuple(row) 
-                          for row in conn.execute(f"SELECT * FROM storage").fetchall() } )
+            dbdict = {}
+            for row in conn.execute("SELECT * FROM storage").fetchall():
+                process = Processo.fromSqliteTuple(row)
+                process.onchange = ProcessStorage.__process_changed
+                dbdict.update({ row[0] : process })
+            self.update(dbdict)            
             if verbose:
                 print(f"Loading and creating {len(self)} processes from database took {time.time()-start:.2f} seconds")
         #iterator = processes if not verbose else progressbar(processes, "Loading Processes: ")        
@@ -650,6 +660,7 @@ class ProcessFactoryStorageClass(dict):
         for process_path in tqdm.tqdm(paths):
             try:   
                 processo = Processo.fromHtml(process_path, verbose=False)
+                processo.onchange = ProcessStorage.__process_changed
                 self.update({processo.name : processo})
             except FileNotFoundError:
                 if verbose:

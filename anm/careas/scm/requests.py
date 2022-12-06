@@ -55,6 +55,8 @@ def pageRequest(pagename, processostr, wpage, fmtName=True):
             'ctl00$conteudo$btnPoligonal': 'Poligonal',
             'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnPoligonal'}
         formdata = htmlscrap.formdataPostAspNet(wpage.response, formcontrols)
-        wpage.post(scm_dados_processo_main_url,
-                        data=formdata)
+        wpage.post(scm_dados_processo_main_url, 
+                   data=formdata, timeout=scm_timeout)
+        if 'Erro ao mudar a versão para a data selecionada.' in wpage.response.text:
+            raise ErrorProcessSCM(f"Processo {processostr} failed download poligonal from SCM database.")
         return wpage.response

@@ -108,7 +108,7 @@ def parseDadosBasicos(basicos_page, name, verbose, data_tags=scm_data_tags):
 
 
 
-def parseDadosPoligonal(poligonal_page):
+def parseDadosPoligonal(poligonal_page, verbose):
     polydata = {}
     soup = BeautifulSoup(poligonal_page, "html.parser")
     htmltables = soup.findAll('table', { 'class' : 'BordaTabela' }) #table[class="BordaTabela"]
@@ -129,6 +129,8 @@ def parseDadosPoligonal(poligonal_page):
                         'memo'      : memorial
                         }
     except:
+        if verbose:
+            print("parseDadosPoligonal failed!", file=sys.stderr)
         return {}
     return polydata
 
