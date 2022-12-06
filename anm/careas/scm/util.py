@@ -39,7 +39,7 @@ def findfmtPnames(text):
     """
     Find all process names on `text` return list with strings format xxx.xxx/yyyy like `fmtPname`
     """
-    ps = regex_process.findall(text)    
+    ps = regex_processg.findall(text)    
     return [ p[0]+'.'+p[1]+'/'+p[2] for p in ps ]
 
 def findPnames(pross_str):    

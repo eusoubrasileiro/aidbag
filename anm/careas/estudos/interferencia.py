@@ -11,7 +11,8 @@ from ..config import config
 from ..scm import (
     fmtPname,
     SCM_SEARCH,
-    Processo
+    ProcessStorage,
+    util    
 )
 from ....web import htmlscrap 
 from .scraping import (
@@ -390,8 +391,9 @@ class Interferencia:
         pass 
 
     @staticmethod
-    def from_excel(dir='.'):        
-        processo = Processo.fromHtml(dir, verbose=False)
+    def from_excel(dir='.'):            
+        name = util.findfmtPnames(pathlib.Path(dir).absolute().stem)[0]
+        processo = ProcessStorage[name]
         estudo = Interferencia(None, processo.name, verbose=False, getprocesso=False)     
         estudo.processo = processo 
         estudo.processo_path = estudo.processPath(processo)      
@@ -403,7 +405,8 @@ class Interferencia:
         
     @staticmethod
     def from_json(dir='.'):
-        processo = Processo.fromHtml(dir, verbose=False)
+        name = util.findfmtPnames(pathlib.Path(dir).absolute().stem)[0]
+        processo = ProcessStorage[name]
         estudo = Interferencia(None, processo.name, verbose=False, getprocesso=False)     
         estudo.processo = processo 
         estudo.processo_path = estudo.processPath(processo)     
