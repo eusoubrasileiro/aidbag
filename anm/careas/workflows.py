@@ -147,7 +147,7 @@ def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False, overwr
                 estudo = estudos.Interferencia.make(wpage, processo, verbose=verbose, overwrite=overwrite)   
                 proc = estudo.processo              
             elif tipo == 'opção':
-                proc = scm.Processo.Get(processo, wpage, dados=scm.SCM_SEARCH.ALL, verbose=verbose)
+                proc = scm.Processo.Get(processo, wpage, dados=scm.SCM_SEARCH.BASICOS_POLIGONAL, verbose=verbose)
                 proc.salvaDadosBasicosHtml(config.processPathSecor(proc))
         except estudos.DownloadInterferenciaFailed as e:            
             failed_NUPS.append((scm.ProcessStorage[scm.fmtPname(processo)]['NUP'], f" Message: {str(e)}"))                       

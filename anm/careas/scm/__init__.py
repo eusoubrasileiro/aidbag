@@ -9,5 +9,6 @@ from .util import (
 from .processo import (
     Processo, 
     ProcessStorage,
-    SCM_SEARCH
+    SCM_SEARCH,
+    default_run_state
 )

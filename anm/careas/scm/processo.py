@@ -633,6 +633,9 @@ class ProcessFactoryStorageClass(dict):
             dbdict = {}
             for row in conn.execute("SELECT * FROM storage").fetchall():
                 process = Processo.fromSqliteTuple(row)
+                # those hold references to objects so must allways be re-run
+                process['run']['associados'] = False
+                process['run']['ancestry'] = False
                 process.onchange = ProcessStorage.__process_changed
                 dbdict.update({ row[0] : process })
             self.update(dbdict)            
