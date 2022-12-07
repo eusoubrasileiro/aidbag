@@ -266,11 +266,14 @@ class Processo(Sei):
         elif 'sem_redução' in template_name:
             template = templateEnv.get_template("req_sem_redução.html")                
             html_text = template.render(interferencia_sei=interferencia_np, minuta_sei=minuta_np, tipo=tipo, minuta_de=minuta_de) 
-        elif 'edital' in template_name:
+        elif 'edital_son' in template_name:
             template = templateEnv.get_template("req_edital_son.html")                
             html_text = template.render(interferencia_sei=interferencia_np, minuta_sei=minuta_np,    
-                                        **kwargs)  #           
-                                     
+                                        **kwargs)             
+        elif 'edital_dad' in template_name:
+            template = templateEnv.get_template("req_edital_dad.html")                
+            html_text = template.render(**kwargs) 
+                       
         self.insereNotaTecnica(html_text)
         
     def insereMarcador(self, marcador):

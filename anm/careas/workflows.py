@@ -166,8 +166,8 @@ def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False, overwr
     return succeed_NUPs, failed_NUPS
 
 
-def IncluiDocumentosSEIFolder(sei, process_folder, wpage, infer=True, sei_doc=None, 
-        empty=False, verbose=True):
+def IncluiDocumentosSEIFolder(sei, process_folder, wpage, sei_doc=None, 
+        empty=False, termo_abertura=False, verbose=True):
     """
     Inclui process documents from specified folder:
     `__secor_path__\\path\\process_folder`
@@ -192,13 +192,13 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, infer=True, sei_doc=No
     * empty : True
         cria documentos sem anexos
 
-    * infer : True 
-        infer from tipo and fase dados basicos processo 
-        documents to add 
-    
-    * sei_doc : enum 
-        Enum `SEI_DOCS`
-
+    * sei_doc : None or Enum `SEI_DOCS` 
+        If None infer from tipo and fase dados basicos processo 
+        documents to add. Otherwise specify explicitly what to do.
+        
+    * termo_abertura: False
+        To add for process older than < 2020
+                
     """
     if type(process_folder) is str: 
         process_folder = pathlib.Path(config['processos_path']).joinpath(process_folder)
@@ -253,10 +253,10 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, infer=True, sei_doc=No
         
     # inclui vários documentos, se desnecessário é só apagar
     # Inclui termo de abertura de processo eletronico se data < 2020 (protocolo digital nov/2019)
-    if process['data_protocolo'].year < 2020:  
+    if termo_abertura and process['data_protocolo'].year < 2020:  
         psei.InsereTermoAberturaProcessoEletronico()
 
-    if infer: # infer from tipo, fase 
+    if not sei_doc: # infer from tipo, fase 
         requerimento_tipo=None
         if 'requerimento' in process['tipo'].lower():             
             # Inclui Estudo Interferência pdf como Doc Externo no SEI
@@ -274,10 +274,10 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, infer=True, sei_doc=No
                 # advindos de editais de disponibilidade (leilão ou oferta pública)
                 psei.insereDocumentoExterno(1, str(pdf_adicional.absolute())) 
                 if 'leilão' in process['tipo'].lower():                                        
-                    psei.insereNotaTecnicaRequerimento("edital", edital='Leilão', 
+                    psei.insereNotaTecnicaRequerimento("edital_son", edital='Leilão', 
                                                         processo_pai=editalGetDadNUP(process))  
                 elif 'oferta pública' in process['tipo'].lower():                    
-                    psei.insereNotaTecnicaRequerimento("edital", edital='Oferta Pública', 
+                    psei.insereNotaTecnicaRequerimento("edital_son", edital='Oferta Pública', 
                                                         processo_pai=editalGetDadNUP(process))
                 else:
                     requerimento_tipo = 'pesquisa'
@@ -326,6 +326,27 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, infer=True, sei_doc=No
             # InsereDocumentoExternoSEI(sei, nup, 1, pdf_adicional)  # minuta alvará
             # IncluiDespacho(sei, nup, 13)  # despacho  análise de plano alvará
             raise NotImplementedError() 
+        if sei_doc == SEI_DOCS.REQUERIMENTO_EDITAL_DAD:
+            # Possible to get first son with tipo leilão or oferta publica, when multiple                        
+            if len(process['associados']) > 1:
+                raise Exception('Something wrong! Mais de um associado! Àrea Menor no Leilão? ', process.name)
+            # get first 'son' tipo
+            son = scm.ProcessStorage[list(scm.ProcessStorage[name].associados.keys())[0]]
+            edital_tipo = son['tipo']
+            if 'leilão' in edital_tipo.lower():
+                edital_tipo = 'Leilão'
+            elif 'oferta' in edital_tipo.lower():
+                edital_tipo = 'Oferta Pública'
+            else:
+                raise Exception('Something wrong! Não é advindo de edital ', process.name)
+            # compare areas if difference > 0.1 ha stop!
+            if abs(process['poligon']['area']-son['poligon']['area']) < 0.1: # same area
+                pass 
+            else:
+                raise NotImplemented()
+            psei.insereNotaTecnicaRequerimento("edital_dad", edital=edital_tipo, 
+                                processo_filho=son['NUP'])   
+                
     psei.insereMarcador(config['sei']['marcador_default'])
     psei.atribuir(config['sei']['atribuir_default'])
     # should also close the openned text window - going to previous state

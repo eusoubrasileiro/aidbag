@@ -18,4 +18,5 @@ docs_externos = {
 
 class SEI_DOCS(Enum):
     REQUERIMENTO_OPCAO_ALVARA = 0  # opção de área na fase de requerimento  
+    REQUERIMENTO_EDITAL_DAD = 1
 
