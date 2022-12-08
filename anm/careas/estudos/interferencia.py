@@ -254,9 +254,9 @@ class Interferencia:
         ### Todos os eventos posteriores a data de prioridade são marcados
         # como 0 na coluna Prioridade otherwise 1
         if 'prioridadec' in self.processo:
-            processo_prioridade = processo_scm['prioridadec']
+            processo_prioridade = self.processo['prioridadec']
         else: 
-            processo_prioridade = processo_scm['prioridade']
+            processo_prioridade = self.processo['prioridade']
         self.tabela_interf_master['DataPrior'] = processo_prioridade
         self.tabela_interf_master['EvPrior'] = 0 # 1 prioritario 0 otherwise
         self.tabela_interf_master['EvPrior'] = self.tabela_interf_master.apply(
