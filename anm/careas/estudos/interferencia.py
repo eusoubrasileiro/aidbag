@@ -12,7 +12,8 @@ from ..scm import (
     fmtPname,
     SCM_SEARCH,
     ProcessStorage,
-    util    
+    util,
+    Processo    
 )
 from ....web import htmlscrap 
 from .scraping import (
