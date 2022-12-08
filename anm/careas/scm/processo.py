@@ -61,8 +61,6 @@ def thread_safe(function):
     return wrapper
 
 
-process_expire = config['scm']['process_expire']  
-"""how long to keep a process on ProcessStorage"""
 default_run_state = lambda: copy.deepcopy({ 'run' : 
     { 'basicos': False, 'associados': False, 'ancestry': False, 'polygonal': False } })
 """ start state of running parsing processes of process - without deepcopy all mess expected"""
@@ -514,7 +512,7 @@ class Processo:
         if ProcessStorage.get(processostr) is not None:
             processo = ProcessStorage[processostr] #  storage doesn't keep wpage
             processo._wpage = wPageNtlm(wpagentlm.user, wpagentlm.passwd)
-            if processo.birth + process_expire < datetime.datetime.now():         
+            if processo.birth + config['scm']['process_expire'] < datetime.datetime.now():         
                 if verbose:       
                     print("Processo placing on storage ", processostr, file=sys.stderr)
                 processo = Processo(processostr, wpagentlm,  verbose)  # store newer guy             
@@ -545,8 +543,7 @@ class Processo:
 #    )"""
 #    conn.execute(sql)
 
-import sqlite3
-    
+import sqlite3    
 
 # Inherits from dict since it is:
 # 1. the recommended global approach 

@@ -8,7 +8,7 @@ config['secor_timeout'] = 4*60 # sometimes sigareas server/r. interferncia takes
 
 # when to replace the process stored on the ProcessStorage after this amount of time 
 config['scm'] = {} 
-config['scm']['process_expire'] = datetime.timedelta(hours=8)
+config['scm']['process_expire'] = datetime.timedelta(weeks=1)
 
 # sei module configurations
 config['sei'] = {}
