@@ -632,15 +632,19 @@ class ProcessFactoryStorageClass(dict):
             start = time.time()
             dbdict = {}
             for row in conn.execute("SELECT * FROM storage").fetchall():
-                process = Processo.fromSqliteTuple(row)
-                # those hold references to objects so must allways be re-run
-                process['run']['associados'] = False
-                process['run']['ancestry'] = False
+                process = Processo.fromSqliteTuple(row)                
                 process.onchange = ProcessStorage.__process_changed
                 dbdict.update({ row[0] : process })
             self.update(dbdict)            
+            # process object database created now remake links from references
+            for _, process in ProcessStorage.items(): 
+                if 'associados' in process and process['run']['associados']:           
+                    # cannot be obj hook json loads due circular reference
+                    # database must be already fully populated with objects
+                    for name in process['associados']: 
+                         process['associados'][name]['obj'] = ProcessStorage[name]            
             if verbose:
-                print(f"Loading and creating {len(self)} processes from database took {time.time()-start:.2f} seconds")
+                print(f"Loading, creating, relinking references of {len(self)} processes from database took {time.time()-start:.2f} seconds")
         #iterator = processes if not verbose else progressbar(processes, "Loading Processes: ")        
         #self.update({process.name : process for process in map(Processo.fromJSON, iterator)})  
     
@@ -679,3 +683,27 @@ threading.Thread(target=ProcessStorage.loadAll, args=(True,)).start() # load pro
 * key : unique `fmtPname` process string
 * value : `scm.Processo` object
 """
+
+# cannot be obj hook json loads due circular reference
+# database must be already fully populated with objects
+
+# def objects_to_json(obj, verbose=False):
+#     """json.dumps default function to use to json from datetime and process object conversion"""
+#     if isinstance(obj, datetime.datetime):
+#         return { '_isoformat': obj.isoformat() }
+#     if isinstance(obj, Processo):
+#         return { '_process_ref' : obj.name }
+#     else:
+#         if verbose:
+#             print(f"object of type {type(obj)} converted to '' in JSON file", file=sys.stderr) 
+#         return ''
+
+# def json_to_objects(obj):
+#     """json.loads object_hook function from json to datetime and process objects conversion"""
+#     _isoformat = obj.get('_isoformat')
+#     if _isoformat is not None:
+#         return datetime.datetime.fromisoformat(_isoformat)
+#     _process_ref = obj.get('_process_ref')
+#     if _process_ref is not None:
+#         return ProcessStorage[_process_ref]
+#     return obj
