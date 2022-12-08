@@ -271,12 +271,13 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, sei_doc=None,
                     if len(processo['parents'] + processo['sons']) > 1:
                         raise Exception('Something wrong! Mais de um associado! Àrea Menor no Leilão? ', processo.name)   
                     return scm.ProcessStorage[processo['parents'][0]]['NUP']
-                # advindos de editais de disponibilidade (leilão ou oferta pública)
-                psei.insereDocumentoExterno(1, str(pdf_adicional.absolute())) 
-                if 'leilão' in process['tipo'].lower():                                        
+                # advindos de editais de disponibilidade (leilão ou oferta pública)               
+                if 'leilão' in process['tipo'].lower():   
+                    psei.insereDocumentoExterno(1, str(pdf_adicional.absolute()))                                      
                     psei.insereNotaTecnicaRequerimento("edital_son", edital='Leilão', 
                                                         processo_pai=editalGetDadNUP(process))  
                 elif 'oferta pública' in process['tipo'].lower():                    
+                    psei.insereDocumentoExterno(1, str(pdf_adicional.absolute())) 
                     psei.insereNotaTecnicaRequerimento("edital_son", edital='Oferta Pública', 
                                                         processo_pai=editalGetDadNUP(process))
                 else:
@@ -292,7 +293,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, sei_doc=None,
                         # Recomenda opção
                         psei.insereNotaTecnicaRequerimento("opção", tipo=requerimento_tipo)                          
                 else:
-                    psei.insereDocumentoExterno(1, str(pdf_adicional.absolute()))   
+                    psei.insereDocumentoExterno(1, str(pdf_adicional.absolute())) 
                     if p_area < 96.0: # > 4% change notificar 
                         psei.insereNotaTecnicaRequerimento("com_redução", tipo=requerimento_tipo, # com notificação titular
                                 area_porcentagem=str(p_area).replace('.',',')) 
