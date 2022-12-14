@@ -613,7 +613,7 @@ class ProcessFactoryStorageClass(dict):
             return super().__getitem__(key)   
         process = self.__select_from_sqlite(key)        
         if not process:
-            raise KeyError()
+            raise KeyError(key)
         self[key] = process # store here for faster access        
         # add event listener when changed will get updated on database 
         process.onchange = ProcessStorage.__process_changed

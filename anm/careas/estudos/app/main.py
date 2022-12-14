@@ -87,7 +87,7 @@ cache.set('done', False)
 @app.route('/')
 def chooseProcess():    
     return render_template('index.html', 
-                processos_list=cache.get('processos_list'), dados=None, processo=None)
+                processos_list=cache.get('processos_list'), dados=None)
 
 @app.route('/select', methods=['GET'])
 def select():    

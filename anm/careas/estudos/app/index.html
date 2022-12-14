@@ -73,7 +73,11 @@
         navigator.clipboard.writeText($(this).text());
       })
 
-      document.title = "{{ processo }}"; /* set window name to easy work */
+      {% if processo is defined %}
+        document.title = "{{ processo }}"; /* set window name to easy work */
+      {% else %}  
+        document.title = "Work"; /* set window name to easy work */
+      {% endif %} 
 
     });
   </script>
@@ -140,7 +144,7 @@
     <h2>Pick a process</h2>
     <ol>
     {% for process_, dados_ in processos_list %}  
-      <li><a href="/select?selected={{ process_.replace('/','-') }}">{{ process_ }}</a> &#9830; SEI: <a class="copyprocess1" href="/copynup" >{{ dados_['NUP'] }} </a> &#9830; <a href='/process?process={{ process_ }}'>SCM</a></li>
+      <li><a href="/select?selected={{ process_.replace('/','-') }}" target="_blank">{{ process_ }}</a> &#9830; SEI: <a class="copyprocess1" href="/copynup" >{{ dados_['NUP'] }} </a> &#9830; <a href='/process?process={{ process_ }}' target="_blank">SCM</a></li>
       {% endfor %}
     </ol>
   {% else %}    
