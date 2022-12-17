@@ -142,7 +142,7 @@ class Processo:
             raise Exception('Invalid `wPage` instance!')
         response = requests.pageRequest(name, self.name, self._wpage, False)
         self._pages[name]['html'] = response.text # str unicode page       
-        self.__changed()
+        self.changed()
         return self._pages[name]['html']
 
     @thread_safe
@@ -235,7 +235,7 @@ class Processo:
             print("expandAssociados - finished associados: ", self.name, file=sys.stderr)
             
         self._dados['run']['associados'] = True
-        self.__changed()        
+        self.changed()        
 
     def _ancestry(self):
         """
@@ -292,7 +292,7 @@ class Processo:
                     self.name, self._verbose, data_tags)            
                 self._dados.update(dados)
                 self._dados['run']['basicos'] = True 
-                self.__changed()   
+                self.changed()   
                 
     def _dadosPoligonalGetIf(self, **kwargs):
         """wrap around `_dadosPoligonalGet`to download only if page html
@@ -318,7 +318,7 @@ class Processo:
                 dados = parseDadosPoligonal(self._pages['poligon']['html'], self._verbose)
                 self._dados.update({'poligon' : dados })                       
                 self._dados['run']['polygonal'] = True
-                self.__changed()        
+                self.changed()        
 
     def _dadosBasicosFillMissing(self):
         """try fill dados faltantes pelo processo associado (pai) 1. UF 2. substancias
@@ -331,7 +331,7 @@ class Processo:
             father = Processo.Get(self._dados['parents'][0], self._wpage, verbose=self._verbose, run=False)
             father._dadosBasicosGetIf(data_tags=miss_data_tags)
             self._dados.update(father._dados)
-            self.__changed()        
+            self.changed()        
             return True
         else:
             return False
@@ -421,11 +421,11 @@ class Processo:
             f.write(self.toJSON())
         return fname
     
-    def __changed(self):
+    def changed(self):
         """something changed so birth datetime changes"""
         self.birth = datetime.datetime.now() 
         if self.onchange is not None:
-            self.onchange(self)
+            self.onchange(self)            
 
     @staticmethod
     def fromJSON(strJSON, verbose=False, reparse=False):
