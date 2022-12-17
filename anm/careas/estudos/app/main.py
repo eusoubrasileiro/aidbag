@@ -94,6 +94,10 @@ def select():
     cache.set('selected', fmtPname(request.args.get('selected')))
     key = cache.get('selected')
     number, year = numberyearPname(key)
+    processo = ProcessStorage[key]
+    if 'iestudo' not in processo: # status of finished priority check on table
+        processo._dados.update( {'iestudo' : {'done' : False } })    
+        processo.changed() # force database update
     json_path = (pathlib.Path(wf.ProcessPathStorage[key]) / (config['interferencia']['file_prefix'] 
                  + '_' + '_'.join([number, year])+'.json'))          
     cache.set('json_path', json_path)
@@ -122,6 +126,8 @@ def details():
     key = request.args.get('process')
     print(f'process is {key}', file=sys.stderr)
     return ProcessStorage[key]._pages['basic']['html']    
+
+
 
     
 @app.route('/update', methods=['POST'])

@@ -64,6 +64,21 @@
         });        
       });
 
+      $("input[type='checkbox']").click(function(event) {
+        $("body").css("cursor", "progress"); /* wait cursor */
+        var data = {};        
+        parent = event.target.parentElement.parentElement.getAttribute('group');          
+        data['process'] = parent;
+        data['state'] = event.target.checked;        
+        fetch("/update", {
+          method: "POST",
+          headers: {'Content-Type': 'application/json'}, 
+          body: JSON.stringify(data)
+        }).then(function(response) {
+          $("body").css("cursor", "default"); /* default cursor */
+        });        
+      });
+
       $("tr[evindex='0']:not([evn='1']) td:nth-child(3)").wrap(function() {        
         return "<a href='/process?process="+$(this).text()+"'/></a>";
       });
@@ -137,7 +152,25 @@
     tr.c1 { background-color: white;   }
     tr.c2 { background-color: #78b0de;   }
     tr:hover { background-color: rgb(180, 180, 180) !important; }
-  </style>
+    /* <!-- https://css-tricks.com/snippets/css/a-guide-to-flexbox/ --> */
+    .container {
+      display: flex;
+      justify-content: center;
+      align-items: stretch ;
+      list-style: none;
+      margin: 0;       
+      color : white;
+      font-size: medium;   
+    }
+    .container li {
+      background: burlywood;
+      text-decoration: none;
+      justify-content: baseline;
+      display: flex;      
+      padding: 0.5em;      
+      border: 3px solid white;
+    }
+  </style>  
 </head> 
 <body>
   {% if processos_list %}
@@ -148,16 +181,19 @@
       {% endfor %}
     </ol>
   {% else %}    
-    <div style="text-align:center;font-size: medium;font-weight: bold;display: block;">
-      <a style="color:rgb(43, 50, 36);">Prioridade: {{ dados['prioridade'] }}</a> <a href='/process?process={{ processo }}'>SCM</a> SEI: <a class="copyprocess2" href="/copynup" >{{ dados['NUP'] }} </a> 
-      <a>1<sup>st</sup> parent: 
+    <ul class="container">
+      <li> <a>Prioridade: {{ dados['prioridade'] }}</a> </li>
+      <li> <a href='/process?process={{ processo }}'>SCM</a> </li>
+      <li> <a>SEI:</a><a class="copyprocess2" href="/copynup" >{{ dados['NUP'] }} </a> </li>
+      <li> <a>1<sup>st</sup> parent: 
         {% if dados['parents'] %}
           {{ dados['parents'][0] }}
         {% else %}
-          {{ '-' }}
+          {{ 'None' }}
         {% endif %}
-      </a>       
-    </div>     
+      </a> </li>
+      <li> <a id="iestudo">Done</a> </li>     
+    </ul>     
     {{ pandas_table|safe }}     
   {% endif %}    
 </body>
