@@ -9,9 +9,7 @@ from .scm import (
     numberyearPname,    
 )
 
-from .config import (
-    config
-)
+from .config import *
 
 from .util import ContaPrazo
 

@@ -22,8 +22,9 @@ from .sei import (
         Sei,
         Processo,
         docs_externos,
-        SEI_DOCS
+        WORK_ACTIVITY
     )
+        
 
 from .estudos.util import downloadMinuta
 
@@ -166,7 +167,92 @@ def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False, overwr
     return succeed_NUPs, failed_NUPS
 
 
-def IncluiDocumentosSEIFolder(sei, process_folder, wpage, sei_doc=None, 
+def inferWork(process, folder):
+    """
+    From Processo object and work-folder try to infer the work and docs to create or add.
+    
+    returns dict with lots of infos key,value pairs    
+    """
+    infos = {}    
+    # search/parse local folder
+    # Estudo de Interferência deve chamar 'R.pdf' glob.glob("R*.pdf")[0] seja o primeiro
+    pdf_interferencia = [ file for file in folder.glob("R*.pdf") ]
+    # turn empty list to None
+    infos['pdf_interferencia'] = pdf_interferencia[0] if pdf_interferencia else None
+    infos['pdf_adicional'] = None
+    # search/parse process object
+    if infos['pdf_interferencia']:
+        pdf_interferencia_text = readPdfText(pdf_interferencia.absolute())
+        area_text="PORCENTAGEM ENTRE ESTA ÁREA E A ÁREA ORIGINAL DO PROCESSO:" # para cada area poligonal 
+        count = pdf_interferencia_text.count(area_text)            
+        infos['areas'] = {'count' : count}
+        infos['areas'] = {'perc' : []}
+        if count > 0: # só uma área
+            percs = re.findall(f"(?<={area_text}) +([\d,]+)", pdf_interferencia_text)
+            percs = [ float(x.replace(',', '.')) for x in percs ]  
+            infos['areas']['perc'].append(percs) # first perc area
+            if count == 0:
+                infos['interferencia'] = 'total'
+            elif count == 1:
+                infos['interferencia'] = 'ok'
+            elif count > 0:
+                infos['interferencia'] = 'opção'
+        # elif count_areas > 1: # multiplas áreas opção           
+        # elif count_areas == 0: # interferência total 
+        #     perc = -1     
+    else:
+        RuntimeError('Nao encontrou pdf R*.pdf')
+        
+    def editalGetDadNUP(processo):
+        if len(process['associados']) > 1:
+            raise Exception('Something wrong! Mais de um associado! Àrea Menor no Leilão? ', processo.name)   
+        return scm.ProcessStorage[processo['parents'][0]]['NUP']         
+   
+    # 'doc_ext' from config.docs_externos
+    infos['minuta']  =  {'de' : '', 'code': 0, 'doc_ext': -1}
+    infos['edital'] = {}
+    if 'requerimento' in process['tipo'].lower():     
+        if 'garimpeira' in process['fase'].lower():
+            infos['requerimento'] = 'de Permissão de Lavra Garimpeira'
+            infos['minuta']['de']  = infos['requerimento']
+            infos['work'] = WORK_ACTIVITY.REQUERIMENTO_PLG
+            infos['minuta']['code'] = 4  
+            infos['minuta']['doc_ext'] = 5          
+        elif 'lavra' in process['fase'].lower():
+            infos['work'] = WORK_ACTIVITY.DIREITO_RLAVRA_FORMULARIO_1
+            infos['minuta']['de']  = 'de Portaria de Lavra'
+            infos['minuta']['code'] = 2
+            infos['minuta']['doc_ext'] = 6
+        elif 'licenciamento' in process['fase'].lower():
+            infos['requerimento'] = 'de Licenciamento'
+            infos['minuta']['de']  = infos['requerimento']
+            infos['work'] = WORK_ACTIVITY.REQUERIMENTO_LICENCIAMENTO
+            infos['minuta']['code'] = 5 # must be downloaded by hand
+            infos['minuta']['doc_ext'] = 2
+        elif 'extração' in process['fase'].lower():
+            infos['requerimento'] = 'de Registro de Extração'
+            infos['minuta']['de']  = infos['requerimento']
+            infos['work'] = WORK_ACTIVITY.REQUERIMENTO_REGISTRO_EXTRAÇÃO
+            infos['minuta']['code'] = 6            
+            infos['minuta']['doc_ext'] = 7
+        elif 'pesquisa' in process['fase'].lower():       
+            infos['requerimento'] = 'de Pesquisa'
+            infos['minuta']['de']  = 'de Alvará de Pesquisa'
+            infos['work'] = WORK_ACTIVITY.REQUERIMENTO_PESQUISA
+            infos['minuta']['code'] = 1
+            infos['minuta']['doc_ext'] = 1
+            # advindos de editais de disponibilidade (leilão ou oferta pública)               
+            if 'leilão' in process['tipo'].lower():   
+                  infos['work'] = WORK_ACTIVITY.REQUERIMENTO_EDITAL    
+                  infos['edital'] = {'tipo' : 'Leilão', 'pai' : editalGetDadNUP(process)}                  
+            if 'pública' in process['tipo'].lower():   
+                  infos['work'] = WORK_ACTIVITY.REQUERIMENTO_EDITAL    
+                  infos['edital'] = {'tipo' : 'Oferta Pública', 'pai' : editalGetDadNUP(process)}                  
+    return infos 
+    
+    
+
+def IncluiDocumentosSEIFolder(sei, process_folder, wpage, activity=None, 
         empty=False, termo_abertura=False, verbose=True):
     """
     Inclui process documents from specified folder:
@@ -192,7 +278,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, sei_doc=None,
     * empty : True
         cria documentos sem anexos
 
-    * sei_doc : None or Enum `SEI_DOCS` 
+    * activity : None or Enum `WORK_ACTIVITY` 
         If None infer from tipo and fase dados basicos processo 
         documents to add. Otherwise specify explicitly what to do.
         
@@ -203,7 +289,6 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, sei_doc=None,
     if type(process_folder) is str: 
         process_folder = pathlib.Path(config['processos_path']).joinpath(process_folder)
 
-    os.chdir(process_folder.absolute()) # enter on process folder
     if verbose and __debugging__:
         print("Main path: ", process_folder.parent)     
         print("Process path: ", process_folder.absolute())
@@ -212,94 +297,54 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, sei_doc=None,
     # get process from folder name    
     name = scm.findfmtPnames(process_folder.absolute().stem)[0]
     process = scm.ProcessStorage[name]
-
-    pdf_adicional = None
-    pdf_interferencia = None            
-
-    if not empty: # busca pdfs e adiciona só os existentes
-        # Estudo de Interferência deve chamar 'R.pdf' glob.glob("R*.pdf")[0] seja o primeiro
-        pdf_interferencia = [ file for file in process_folder.glob("R*.pdf") ]
-        # turn empty list to None
-        pdf_interferencia = pdf_interferencia[0] if pdf_interferencia else None
-        if pdf_interferencia:                
-            pdf_interferencia_text = readPdfText(pdf_interferencia.absolute())
-            area_text="PORCENTAGEM ENTRE ESTA ÁREA E A ÁREA ORIGINAL DO PROCESSO:" # para cada area poligonal 
-            count_areas = pdf_interferencia_text.count(area_text)            
-            if count_areas == 1: # só uma área
-                p_area = re.findall(f"(?<={area_text}) +([\d,]+)", pdf_interferencia_text)
-                p_area = float(p_area[0].replace(',','.'))
-                # pdf minuta alvará, licenciamento etc... 
-                pdf_adicional = pathlib.Path("minuta.pdf")
-                if not pdf_adicional.exists():
-                    downloadMinuta(wpage, process.name, "minuta.pdf") # use current folder to save pdf 
-                    pdf_adicional = pathlib.Path("minuta.pdf") # chamar-se-a minuta.pdf 
-                    pdf_adicional = pdf_adicional.absolute()
-                    readPdfText(pdf_adicional)  
-            elif count_areas > 1: # multiplas áreas opção 
-                p_area = ['33,222', '22,120', '0,153'] # exemple TODO implement!
-                pdf_adicional = None  
-            elif count_areas == 0: # interferência total 
-                p_area = -1                
-        else:
-            RuntimeError('Nao encontrou pdf R*.pdf')
-    
-    psei = Processo.fromSei(sei, process['NUP'])    
+        
+    info = inferWork(process, folder_process)
     if verbose and __debugging__:
-        print(f"percentage_area {p_area}")
-        print(f"pdf_interferencia {pdf_interferencia}")
-        print(f"pdf_adicional {pdf_adicional}")
+        print(f"percentage_area {info['area']}")
+        print(f"pdf_interferencia {info['pdf_interferencia']}")
+        print(f"pdf_adicional {info['pdf_adicional']}")
         print(f"tipo {process['tipo'].lower()}")
         print(f"fase {process['fase'].lower()}")        
-        
+   
+    psei = Processo.fromSei(sei, process['NUP'])            
     # inclui vários documentos, se desnecessário é só apagar
     # Inclui termo de abertura de processo eletronico se data < 2020 (protocolo digital nov/2019)
     if termo_abertura and process['data_protocolo'].year < 2020:  
-        psei.InsereTermoAberturaProcessoEletronico()
+        psei.InsereTermoAberturaProcessoEletronico()        
+    
+    if activity is None:
+        activity = info['work'] # get from infer
+        
+    if WORK_ACTIVITY.REQUERIMENTO_GENERICO in activity:
+        # Inclui Estudo Interferência pdf como Doc Externo no SEI
+        psei.insereDocumentoExterno(0, str(info['pdf_interferencia'].absolute()))                    
+        if activity == WORK_ACTIVITY.REQUERIMENTO_EDITAL:
+            psei.insereNotaTecnicaRequerimento("edital_son", **info)            
+        elif activity in WORK_ACTIVITY.REQUERIMENTO_GENERICO_NOT_EDITAL:  
+            if 'total' in info['interferencia']:
+                psei.insereNotaTecnicaRequerimento("interferência_total", **info)           
+            elif 'opção' in info['interferencia']:
+                psei.insereNotaTecnicaRequerimento("opção", **info)                            
+            elif 'ok' in info['inteferencia']:                
+                info['pdf_adicional'] = folder_process / "minuta.pdf"
+                if not info['pdf_adicional'].exists():
+                    downloadMinuta(wpage, process.name, 
+                                   str(info['pdf_adicional'].absolute()), info['minuta']['code'])
+                # guarantee to insert an empty in any case
+                pdf_adicional = str(info['pdf_adicional'].absolute()) if info['pdf_adicional'].exists() else None 
+                psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional)
+                if info['areas']['perc'][0] < 96.0: # > 4% change notificar 
+                    psei.insereNotaTecnicaRequerimento("com_redução", # com notificação titular
+                            area_porcentagem=str(info['areas']['perc'][0]).replace('.',','),
+                            **info) 
+                else:
+                    psei.insereNotaTecnicaRequerimento("sem_redução", **info) 
+                    # Recomenda Só análise de plano s/ notificação titular (mais comum)
 
-    if not sei_doc: # infer from tipo, fase 
-        requerimento_tipo=None
-        if 'requerimento' in process['tipo'].lower():             
-            # Inclui Estudo Interferência pdf como Doc Externo no SEI
-            psei.insereDocumentoExterno(0, str(pdf_interferencia.absolute()))            
-            if 'requerimento de lavra' in process['fase'].lower():
-                # Formulário 1  : TODO
-                #psei.insereNotaTecnicaRequerimento("interferência_total", tipo=processo_tipo)                 
-                pass             
-            elif 'requerimento de pesquisa' in process['fase'].lower():              
-                #only works for sons
-                def editalGetDadNUP(processo):
-                    if len(processo['parents'] + processo['sons']) > 1:
-                        raise Exception('Something wrong! Mais de um associado! Àrea Menor no Leilão? ', processo.name)   
-                    return scm.ProcessStorage[processo['parents'][0]]['NUP']
-                # advindos de editais de disponibilidade (leilão ou oferta pública)               
-                if 'leilão' in process['tipo'].lower():   
-                    psei.insereDocumentoExterno(1, str(pdf_adicional.absolute()))                                      
-                    psei.insereNotaTecnicaRequerimento("edital_son", edital='Leilão', 
-                                                        processo_pai=editalGetDadNUP(process))  
-                elif 'oferta pública' in process['tipo'].lower():                    
-                    psei.insereDocumentoExterno(1, str(pdf_adicional.absolute())) 
-                    psei.insereNotaTecnicaRequerimento("edital_son", edital='Oferta Pública', 
-                                                        processo_pai=editalGetDadNUP(process))
-                else:
-                    requerimento_tipo = 'pesquisa'
-            elif 'requerimento de licenciamento' in process['fase'].lower():
-                requerimento_tipo = 'licenciamento'       
-            if requerimento_tipo: # requerimento novo clássico
-                if pdf_adicional is None:
-                    if p_area == -1:                    
-                        # Recomenda interferencia total
-                        psei.insereNotaTecnicaRequerimento("interferência_total", tipo=requerimento_tipo) 
-                    else:
-                        # Recomenda opção
-                        psei.insereNotaTecnicaRequerimento("opção", tipo=requerimento_tipo)                          
-                else:
-                    psei.insereDocumentoExterno(1, str(pdf_adicional.absolute())) 
-                    if p_area < 96.0: # > 4% change notificar 
-                        psei.insereNotaTecnicaRequerimento("com_redução", tipo=requerimento_tipo, # com notificação titular
-                                area_porcentagem=str(p_area).replace('.',',')) 
-                    else:
-                        psei.insereNotaTecnicaRequerimento("sem_redução", tipo=requerimento_tipo) 
-                        # Recomenda Só análise de plano s/ notificação titular (mais comum)
+    elif activity == WORK_ACTIVITY.DIREITO_RLAVRA_FORMULARIO_1:
+        # Formulário 1  : TODO
+        #psei.insereNotaTecnicaRequerimento("interferência_total", tipo=processo_tipo)     
+        raise NotImplementedError()
         # else:
         #     # tipo - requerimento de cessão parcial ou outros
         #     if 'lavra' in fase.lower(): # minuta portaria de Lavra
@@ -319,41 +364,38 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, sei_doc=None,
         #         #IncluiDespacho(sei, nup, 16)
         #         # IncluiDespacho(sei, NUP, 9) # - Recomenda c/ retificação de alvará
         #         raise NotImplementedError() 
-
-        #     pass
-    else: # dont infer, especify explicitly        
-        if sei_doc == SEI_DOCS.REQUERIMENTO_OPCAO_ALVARA: # opção de área na fase de requerimento                
-            # InsereDocumentoExternoSEI(sei, nup, 3, pdf_interferencia) # estudo opção
-            # InsereDocumentoExternoSEI(sei, nup, 1, pdf_adicional)  # minuta alvará
-            # IncluiDespacho(sei, nup, 13)  # despacho  análise de plano alvará
-            raise NotImplementedError() 
-        if sei_doc == SEI_DOCS.REQUERIMENTO_EDITAL_DAD:
-            # Possible to get first son with tipo leilão or oferta publica, when multiple                        
-            if len(process['associados']) > 1:
-                raise Exception('Something wrong! Mais de um associado! Àrea Menor no Leilão? ', process.name)
-            # get first 'son' tipo
-            son = scm.ProcessStorage[list(scm.ProcessStorage[name].associados.keys())[0]]
-            edital_tipo = son['tipo']
-            if 'leilão' in edital_tipo.lower():
-                edital_tipo = 'Leilão'
-            elif 'oferta' in edital_tipo.lower():
-                edital_tipo = 'Oferta Pública'
-            else:
-                raise Exception('Something wrong! Não é advindo de edital ', process.name)
-            # compare areas if difference > 0.1 ha stop!
-            if abs(process['poligon']['area']-son['poligon']['area']) < 0.1: # same area
-                pass 
-            else:
-                raise NotImplemented()
-            psei.insereNotaTecnicaRequerimento("edital_dad", edital=edital_tipo, 
-                                processo_filho=son['NUP'])   
+        #     pass    
+    elif activity == WORK_ACTIVITY.REQUERIMENTO_OPCAO_ALVARA: # opção de área na fase de requerimento                
+        # InsereDocumentoExternoSEI(sei, nup, 3, pdf_interferencia) # estudo opção
+        # InsereDocumentoExternoSEI(sei, nup, 1, pdf_adicional)  # minuta alvará
+        # IncluiDespacho(sei, nup, 13)  # despacho  análise de plano alvará
+        raise NotImplementedError() 
+    elif activity == WORK_ACTIVITY.REQUERIMENTO_EDITAL_DAD:
+        # Possible to get first son with tipo leilão or oferta publica, when multiple                        
+        if len(process['associados']) > 1:
+            raise Exception('Something wrong! Mais de um associado! Àrea Menor no Leilão? ', process.name)
+        # get first 'son' tipo
+        son = scm.ProcessStorage[list(scm.ProcessStorage[name].associados.keys())[0]]
+        edital_tipo = son['tipo']
+        if 'leilão' in edital_tipo.lower():
+            edital_tipo = 'Leilão'
+        elif 'oferta' in edital_tipo.lower():
+            edital_tipo = 'Oferta Pública'
+        else:
+            raise Exception('Something wrong! Não é advindo de edital ', process.name)
+        # compare areas if difference > 0.1 ha stop!
+        if abs(process['poligon']['area']-son['poligon']['area']) < 0.1: # same area
+            pass 
+        else:
+            raise NotImplemented()
+        psei.insereNotaTecnicaRequerimento("edital_dad", edital=edital_tipo, 
+                            processo_filho=son['NUP'])   
                 
     psei.insereMarcador(config['sei']['marcador_default'])
     psei.atribuir(config['sei']['atribuir_default'])
     # should also close the openned text window - going to previous state
-    psei.closeOtherWindows()
+    psei.closeOtherWindows()    
     
-    os.chdir(process_folder.parent) # restore original path , to not lock the folder-path
     if verbose:
         print(process['NUP'])
 

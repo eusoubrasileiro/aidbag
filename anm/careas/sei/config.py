@@ -1,4 +1,5 @@
-from enum import Enum
+from enum import Enum, auto, Flag
+
 import jinja2
 from ..config import config
     
@@ -13,10 +14,22 @@ docs_externos = {
     3: {'tipo': 'Estudo', 'desc': 'de Opção'},
     4: {'tipo': 'Minuta', 'desc': 'de Portaria de Lavra'},
     5: {'tipo': 'Minuta', 'desc': 'de Permissão de Lavra Garimpeira'},
-    6: {'tipo': 'Formulário', 'desc': '1 Análise de Requerimento de Lavra SECOR-MG'}
+    6: {'tipo': 'Formulário', 'desc': '1 Análise de Requerimento de Lavra SECOR-MG'},
+    7: {'tipo': 'Minuta', 'desc': 'de Registro de Extração'}
 }
 
-class SEI_DOCS(Enum):
-    REQUERIMENTO_OPCAO_ALVARA = 0  # opção de área na fase de requerimento  
-    REQUERIMENTO_EDITAL_DAD = 1
+class WORK_ACTIVITY(Flag):        
+    REQUERIMENTO_PESQUISA = auto()
+    REQUERIMENTO_LICENCIAMENTO = auto()
+    REQUERIMENTO_PLG = auto()    
+    REQUERIMENTO_REGISTRO_EXTRAÇÃO = auto()    
+    REQUERIMENTO_EDITAL = auto()
+    REQUERIMENTO_EDITAL_DAD = auto() # old process to archive 
+    REQUERIMENTO_GENERICO = REQUERIMENTO_REGISTRO_EXTRAÇÃO | REQUERIMENTO_PLG | REQUERIMENTO_LICENCIAMENTO | REQUERIMENTO_PESQUISA | REQUERIMENTO_EDITAL
+    REQUERIMENTO_GENERICO_NOT_EDITAL = REQUERIMENTO_REGISTRO_EXTRAÇÃO | REQUERIMENTO_PLG | REQUERIMENTO_LICENCIAMENTO | REQUERIMENTO_PESQUISA  
+    REQUERIMENTO_OPCAO_ALVARA = auto()  # opção de área na fase de requerimento  
+    DIREITO_RLAVRA_FORMULARIO_1 = auto()
+    
+    
+    
 

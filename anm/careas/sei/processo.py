@@ -146,15 +146,15 @@ class Processo(Sei):
     def insereDocumentoExterno(self, doc=0, pdf_path=None):
         """
         Inclui pdf como documento externo no SEI
-        doc :
-            0  - Estudo      - 'de Retirada de Interferência'
-            1  - Minuta      - 'Pré de Alvará'
-            2  - Minuta      - 'de Licenciamento'
-            3  - Estudo      - 'de Opção'
-            4  - Minuta      - 'de Portaria de Lavra'
-            5  - Minuta      - 'de Permissão de Lavra Garimpeira'
-            6  - Formulario  - '1 Análise de Requerimento de Lavra'
-        pdf_path :
+        * doc :
+            0.  - Estudo      - 'de Retirada de Interferência' 
+            1.  - Minuta      - 'Pré de Alvará' 
+            2.  - Minuta      - 'de Licenciamento' 
+            3.  - Estudo      - 'de Opção' 
+            4.  - Minuta      - 'de Portaria de Lavra' 
+            5.  - Minuta      - 'de Permissão de Lavra Garimpeira' 
+            6.  - Formulario  - '1 Análise de Requerimento de Lavra' 
+        * pdf_path :
             if None cria sem anexo
         """
         self.insereDocumento(0) # Inclui Externo
@@ -230,7 +230,7 @@ class Processo(Sei):
         self.closeOtherWindows()
         self.driver.switch_to.default_content() # go back to main document        
         
-    def insereNotaTecnicaRequerimento(self, template_name, assinar=True, tipo='pesquisa', **kwargs):
+    def insereNotaTecnicaRequerimento(self, template_name, **kwargs):
         """analisa documentos e cria nota técnica sobre análise de interferência
         based on jinja2 template
         'area_porcentagem' must be passed as kwargs"""
@@ -245,27 +245,24 @@ class Processo(Sei):
                 minuta_np = docs[title]['np']
             if 'Interferência' in title and not interferencia_np:
                 interferencia_np = docs[title]['np']        
-                
-        if tipo == 'pesquisa':
-            minuta_de = 'de Alvará de Pesquisa'
-        elif tipo == 'licenciamento':
-            minuta_de = 'de Licenciamento'
                  
         if 'interferência_total' in template_name: 
             template = templateEnv.get_template("req_interferência_total.html",)                
             html_text = template.render(interferencia_sei=interferencia_np,
-                                        tipo=tipo, minuta_de=minuta_de)     
+                                        tipo=kwargs['requerimento'], minuta_de=kwargs['minuta']['de'])     
         elif 'opção' in template_name:
             template = templateEnv.get_template("req_opção.html")                
             html_text = template.render(interferencia_sei=interferencia_np,
-                                        tipo=tipo, minuta_de=minuta_de)     
+                                        tipo=kwargs['requerimento'], minuta_de=kwargs['minuta']['de'])     
         elif 'com_redução' in template_name:
             template = templateEnv.get_template("req_com_redução.html")                
-            html_text = template.render(interferencia_sei=interferencia_np, minuta_sei=minuta_np, tipo=tipo, minuta_de=minuta_de,  
+            html_text = template.render(interferencia_sei=interferencia_np, minuta_sei=minuta_np, 
+                                        tipo=kwargs['requerimento'], minuta_de=kwargs['minuta']['de'],  
                                         **kwargs)  # area_porcentagem must be passed as kwargs  
         elif 'sem_redução' in template_name:
             template = templateEnv.get_template("req_sem_redução.html")                
-            html_text = template.render(interferencia_sei=interferencia_np, minuta_sei=minuta_np, tipo=tipo, minuta_de=minuta_de) 
+            html_text = template.render(interferencia_sei=interferencia_np, minuta_sei=minuta_np, 
+                                        tipo=kwargs['requerimento'], minuta_de=kwargs['minuta']['de']) 
         elif 'edital_son' in template_name:
             template = templateEnv.get_template("req_edital_son.html")                
             html_text = template.render(interferencia_sei=interferencia_np, minuta_sei=minuta_np,    
