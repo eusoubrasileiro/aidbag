@@ -42,10 +42,10 @@ class Sei:
         if self.headless:
             options.add_argument("headless") # to hide window in 'background'
         self.driver = Chrome(options=options)        
-        self.driver.get("https://sei.anm.gov.br/")
+        self.driver.get("https://sei.anm.gov.br/")        
+        send_keys(self.driver, "input#txtUsuario", self.user, clear=True)
+        send_keys(self.driver, "input#pwdSenha", self.passwd, clear=True)        
         send_keys(self.driver, "select#selOrgao", "ANM")
-        send_keys(self.driver, "input#txtUsuario", self.user)
-        send_keys(self.driver, "input#pwdSenha", self.passwd)        
         click(self.driver, "button#sbmLogin")        
         # to avoid problems start saving main window handle
         self.mainwindow = self.driver.current_window_handle

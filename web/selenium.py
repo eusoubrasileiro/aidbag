@@ -52,7 +52,7 @@ def switch_to_frame(driver, selector, by=By.CSS_SELECTOR, timeout=10):
         
 
 def send_keys(driver, selector, text, by=By.CSS_SELECTOR, timeout=10, 
-              retry_count=3):
+              retry_count=3, clear=False):
     """This method 'send_keys' to an element's text field.
     
     Has multiple parts:
@@ -68,10 +68,13 @@ def send_keys(driver, selector, text, by=By.CSS_SELECTOR, timeout=10,
     * text - the new text to type into the text field
     * by - the type of selector to search by (Default: CSS Selector)
     * timeout - how long to wait for the selector to be visible
+    * clear - clear before, send Keys.BACK_SPACE*42 before
     
     """
     element = wait_for_element_visible(driver, selector, by)              
     try:        
+        if clear:
+            element.send_keys(Keys.BACK_SPACE*42)
         if text.endswith("\n"): # send Enter also
             text = text + Keys.ENTER
         element.send_keys(text)
