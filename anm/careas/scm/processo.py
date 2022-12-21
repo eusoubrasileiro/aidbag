@@ -11,7 +11,8 @@ import tqdm
 from ....general import progressbar 
 from ....web.htmlscrap import wPageNtlm
 from ....web.io import (
-    saveHtmlPage, 
+    saveHtmlPage,
+    saveFullHtmlPage, 
     try_read_html
     )
 from ....web.json import (
@@ -88,8 +89,8 @@ class Processo:
         self._dados.update(default_run_state())                           
         """dados parsed and processed """
         # web pages are 'dadosbasicos' and 'poligonal'
-        self._pages = { 'basic'   : {'html' : '' },
-                        'poligon' : {'html' : '' } 
+        self._pages = { 'basic'   : {'html' : '' , 'url': '', 'session' : None},
+                        'poligon' : {'html' : '' , 'url': '', 'session' : None} 
                       } # 'html' is the request.response.text property : bytes unicode decoded or infered      
         self.birth = datetime.datetime.now() 
         """when this process was requested for the first time"""
@@ -136,14 +137,6 @@ class Processo:
             if SCM_SEARCH.PRIORIDADE in task and not self['run']['ancestry']:
                 self._ancestry()
 
-    def _pageRequest(self, name):
-        """python requests page and get response unicode str decoded"""
-        if not isinstance(self._wpage, wPageNtlm):
-            raise Exception('Invalid `wPage` instance!')
-        response = requests.pageRequest(name, self.name, self._wpage, False)
-        self._pages[name]['html'] = response.text # str unicode page       
-        self.changed()
-        return self._pages[name]['html']
 
     @thread_safe
     def _expandAssociados(self, ass_ignore=''):
@@ -273,6 +266,15 @@ class Processo:
         else: 
             self._dadosBasicosGet(download=False, **kwargs)    
 
+    def _pageRequest(self, name):
+        """python requests page and get response unicode str decoded"""
+        if not isinstance(self._wpage, wPageNtlm):
+            raise Exception('Invalid `wPage` instance!')
+        # str unicode page
+        html, url, session = requests.pageRequest(name, self.name, self._wpage, False)
+        self._pages[name].update({'html' : html, 'url' : url, 'session' : session}) 
+        self.changed()
+
     def _dadosBasicosGet(self, data_tags=None, download=True):
         """dowload the dados basicos scm main html page or 
         use the existing one stored at `self._pages` 
@@ -335,30 +337,28 @@ class Processo:
             return True
         else:
             return False
+        
+    def salvaPageScmHtml(self, html_path, pagename='basic', overwrite=False):
+        """Save SCM Html page 'Basicos' or 'Poligonal' tab.
 
-    def salvaDadosBasicosHtml(self, html_path, overwrite=False):
-        """not thread safe"""
-        path = pathlib.Path(html_path).joinpath('scm_basicos_'+self.number+'_'+self.year)
+        Args:
+            html_path (str): pathlib.Path where to save
+            pagename (str): 'basic' or 'poligon'
+            overwrite (bool): weather to overwrite already saved html
+        """                
+        path = pathlib.Path(html_path).joinpath(config['scm']['html_prefix'][pagename]+
+                                                self.number+'_'+self.year)
         if not overwrite and path.with_suffix('.html').exists():
             return 
-        if not self._pages['basic']['html']:
-            self._pageRequest('basic') # get/fill-in self.wpage.response            
-        if not hasattr(self._wpage, 'response'):
-            saveHtmlPage(str(path), self._pages['basic']['html'])
-        else: # save html and page contents - full page
-            self._wpage.save(str(path), self._pages['basic']['html']) 
-
-    def salvaDadosPoligonalHtml(self, html_path, overwrite=False):
-        """not thread safe"""
-        path = pathlib.Path(html_path).joinpath('scm_poligonal_'+self.number+'_'+self.year)
-        if not overwrite and path.with_suffix('.html').exists():
-            return 
-        if not self._pages['poligon']['html']:
-            self._pageRequest('poligon') # get/fill-in self.wpage.reponse
-        if not hasattr(self._wpage, 'response'): # save only the html
-            saveHtmlPage(str(path), self._pages['poligon']['html'])
-        else: # save html and page contents - full page
-            self._wpage.save(str(path), self._pages['poligon']['html']) 
+        if not self._pages[pagename]['html']:
+            self._pageRequest(pagename) # get/fill-in _pages['']['session']          
+        if self._pages[pagename]['session']: # save html and page contents - full page  
+            # MUST re-use session due ASP.NET authentication etc.           
+            saveFullHtmlPage(self._pages[pagename]['url'], str(path), self._pages[pagename]['session'], 
+                             self._pages[pagename]['html'])            
+        else: # save simple plain html text page
+            saveHtmlPage(str(path), self._pages[pagename]['html'])
+ 
             
     def toSqliteTuple(self):
         """Create a tuple of this process with complexes fields as json strings

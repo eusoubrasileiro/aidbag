@@ -30,7 +30,8 @@ def saveHtmlPage(path, html):
 
 
 def saveFullHtmlPage(url, pagepath='page', session=requests.Session(), html=None, verbose=True):
-    """Save web page html and supported contents        
+    """Save web page html and supported contents      
+        * url:  
         * pagepath : path-to-page   
         It will create a file  `'path-to-page'.html` and a folder `'path-to-page'_files`
         https://stackoverflow.com/a/62207356/1207193

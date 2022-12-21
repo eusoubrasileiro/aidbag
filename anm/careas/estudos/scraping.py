@@ -15,7 +15,7 @@ def fetch_save_Html(wpage, number, year, html_file):
         'ctl00$cphConteudo$txtAnoProc': year,
         'ctl00$cphConteudo$btnEnviarUmProcesso': 'Processar'
     }
-    formdata = htmlscrap.formdataPostAspNet(wpage.response, formcontrols)
+    formdata = htmlscrap.formdataPostAspNet(wpage.response.text, formcontrols)
     wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1',
             data=formdata, timeout=config['secor_timeout'])
     if not ( wpage.response.url == r'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'):
@@ -36,7 +36,7 @@ def cancelaUltimo(wpage, number, year):
         'ctl00$cphConteudo$txtAno': year,
         'ctl00$cphConteudo$btnConsultar': 'Consultar'
     }
-    formdata = htmlscrap.formdataPostAspNet(wpage.response, formcontrols)    
+    formdata = htmlscrap.formdataPostAspNet(wpage.response.text, formcontrols)    
     wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/CancelarEstudo.aspx', data=formdata) # Consulta
     formcontrols = { # Cancela
         'ctl00$cphConteudo$txtNumero': number,
@@ -44,7 +44,7 @@ def cancelaUltimo(wpage, number, year):
         'ctl00$cphConteudo$rptEstudo$ctl00$btnCancelar.x': '12',
         'ctl00$cphConteudo$rptEstudo$ctl00$btnCancelar.y': '12'
     }
-    formdata = htmlscrap.formdataPostAspNet(wpage.response, formcontrols)
+    formdata = htmlscrap.formdataPostAspNet(wpage.response.text, formcontrols)
     wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/CancelarEstudo.aspx', data=formdata)
     if 'Estudo excluído com sucesso.' in wpage.response.text:
         return True 

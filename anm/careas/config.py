@@ -6,9 +6,12 @@ import datetime
 config = {}
 config['secor_timeout'] = 4*60 # sometimes sigareas server/r. interferncia takes a long long time to answer 
 
-# when to replace the process stored on the ProcessStorage after this amount of time 
+#configs are per module
+
 config['scm'] = {} 
+# when to replace the process stored on the ProcessStorage after this amount of time 
 config['scm']['process_expire'] = datetime.timedelta(weeks=1)
+config['scm'] = {'html_prefix' : {'basic': 'scm_basicos_', 'poligon': 'scm_poligonal_'} }
 
 # sei module configurations
 config['sei'] = {}

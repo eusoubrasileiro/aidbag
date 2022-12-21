@@ -24,22 +24,26 @@ def pageRequest(pagename, processostr, wpage, fmtName=True):
             page name to requets from `urls`
         * processostr:  str
             process unique name 
-        * wpage: *WARNING*   
-            it is CHANGED because it is passed by reference (Python default behavior)
-            and `request.response` is returned nonetheless 
+        * wpage: requests.wpage        
+            copied before using, nothing is persisted            
         * fmtName: True (default)
             wether to call `fmtPname` on `processostr` before http-request
+        
+        returns: 
+            wpage.response.text, url, wpage.session
     """
+    
     if fmtName:
-        processostr = fmtPname(processostr)
-    if pagename == 'basic': 
+        processostr = fmtPname(processostr)        
+    wpage = wpage.copy() # to make session unique across each proces/request
+    if pagename == 'basic':         
         wpage.get(urls['basic'])
         formcontrols = {
             'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnConsultarProcesso',
             'ctl00$conteudo$txtNumeroProcesso': processostr,
             'ctl00$conteudo$btnConsultarProcesso': 'Consultar',
             '__VIEWSTATEENCRYPTED': ''}
-        formdata = htmlscrap.formdataPostAspNet(wpage.response, formcontrols)
+        formdata = htmlscrap.formdataPostAspNet(wpage.response.text, formcontrols)
         try:
             wpage.post(scm_dados_processo_main_url,
                     data=formdata, timeout=scm_timeout)
@@ -47,16 +51,16 @@ def pageRequest(pagename, processostr, wpage, fmtName=True):
             if "Object reference not set to an instance of an object" in wpage.response.text:                
                 raise ErrorProcessSCM(f"Processo {processostr} corrupted on SCM database. Couldn't download.")
             else: # connection, authentication errors or others... must re-raise
-                raise
-        return wpage.response
-    if pagename == 'poligon': # first connection to 'dadosbasicos' above MUST have been made before
-        pageRequest('basic', processostr, wpage) # ask basicos first
+                raise        
+    elif pagename == 'poligon': # first connection to 'dadosbasicos' above MUST have been made before
+        html, _, session = pageRequest('basic', processostr, wpage) # ask basicos first
+        wpage.session = session # MUST re-use session
         formcontrols = {
             'ctl00$conteudo$btnPoligonal': 'Poligonal',
             'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnPoligonal'}
-        formdata = htmlscrap.formdataPostAspNet(wpage.response, formcontrols)
+        formdata = htmlscrap.formdataPostAspNet(html, formcontrols)
         wpage.post(scm_dados_processo_main_url, 
                    data=formdata, timeout=scm_timeout)
         if 'Erro ao mudar a versão para a data selecionada.' in wpage.response.text:
             raise ErrorProcessSCM(f"Processo {processostr} failed download poligonal from SCM database.")
-        return wpage.response
+    return wpage.response.text, urls['basic'], wpage.session

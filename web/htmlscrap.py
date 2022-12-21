@@ -46,14 +46,14 @@ class wPage: # html  webpage scraping with soup and requests
     # wp = wPage()
     # wp.get("https://br.yahoo.com/")
     # wp.save("yahoo", verbose=True)
-    def save(self, pagepath='page', html=None, verbose=False):
+    def save(self, pagepath='page', verbose=False):
         """
         using last page accessed (or 'html' str passed)
         save its html and supported contents        
         * pagepath : path-to-page   
         """       
         saveFullHtmlPage(self.response.url, pagepath, 
-                     self.session, self.response.text)
+                     self.session, self.response.text, verbose)
 
     def post(self, arg, save=True, **kwargs):
         """save : save response overwriting the last"""
@@ -96,17 +96,17 @@ class wPageNtlm(wPage): # overwrites original class for ntlm authentication
     __copy__ = copy # Now works with copy.copy too
 
 
-def formdataPostAspNet(response, formcontrols):
+def formdataPostAspNet(html, formcontrols):
     """
     Creates a formdata dict based on dict of formcontrols to make a post request
-    to an AspNet html page. Use the previous html get `response` to extract the AspNet
+    to an AspNet html page. Use the previous html text to extract the AspNet
     states of the page.
 
     response : from page GET request
     formcontrols : dict from webpage with values assigned
     """
     # get the aspnet form data neeed with bsoup
-    soup = BeautifulSoup(response.content, features="lxml")
+    soup = BeautifulSoup(html, features="html.parser")
     aspnetstates = ['__VIEWSTATE', '__VIEWSTATEGENERATOR', '__EVENTVALIDATION', '__EVENTTARGET',
                     '__EVENTARGUMENT', '__VIEWSTATEENCRYPTED' ];
     formdata = {}

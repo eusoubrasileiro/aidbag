@@ -122,8 +122,8 @@ class Interferencia:
             `DownloadInterferenciaFailed`, `CancelaUltimoEstudoFailed`
         """
         estudo = Interferencia(wpage, processostr, task=SCM_SEARCH.ALL, verbose=verbose)
-        estudo.processo.salvaDadosBasicosHtml(estudo.processo_path, overwrite)
-        estudo.processo.salvaDadosPoligonalHtml(estudo.processo_path, overwrite)                    
+        estudo.processo.salvaPageScmHtml(estudo.processo_path, 'basic', overwrite)
+        estudo.processo.salvaPageScmHtml(estudo.processo_path, 'poligon', overwrite)                    
         estudo.saveHtml(overwrite)
         # only if retirada interferencia html is saved we can create spreadsheets
         try:               
