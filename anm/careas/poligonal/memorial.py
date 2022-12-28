@@ -68,7 +68,7 @@ class Poligon():
             if True treat points as str and parse it with `util.readMemorial`
             argument `fmt` is used in this case
 
-        * round_verd: False (default)
+        * round_verd: True (default)
             round angles to 0, 90, 180, 270 etc.. 'rumos verdadeiros'
 
         * round_dist: int (default 2)

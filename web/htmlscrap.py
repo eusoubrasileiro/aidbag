@@ -106,7 +106,7 @@ def formdataPostAspNet(html, formcontrols):
     formcontrols : dict from webpage with values assigned
     """
     # get the aspnet form data neeed with bsoup
-    soup = BeautifulSoup(html, features="html.parser")
+    soup = BeautifulSoup(html, features="lxml")
     aspnetstates = ['__VIEWSTATE', '__VIEWSTATEGENERATOR', '__EVENTVALIDATION', '__EVENTTARGET',
                     '__EVENTARGUMENT', '__VIEWSTATEENCRYPTED' ];
     formdata = {}

@@ -30,10 +30,10 @@ def fmtPname(pross_str):
     pross_str = '0'*ncharsmissing+pross_str # prepend with zeros
     return pross_str[:3]+'.'+pross_str[3:6]+r'/'+pross_str[6:]
 
-def numberyearPname(pross_str):
+def numberyearPname(pross_str, type_=str):
     "return process (number, year)"
     pross_str = ''.join(re.findall('\d', fmtPname(pross_str)))
-    return pross_str[:6], pross_str[6:]
+    return type_(pross_str[:6]), type_(pross_str[6:])
 
 def findfmtPnames(text):
     """

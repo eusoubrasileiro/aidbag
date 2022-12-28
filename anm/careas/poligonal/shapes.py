@@ -4,6 +4,7 @@ import numpy as np
 import geopandas as gp
 from shapely.geometry import Polygon, Point
 import pyproj 
+from ..scm.util import numberyearPname
 
 CRS_SIRGAS2000 = "+proj=longlat +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs"
 
@@ -30,11 +31,14 @@ def readPolygon(shpname):
     points = np.array(list(zip(lat, lon)))
     return points
 
-def readPolygonQuery(fname, column_name='PROCESSO', value='654/1938'):
-    """read a esri shape file and get its coordinates 
-    after filtering by collumn_name == value"""
+def readPolygonQuery(fname, processo='654/1938'):
+    """read the SIGMINE shape esri file and the processo coordinates 
+    after filtering by processo NUMERO & ANO"""
     shp = gp.read_file(fname)
-    selected = shp[ shp[column_name] == value]
+    number, year = numberyearPname(processo, int)
+    selected = shp.query("NUMERO == @number & ANO == @year")    
+    if not len(selected) > 0:
+        raise IndexError(f"Did not find processo {number}/{year}. Did you mistype?")
     coordinates = selected.geometry.apply(lambda x: np.array(x.exterior.coords)).values
     del shp 
     coordinates = np.vstack(coordinates) # turn nested list or arrays to multidim array
