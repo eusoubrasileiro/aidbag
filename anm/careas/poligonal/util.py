@@ -7,6 +7,15 @@ from .geographic import (
     wgs84Inverse    
 )
 
+def prefixlinenumbers(string_):
+    """print string with line number """
+    newstring_ = ''
+    for i, line in enumerate(string_.split('\n')):
+        newstring_ += f"{i+1:3d}  {line}\n"
+    if line: # empty line in the end, ignore it 
+        newstring_ = newstring_[:len(f"{i+1:3d}  {line}\n")+1]
+    return newstring_
+
 def ddegree2dms(dd): 
     """decimal degree to tuple (degrees, minutes, seconds)
         * dd : float64
@@ -24,6 +33,7 @@ regex_dmsms = re.compile(r'([-|+]\d{1,2})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{1,3})')
 regex_dmsms_ = re.compile(r'([-+]);(\d{1,3});(\d{1,2});(\d{1,2});(\d{1,3})')     # crazy SIGAREAS format
 # N decimal places - GTM PRO format but also some dms formats
 regex_dms = re.compile(r'([-+]*\d{1,2})[ \'\"\,]+(\d{1,2})[ \'\"\,]+(\d{1,2}[\.\,]\d+)\D')
+regex_ddegree = re.compile(r'[+-]\d+(?:[\.\,]\d+)') # probably needs revision
 
 class NotPairofCoordinatesError(Exception):
     """It must be a pairs of coordinates (lat., lon) even number. Odd number found!"""
@@ -58,6 +68,7 @@ def parse_coordinates(text, decimal=False, fmt='scm'):
     * fmt : 'scm' default
         'scm' -> try generic dmsms than SIGAREAS format
         'gtmpro' -> dms 10micro seconds, 5 decimal places
+        'ddegree' -> decimal degree output only to decimal numpy array
 
     """    
     text = re.sub("\n+", "\n", text) # \n\n are causes lots of problems even with re.MULTILINE
@@ -73,6 +84,14 @@ def parse_coordinates(text, decimal=False, fmt='scm'):
         text = text.replace(',','.')        
         data = np.array([ [*map(float, values)] 
             for values in regex_dms.findall(text) ], dtype=np.double)
+    elif fmt == 'ddegree':
+        if not decimal:
+            print("ddegree format only supports decimal output, using it", file=sys.stderr)            
+        data = np.array(list(map(float,regex_ddegree.findall(text))))
+        if len(data)%2 != 0: # must be even lat, lon pairs        
+            raise NotPairofCoordinatesError()     
+        data = data.reshape(-1, 2)    
+        return data     
     else:
         raise NotImplementedError()
     if data.shape[0]%2 != 0: # must be even lat, lon pairs        
@@ -172,7 +191,7 @@ def formatMemorial(latlon, fmt='sigareas', close_poly=True, view=False,
     else:
         return fmtlines
 
-def check_nsew_memo(data, maxdev=1):
+def check_nsew_memo(data, maxdev=0):
     """simple fast check if its a nsew navigation
 
     * latlon: numpy array from `memorialRead(...,decimal=True)`
@@ -186,13 +205,15 @@ def check_nsew_memo(data, maxdev=1):
     Hence we calculate tan(deviation angle) on first quadrant using 
     deviation angle (min(abs(lat),abs(lon))/max(abs(lat), abs(lon)))
 
-    Note: use maxdev=0 for check use on sigareas
+    Note: maxdev=0 for check on sigareas 
     """
     vectors = np.abs(np.diff(data, axis=0)) # vectors on first quadrant
     maxs = np.max(vectors, axis=-1) 
     mins = np.min(vectors, axis=-1)
     dev_angles = np.rad2deg(mins/maxs) # angles of deviation from n/s/e/w
-    return np.alltrue(dev_angles <= maxdev)  
+    if not np.alltrue(dev_angles <= maxdev):
+        return False, dev_angles
+    return True, dev_angles
 
 class forceverdFailed(Exception):
     """increase the tolerance distance to adjust to nsew"""
@@ -223,27 +244,26 @@ xxxx -19°44'16''507 -44°17'45''410
 # since you will adjuste and readjust more than once
 # doesn't make sense at all 
 
-def _forceverdAprox(vertices, tolerancem=0.5, debug=True):
-    cvertices = np.copy(vertices)
-    vertices_new = np.copy(cvertices)
+def _forceverdAprox(vertices, tolerancem=0.5, debug=True):    
+    vertices_new = np.copy(vertices)
     dists = []
-    for i, (plat, plon) in enumerate(cvertices):
-        for j, (lat, lon) in enumerate(cvertices[i+1:]): # compare with next one : downward
-            dlat, dlon = lat-plat, lon-plon
-            dist = wgs84Inverse(lat, lon, plat, lon)
-            if(dlat != 0.0 and abs(dist) < tolerancem ):
-                if debug:
-                    print('line: {:>3d} - lat {:.8f} changed to {:.8f} distance {:2.2f} (m)'.format(i+1+j+1,
-                        lat, plat, dist), file=sys.stderr)
-                vertices_new[i+1+j, 0] = plat
-                dists.append(dist)
-            dist = wgs84Inverse(lat, lon, lat, plon)
-            if(dlon != 0.0 and abs(dist) < tolerancem):
-                if debug:
-                    print('line: {:>3d} - lon {:.8f} changed to {:.8f} distance {:2.2f} (m)'.format(i+1+j+1,
-                        lon, plon, dist), file=sys.stderr)
-                dists.append(dist)
-                vertices_new[i+1+j, 1] = plon    
+    for i, (plat, plon) in enumerate(vertices_new[:-1]): # first row is never changed
+        lat, lon  = vertices_new[i+1] # next row downward
+        dlat, dlon = lat-plat, lon-plon
+        dist = wgs84Inverse(lat, lon, plat, lon)
+        if(dlat != 0.0 and abs(dist) < tolerancem ):
+            if debug:
+                print('line: {:>3d} - lat {:.8f} changed to {:.8f} distance {:2.2f} (m)'.format(i+1,
+                    lat, plat, dist), file=sys.stderr)
+            vertices_new[i+1, 0] = plat
+            dists.append(dist)
+        dist = wgs84Inverse(lat, lon, lat, plon)
+        if(dlon != 0.0 and abs(dist) < tolerancem):
+            if debug:
+                print('line: {:>3d} - lon {:.8f} changed to {:.8f} distance {:2.2f} (m)'.format(i+1,
+                    lon, plon, dist), file=sys.stderr)
+            dists.append(dist)
+            vertices_new[i+1, 1] = plon    
     return dists, vertices_new 
 
 def forceverdPoligonal(vertices, tolerancem=0.5, view=False, close_poly=True, debug=True):
@@ -265,12 +285,18 @@ def forceverdPoligonal(vertices, tolerancem=0.5, view=False, close_poly=True, de
     if debug and dists: # not dists: means no statistics to report and nothing more            
         print("Changes statistics min (m) : {:2.2f}  p50: {:2.2f} max: {:2.2f}".format(
             *(np.percentile(dists, [0, 50, 100]))), file=sys.stderr)
-    if check_nsew_memo(vertices_new, 0) == False:
-        print(vertices_new)
-        raise forceverdFailed(str(vertices_new))  # 'rumos verdadeiros' NSEW check sigareas deviation 0
+    check, angles = check_nsew_memo(vertices_new)
+    if  not check:
+        msgs = f"vertices numpy \n {vertices_new}\n"
+        msgs += prefixlinenumbers(formatMemorial(vertices_new)+'\n')
+        msgs += (str(vertices_new)+'\n'+ # 'rumos verdadeiros' NSEW check sigareas deviation 1
+                              f'angles that were bigger than tolerance {angles}')
+        raise forceverdFailed(msgs)  
     if close_poly: # close polygon back
         vertices_new = np.append(vertices_new, vertices_new[0:1], axis=0)
     if view:
         print(vertices_new)
     else: 
-        return vertices_new
+        return vertices_new    
+    
+
