@@ -226,7 +226,7 @@ class Interferencia:
             processo_events['Obs'] = dfbasicos['Observação']
             processo_events['DOU'] = dfbasicos['Publicação D.O.U']
             # strdate to datetime comparacao prioridade
-            processo_events.loc[:, 'Data'] = processo_events.Data.apply(
+            processo_events['Data'] = processo_events.Data.apply(
                 lambda strdate: datetime.strptime(strdate, "%d/%m/%Y %H:%M:%S"))
             # to add an additional row caso a primeira data dos eventos diferente
             # da prioritária correta
