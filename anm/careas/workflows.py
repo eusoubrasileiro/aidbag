@@ -295,22 +295,17 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, activity=None,
     if type(process_folder) is str: 
         process_folder = pathlib.Path(config['processos_path']).joinpath(process_folder)
 
-    if verbose and __debugging__:
-        print("Main path: ", process_folder.parent)     
-        print("Process path: ", process_folder.absolute())
-        print("Current dir: ", os.getcwd())
-
     # get process from folder name    
     name = scm.findfmtPnames(process_folder.absolute().stem)[0]
     process = scm.ProcessStorage[name]
         
     info = inferWork(process, process_folder)
+
     if verbose and __debugging__:
-        print(f"percentage_area {info['areas']}")
-        print(f"pdf_interferencia {info['pdf_interferencia']}")
-        print(f"pdf_adicional {info['pdf_adicional']}")
-        print(f"tipo {process['tipo'].lower()}")
-        print(f"fase {process['fase'].lower()}")        
+        print("Main path: ", process_folder.parent)     
+        print("Process path: ", process_folder.absolute())
+        print("Current dir: ", os.getcwd())
+        print(f"activity {activity} \n info dict {info}")      
    
     psei = Processo.fromSei(sei, process['NUP'])            
     # inclui vários documentos, se desnecessário é só apagar
@@ -318,7 +313,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, activity=None,
     if termo_abertura and process['data_protocolo'].year < 2020:  
         psei.InsereTermoAberturaProcessoEletronico()        
     
-    if activity is None:
+    if not activity:
         activity = info['work'] # get from infer
         
     if activity in WORK_ACTIVITY.REQUERIMENTO_GENERICO:
@@ -343,7 +338,7 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, activity=None,
                 info['pdf_adicional'] = process_folder / "minuta.pdf"
                 if not info['pdf_adicional'].exists():
                     downloadMinuta(wpage, process.name, 
-                                   str(info['pdf_adicional'].absolute()), info['minuta']['code'])
+                                str(info['pdf_adicional'].absolute()), info['minuta']['code'])
                 # guarantee to insert an empty in any case
                 pdf_adicional = str(info['pdf_adicional'].absolute()) if info['pdf_adicional'].exists() else None 
                 psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional)
@@ -364,28 +359,28 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, activity=None,
             # guarantee to insert an empty in any case
             pdf_adicional = str(info['pdf_adicional'].absolute()) if info['pdf_adicional'].exists() else None 
             psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional)
-        #psei.insereNotaTecnicaRequerimento("interferência_total", tipo=processo_tipo)     
-        #raise NotImplementedError()
-        # else:
-        #     # tipo - requerimento de cessão parcial ou outros
-        #     if 'lavra' in fase.lower(): # minuta portaria de Lavra
-        #         # parecer de retificação de alvará
-        #         #IncluiParecer(sei, nup, 0)
-        #         # Inclui Estudo pdf como Doc Externo no SEI
-        #         #InsereDocumentoExternoSEI(sei, nup, 0, pdf_interferencia)
-        #         #InsereDocumentoExternoSEI(sei, nup, 4, pdf_adicional)
-        #         # Adicionado manualmente depois o PDF gerado
-        #         # com links p/ SEI
-        #         #InsereDocumentoExternoSEI(sei, nup, 6, None)
-        #         #InsereDeclaracao(sei, nup, 14) # 14 Informe: Requerimento de Lavra Formulario 1 realizado
-        #         # 15 - xxxxxxxx
-        #         #IncluiDespacho(sei, nup, 15, 
-        #         #    setor=u"ccccxxxxx") 
-        #         # 16 - xxxxxxx
-        #         #IncluiDespacho(sei, nup, 16)
-        #         # IncluiDespacho(sei, NUP, 9) # - Recomenda c/ retificação de alvará
-        #         raise NotImplementedError() 
-        #     pass    
+    #psei.insereNotaTecnicaRequerimento("interferência_total", tipo=processo_tipo)     
+    #raise NotImplementedError()
+    # else:
+    #     # tipo - requerimento de cessão parcial ou outros
+    #     if 'lavra' in fase.lower(): # minuta portaria de Lavra
+    #         # parecer de retificação de alvará
+    #         #IncluiParecer(sei, nup, 0)
+    #         # Inclui Estudo pdf como Doc Externo no SEI
+    #         #InsereDocumentoExternoSEI(sei, nup, 0, pdf_interferencia)
+    #         #InsereDocumentoExternoSEI(sei, nup, 4, pdf_adicional)
+    #         # Adicionado manualmente depois o PDF gerado
+    #         # com links p/ SEI
+    #         #InsereDocumentoExternoSEI(sei, nup, 6, None)
+    #         #InsereDeclaracao(sei, nup, 14) # 14 Informe: Requerimento de Lavra Formulario 1 realizado
+    #         # 15 - xxxxxxxx
+    #         #IncluiDespacho(sei, nup, 15, 
+    #         #    setor=u"ccccxxxxx") 
+    #         # 16 - xxxxxxx
+    #         #IncluiDespacho(sei, nup, 16)
+    #         # IncluiDespacho(sei, NUP, 9) # - Recomenda c/ retificação de alvará
+    #         raise NotImplementedError() 
+    #     pass    
     elif activity in WORK_ACTIVITY.REQUERIMENTO_OPCAO_ALVARA: # opção de área na fase de requerimento                
         # InsereDocumentoExternoSEI(sei, nup, 3, pdf_interferencia) # estudo opção
         # InsereDocumentoExternoSEI(sei, nup, 1, pdf_adicional)  # minuta alvará
@@ -394,24 +389,27 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, activity=None,
     elif activity in WORK_ACTIVITY.REQUERIMENTO_EDITAL_DAD:
         # Possible to get first son with tipo leilão or oferta publica, when multiple                        
         if len(process['associados']) > 1:
-            raise Exception('Something wrong! Mais de um associado! Àrea Menor no Leilão? ', process.name)
-        # get first 'son' tipo
-        son = scm.ProcessStorage[list(scm.ProcessStorage[name].associados.keys())[0]]
-        edital_tipo = son['tipo']
-        if 'leilão' in edital_tipo.lower():
-            edital_tipo = 'Leilão'
-        elif 'oferta' in edital_tipo.lower():
-            edital_tipo = 'Oferta Pública'
-        else:
-            raise Exception('Something wrong! Não é advindo de edital ', process.name)
-        # compare areas if difference > 0.1 ha stop!
-        if abs(process['poligon']['area']-son['poligon']['area']) < 0.1: # same area
-            pass 
-        else:
-            raise NotImplemented()            
+            print('Mais de um associado! Àrea Menor no Leilão? Something wrong?', process.name)
+        # get 'son' by poligon matching area or first on the list 
+        sons = []
+        edital_tipo = None 
+        for name, attrs in scm.ProcessStorage[name].associados.items():
+            son = attrs['obj']
+            tipo = son['tipo'].lower()
+            if 'leilão' in tipo:
+                sons.append([son['NUP'], son['poligon']['area'], abs(process['poligon']['area']-son['poligon']['area'])])     
+                edital_tipo = 'Leilão'           
+            elif 'oferta' in tipo:
+                sons.append([son['NUP'], son['poligon']['area'], abs(process['poligon']['area']-son['poligon']['area'])])
+                edital_tipo = 'Oferta Pública'
+        if not sons: # could not find son or sons 
+            raise Exception('Something wrong! Não é advindo de edital!', process.name)
+        # TODO deal with more participants on edital                
+        if sons[0] > 0.1: # # compare areas if difference > 0.1 ha stop! - not same area
+           raise NotImplemented('Not same Area!')            
         psei.insereNotaTecnicaRequerimento("edital_dad", info, edital=edital_tipo, 
-                            processo_filho=son['NUP'])   
-                
+                            processo_filho=sons[0][0])#['NUP']
+
     psei.insereMarcador(config['sei']['marcador_default'])
     psei.atribuir(config['sei']['atribuir_default'])
     # should also close the openned text window - going to previous state
