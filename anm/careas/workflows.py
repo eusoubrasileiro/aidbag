@@ -183,20 +183,23 @@ def inferWork(process, folder):
     # search/parse process object
     if infos['pdf_interferencia']:
         pdf_interferencia_text = readPdfText(infos['pdf_interferencia'].absolute())
-        area_text="PORCENTAGEM ENTRE ESTA ÁREA E A ÁREA ORIGINAL DO PROCESSO:" # para cada area poligonal 
-        count = pdf_interferencia_text.count(area_text)            
-        infos['areas'] = {'count' : count}
-        infos['areas'] = {'perc' : []}
-        if count > 0: # só uma área
-            percs = re.findall(f"(?<={area_text}) +([\d,]+)", pdf_interferencia_text)
-            percs = [ float(x.replace(',', '.')) for x in percs ]  
-            infos['areas']['perc'] = percs 
-            if count == 0:
-                infos['interferencia'] = 'total'
-            elif count == 1:
-                infos['interferencia'] = 'ok'
-            elif count > 0:
-                infos['interferencia'] = 'opção'
+        if 'ENGLOBAMENTO' in pdf_interferencia_text:
+            infos['interferencia'] = 'ok' 
+        else:
+            area_text="PORCENTAGEM ENTRE ESTA ÁREA E A ÁREA ORIGINAL DO PROCESSO:" # para cada area poligonal 
+            count = pdf_interferencia_text.count(area_text)            
+            infos['areas'] = {'count' : count}
+            infos['areas'] = {'perc' : []}
+            if count > 0: # só uma área
+                percs = re.findall(f"(?<={area_text}) +([\d,]+)", pdf_interferencia_text)
+                percs = [ float(x.replace(',', '.')) for x in percs ]  
+                infos['areas']['perc'] = percs 
+                if count == 0:
+                    infos['interferencia'] = 'total'
+                elif count == 1:
+                    infos['interferencia'] = 'ok'
+                elif count > 0:
+                    infos['interferencia'] = 'opção'
         # elif count_areas > 1: # multiplas áreas opção           
         # elif count_areas == 0: # interferência total 
         #     perc = -1     
@@ -211,6 +214,7 @@ def inferWork(process, folder):
     # 'doc_ext' from config.docs_externos
     infos['minuta']  =  {'de' : '', 'code': 0, 'doc_ext': -1}
     infos['edital'] = {}
+    
     if 'requerimento' in process['tipo'].lower():     
         if 'garimpeira' in process['fase'].lower():
             infos['requerimento'] = 'de Permissão de Lavra Garimpeira'
@@ -344,9 +348,17 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, activity=None,
                     # Recomenda Só análise de plano s/ notificação titular (mais comum)
 
     elif activity in WORK_ACTIVITY.DIREITO_RLAVRA_FORMULARIO_1:
-        # Formulário 1  : TODO
+        psei.insereDocumentoExterno(0, str(info['pdf_interferencia'].absolute())) 
+        if 'ok' in info['interferencia']:                
+            info['pdf_adicional'] = process_folder / "minuta.pdf"
+            if not info['pdf_adicional'].exists():
+                downloadMinuta(wpage, process.name, 
+                                str(info['pdf_adicional'].absolute()), info['minuta']['code'])
+            # guarantee to insert an empty in any case
+            pdf_adicional = str(info['pdf_adicional'].absolute()) if info['pdf_adicional'].exists() else None 
+            psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional)
         #psei.insereNotaTecnicaRequerimento("interferência_total", tipo=processo_tipo)     
-        raise NotImplementedError()
+        #raise NotImplementedError()
         # else:
         #     # tipo - requerimento de cessão parcial ou outros
         #     if 'lavra' in fase.lower(): # minuta portaria de Lavra
