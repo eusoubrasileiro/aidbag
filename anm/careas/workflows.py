@@ -325,12 +325,20 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, activity=None,
         # Inclui Estudo Interferência pdf como Doc Externo no SEI
         psei.insereDocumentoExterno(0, str(info['pdf_interferencia'].absolute()))                    
         if activity in WORK_ACTIVITY.REQUERIMENTO_EDITAL:
-            psei.insereNotaTecnicaRequerimento("edital_son", **info)            
+            if 'ok' in info['interferencia']:                
+                info['pdf_adicional'] = process_folder / "minuta.pdf"
+            if not info['pdf_adicional'].exists():
+                downloadMinuta(wpage, process.name, 
+                        str(info['pdf_adicional'].absolute()), info['minuta']['code'])
+            # guarantee to insert an empty in any case
+            pdf_adicional = str(info['pdf_adicional'].absolute()) if info['pdf_adicional'].exists() else None 
+            psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional)                        
+            psei.insereNotaTecnicaRequerimento("edital_son", info)            
         elif activity in WORK_ACTIVITY.REQUERIMENTO_GENERICO_NOT_EDITAL:  
             if 'total' in info['interferencia']:
-                psei.insereNotaTecnicaRequerimento("interferência_total", **info)           
+                psei.insereNotaTecnicaRequerimento("interferência_total", info)           
             elif 'opção' in info['interferencia']:
-                psei.insereNotaTecnicaRequerimento("opção", **info)                            
+                psei.insereNotaTecnicaRequerimento("opção", info)                            
             elif 'ok' in info['interferencia']:                
                 info['pdf_adicional'] = process_folder / "minuta.pdf"
                 if not info['pdf_adicional'].exists():
@@ -340,11 +348,10 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, activity=None,
                 pdf_adicional = str(info['pdf_adicional'].absolute()) if info['pdf_adicional'].exists() else None 
                 psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional)
                 if info['areas']['perc'][0] < 96.0: # > 4% change notificar 
-                    psei.insereNotaTecnicaRequerimento("com_redução", # com notificação titular
-                            area_porcentagem=str(info['areas']['perc'][0]).replace('.',','),
-                            **info) 
+                    psei.insereNotaTecnicaRequerimento("com_redução", info, # com notificação titular
+                            area_porcentagem=str(info['areas']['perc'][0]).replace('.',','))                            
                 else:
-                    psei.insereNotaTecnicaRequerimento("sem_redução", **info) 
+                    psei.insereNotaTecnicaRequerimento("sem_redução", info) 
                     # Recomenda Só análise de plano s/ notificação titular (mais comum)
 
     elif activity in WORK_ACTIVITY.DIREITO_RLAVRA_FORMULARIO_1:
@@ -401,8 +408,8 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, activity=None,
         if abs(process['poligon']['area']-son['poligon']['area']) < 0.1: # same area
             pass 
         else:
-            raise NotImplemented()
-        psei.insereNotaTecnicaRequerimento("edital_dad", edital=edital_tipo, 
+            raise NotImplemented()            
+        psei.insereNotaTecnicaRequerimento("edital_dad", info, edital=edital_tipo, 
                             processo_filho=son['NUP'])   
                 
     psei.insereMarcador(config['sei']['marcador_default'])

@@ -230,10 +230,10 @@ class Processo(Sei):
         self.closeOtherWindows()
         self.driver.switch_to.default_content() # go back to main document        
         
-    def insereNotaTecnicaRequerimento(self, template_name, **kwargs):
+    def insereNotaTecnicaRequerimento(self, template_name, infos, **kwargs):
         """analisa documentos e cria nota técnica sobre análise de interferência
         based on jinja2 template
-        'area_porcentagem' must be passed as kwargs"""
+        'area_porcentagem' must be passed as **kwargs"""
         docs = self.listaDocumentos()
         # get numero protocolo minuta and interferencia
         minuta_np = None 
@@ -248,28 +248,23 @@ class Processo(Sei):
                  
         if 'interferência_total' in template_name: 
             template = templateEnv.get_template("req_interferência_total.html",)                
-            html_text = template.render(interferencia_sei=interferencia_np,
-                                        tipo=kwargs['requerimento'], minuta_de=kwargs['minuta']['de'])     
+            html_text = template.render(infos=infos, interferencia_sei=interferencia_np)                 
         elif 'opção' in template_name:
             template = templateEnv.get_template("req_opção.html")                
-            html_text = template.render(interferencia_sei=interferencia_np,
-                                        tipo=kwargs['requerimento'], minuta_de=kwargs['minuta']['de'])     
+            html_text = template.render(infos=infos, interferencia_sei=interferencia_np)
         elif 'com_redução' in template_name:
             template = templateEnv.get_template("req_com_redução.html")                
-            html_text = template.render(interferencia_sei=interferencia_np, minuta_sei=minuta_np, 
-                                        tipo=kwargs['requerimento'], minuta_de=kwargs['minuta']['de'],  
-                                        **kwargs)  # area_porcentagem must be passed as kwargs  
+            html_text = template.render(infos=infos, interferencia_sei=interferencia_np, minuta_sei=minuta_np, 
+                                        **kwargs)  # 'area_porcentagem' was passed as kwargs
         elif 'sem_redução' in template_name:
             template = templateEnv.get_template("req_sem_redução.html")                
-            html_text = template.render(interferencia_sei=interferencia_np, minuta_sei=minuta_np, 
-                                        tipo=kwargs['requerimento'], minuta_de=kwargs['minuta']['de']) 
+            html_text = template.render(infos=infos, interferencia_sei=interferencia_np, minuta_sei=minuta_np)
         elif 'edital_son' in template_name:
             template = templateEnv.get_template("req_edital_son.html")                
-            html_text = template.render(interferencia_sei=interferencia_np, minuta_sei=minuta_np,    
-                                        **kwargs)             
+            html_text = template.render(infos=infos, interferencia_sei=interferencia_np, minuta_sei=minuta_np)             
         elif 'edital_dad' in template_name:
             template = templateEnv.get_template("req_edital_dad.html")                
-            html_text = template.render(**kwargs) 
+            html_text = template.render(infos=infos, **kwargs) 
                        
         self.insereNotaTecnica(html_text)
         
