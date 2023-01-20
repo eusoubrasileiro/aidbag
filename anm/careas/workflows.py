@@ -190,19 +190,16 @@ def inferWork(process, folder):
             count = pdf_interferencia_text.count(area_text)            
             infos['areas'] = {'count' : count}
             infos['areas'] = {'perc' : []}
-            if count > 0: # só uma área
+            if count == 0:
+                infos['interferencia'] = 'total'
+            elif count > 0: # só uma área
+                if count == 1:
+                    infos['interferencia'] = 'ok'
+                if count > 1:
+                    infos['interferencia'] = 'opção'
                 percs = re.findall(f"(?<={area_text}) +([\d,]+)", pdf_interferencia_text)
                 percs = [ float(x.replace(',', '.')) for x in percs ]  
-                infos['areas']['perc'] = percs 
-                if count == 0:
-                    infos['interferencia'] = 'total'
-                elif count == 1:
-                    infos['interferencia'] = 'ok'
-                elif count > 0:
-                    infos['interferencia'] = 'opção'
-        # elif count_areas > 1: # multiplas áreas opção           
-        # elif count_areas == 0: # interferência total 
-        #     perc = -1     
+                infos['areas']['perc'] = percs                 
     else:
         RuntimeError('Nao encontrou pdf R*.pdf')
         
