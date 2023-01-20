@@ -214,30 +214,30 @@ def inferWork(process, folder):
     
     if 'requerimento' in process['tipo'].lower():     
         if 'garimpeira' in process['fase'].lower():
-            infos['requerimento'] = 'de Permissão de Lavra Garimpeira'
-            infos['minuta']['de']  = infos['requerimento']
+            infos['requerimento'] = 'Permissão de Lavra Garimpeira'
+            infos['minuta']['de']  = 'de ' + infos['requerimento']
             infos['work'] = WORK_ACTIVITY.REQUERIMENTO_PLG
             infos['minuta']['code'] = 4  
             infos['minuta']['doc_ext'] = 5          
         elif 'lavra' in process['fase'].lower():
             infos['work'] = WORK_ACTIVITY.DIREITO_RLAVRA_FORMULARIO_1
-            infos['minuta']['de']  = 'de Portaria de Lavra'
+            infos['minuta']['de']  = 'de ' + 'Portaria de Lavra'
             infos['minuta']['code'] = 2
             infos['minuta']['doc_ext'] = 6
         elif 'licenciamento' in process['fase'].lower():
-            infos['requerimento'] = 'de Licenciamento'
-            infos['minuta']['de']  = infos['requerimento']
+            infos['requerimento'] = 'Licenciamento'
+            infos['minuta']['de']  = 'de ' + infos['requerimento']
             infos['work'] = WORK_ACTIVITY.REQUERIMENTO_LICENCIAMENTO
             infos['minuta']['code'] = 5 # must be downloaded by hand
             infos['minuta']['doc_ext'] = 2
         elif 'extração' in process['fase'].lower():
-            infos['requerimento'] = 'de Registro de Extração'
-            infos['minuta']['de']  = infos['requerimento']
+            infos['requerimento'] = 'Registro de Extração'
+            infos['minuta']['de']  = 'de ' + infos['requerimento']
             infos['work'] = WORK_ACTIVITY.REQUERIMENTO_REGISTRO_EXTRAÇÃO
             infos['minuta']['code'] = 6            
             infos['minuta']['doc_ext'] = 7
         elif 'pesquisa' in process['fase'].lower():       
-            infos['requerimento'] = 'de Pesquisa'
+            infos['requerimento'] = 'Pesquisa'
             infos['minuta']['de']  = 'de Alvará de Pesquisa'
             infos['work'] = WORK_ACTIVITY.REQUERIMENTO_PESQUISA
             infos['minuta']['code'] = 1
