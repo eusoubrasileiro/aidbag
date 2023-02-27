@@ -6,7 +6,8 @@
     integrity="sha256-o88AwQnZB+VDvE9tvIXrMQaPlFFSUTR+nldQm1LuPXQ="
     crossorigin="anonymous"></script>
   <script language="javascript" type="text/javascript">
-    $( document ).ready(function() {
+
+    $(window).on("load", function() {
 
       $("tbody tr[evindex='0']").each(function(index) { /* add class c1/c2 even/odd rows */
         if (index % 2 === 0) { 
@@ -88,27 +89,27 @@
         navigator.clipboard.writeText($(this).text());
       })
 
-      {% if processo is defined %}
-        document.title = "{{ processo }}"; /* set window name to easy work */
-      {% else %}  
-        document.title = "Work"; /* set window name to easy work */
-      {% endif %} 
-
-      // F5 or refresh page event
-      // $(windows).unload(function() {
-      //   // could put an animation here also 
-      //   // put an information of processes loaded from database
-      //   fetch("/", {
-      //     method: "GET"          
-      //   }).then(function(response) {
-      //     $("body").css("cursor", "default"); /* default cursor */
-      //   });  
-      //   return "Handler for .unload() called.";
-      // });
+      $("*").css("cursor", "auto") /* loading page finished */
 
     });
+
+    {% if processo is defined %}
+      document.title = "{{ processo }}"; /* set window name to easy work */
+    {% else %}  
+      document.title = "Work"; /* set window name to easy work */
+    {% endif %} 
+
+    // // F5 or refresh page event - changes cursor
+    $(window).on("beforeunload", function() {
+      // put an information of processes loaded from database
+      $("*").css("cursor", "progress");      
+    });    
+
   </script>
   <style>
+    * {
+      cursor: wait;
+    }
     html {
       font-size: 14px; 
       font-family: Verdana, Geneva, Tahoma, sans-serif;
@@ -199,6 +200,7 @@
   <div style="display:flex;color: cornflowerblue;">
     <div>Press F5 to reload</div>
   </div>    
+  <footer>Loaded {{ dbloaded }} processes from database in {{ time_spent }} seconds. </footer>  
   {% else %}    
     <ul class="container">
       <li> <a>Prioridade: {{ dados['prioridade'] }}</a> </li>

@@ -93,13 +93,14 @@ setCurrentProcessFolders()
 
 @app.route('/', methods=['GET'])
 def chooseProcess():        
-    ProcessStorageUpdate() # update processes from sqlite database
+    dbloaded, time_spent = ProcessStorageUpdate(False, background=False) # update processes from sqlite database
     wf.ProcessPathStorage.clear() # update processes folder from working folder
     setCurrentProcessFolders()
     return render_template('index.html', 
                 processos_list=cache.get('processos_list'), 
                 work_folder=config['processos_path'],
-                dados=None)
+                dados=None,
+                dbloaded=dbloaded, time_spent=round(time_spent,2))
 
 @app.route('/select', methods=['GET'])
 def select():    

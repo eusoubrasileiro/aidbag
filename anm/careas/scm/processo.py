@@ -617,7 +617,8 @@ class ProcessFactoryStorageClass(dict):
         return process
         
     def loadAll(self, verbose=False):        
-        """Load all processes from sqlite database on self"""
+        """Load all processes from sqlite database on self
+        returns tuple (time spent, number of processes) """
         fname = config['scm']['process_storage_file'] + '.db'          
         if not os.path.exists(fname):
             print(f"Process Storage database file not found {fname}", file=sys.stderr)
@@ -635,10 +636,13 @@ class ProcessFactoryStorageClass(dict):
                 if 'associados' in process and process['run']['associados']:           
                     # cannot be obj hook json loads due circular reference
                     # database must be already fully populated with objects
-                    for name in process['associados']: 
-                         process['associados'][name]['obj'] = ProcessStorage[name]            
+                    for name in process['associados']:                         
+                         process['associados'][name]['obj'] = ProcessStorage[name]    
+            n, dt = len(self),time.time()-start         
             if verbose:
-                print(f"Loading, creating, relinking references of {len(self)} processes from database took {time.time()-start:.2f} seconds")
+                print(f"Loading, creating, relinking references of {n} processes from database took {dt:.2f} seconds")
+            else:
+                return (n, dt)
         #iterator = processes if not verbose else progressbar(processes, "Loading Processes: ")        
         #self.update({process.name : process for process in map(Processo.fromJSON, iterator)})  
     
@@ -676,15 +680,16 @@ ProcessStorage = ProcessFactoryStorageClass()
 * key : unique `fmtPname` process string
 * value : `scm.Processo` object
 """
-def ProcessStorageUpdate():
+def ProcessStorageUpdate(verbose, background=True):
     """Update (or Load) Process Storage Dictionary from sqlite Database.
     Any new data or change on the database will be replicated since dict `.update` method is used """
-    threading.Thread(target=ProcessStorage.loadAll, args=(True,)).start() 
+    if background:
+        threading.Thread(target=ProcessStorage.loadAll, args=(verbose,)).start() 
+    else:
+        return ProcessStorage.loadAll(verbose)        
     
-ProcessStorageUpdate()
-# load processes saved on start   
-
-
+ProcessStorageUpdate(True, background=True)
+# load processes on this module load
 
 
 # cannot be obj hook json loads due circular reference
