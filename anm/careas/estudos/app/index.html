@@ -89,8 +89,6 @@
         navigator.clipboard.writeText($(this).text());
       })
 
-      $("*").css("cursor", "auto") /* loading page finished */
-
     });
 
     {% if processo is defined %}
@@ -99,17 +97,13 @@
       document.title = "Work"; /* set window name to easy work */
     {% endif %} 
 
-    // // F5 or refresh page event - changes cursor
+    // F5 or refresh page event: changes the cursor
     $(window).on("beforeunload", function() {
-      // put an information of processes loaded from database
       $("*").css("cursor", "progress");      
     });    
 
   </script>
   <style>
-    * {
-      cursor: wait;
-    }
     html {
       font-size: 14px; 
       font-family: Verdana, Geneva, Tahoma, sans-serif;
