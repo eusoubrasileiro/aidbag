@@ -37,6 +37,23 @@ from ...estudos.interferencia import (
     )
 
 curpath = os.path.dirname(os.path.abspath(__file__))
+   
+app = Flask(__name__, template_folder=curpath)
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 30*60 # 30 mins in seconds
+app.config['CACHE_TYPE'] = 'SimpleCache'  # only 1 connection (1 thread/session/client)
+cache = Cache(app)
+
+def setCurrentProcessFolders():        
+    processos = [] 
+    for process in wf.currentProcessGet():
+        processos.append((process, ProcessStorage[process]._dados.copy()))
+    cache.set('processos_list', processos)
+
+cache.set('selected', None)
+cache.set('table', None)
+cache.set('json_path', None)
+cache.set('done', False)
+setCurrentProcessFolders()
 
 
 def htmlTable(table): 
@@ -71,25 +88,6 @@ def htmlTable(table):
         main_row[0].text = ''   
     html_table = etree.tostring(html_table, encoding='unicode', method='xml')         
     return html_table   
-
-   
-app = Flask(__name__, template_folder=curpath)
-app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 30*60 # 30 mins in seconds
-app.config['CACHE_TYPE'] = 'SimpleCache'  # only 1 connection (1 thread/session/client)
-cache = Cache(app)
-
-def setCurrentProcessFolders():        
-    processos = [] 
-    for process in wf.currentProcessGet():
-        processos.append((process, ProcessStorage[process]._dados.copy()))
-    cache.set('processos_list', processos)
-
-cache.set('selected', None)
-cache.set('table', None)
-cache.set('json_path', None)
-cache.set('done', False)
-setCurrentProcessFolders()
-
 
 @app.route('/', methods=['GET'])
 def chooseProcess():        
