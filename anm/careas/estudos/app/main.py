@@ -26,7 +26,10 @@ from flask import (
 from ...config import config
 from ... import workflows as wf 
 from .....web.pandas_html import dataframe_to_html 
-from ...scm import ProcessStorage
+from ...scm.processo import (
+        ProcessStorageUpdate,
+        ProcessStorage
+    )
 from ...scm.util import fmtPname, numberyearPname
 from ...estudos.interferencia import (
         Interferencia, 
@@ -74,20 +77,29 @@ app = Flask(__name__, template_folder=curpath)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 30*60 # 30 mins in seconds
 app.config['CACHE_TYPE'] = 'SimpleCache'  # only 1 connection (1 thread/session/client)
 cache = Cache(app)
-processos = [] 
-for process in wf.currentProcessGet():
-    processos.append((process, ProcessStorage[process]._dados.copy()))
-cache.set('processos_list', processos)
+
+def setCurrentProcessFolders():        
+    processos = [] 
+    for process in wf.currentProcessGet():
+        processos.append((process, ProcessStorage[process]._dados.copy()))
+    cache.set('processos_list', processos)
+
 cache.set('selected', None)
 cache.set('table', None)
 cache.set('json_path', None)
 cache.set('done', False)
+setCurrentProcessFolders()
 
 
-@app.route('/')
-def chooseProcess():    
+@app.route('/', methods=['GET'])
+def chooseProcess():        
+    ProcessStorageUpdate() # update processes from sqlite database
+    wf.ProcessPathStorage.clear() # update processes folder from working folder
+    setCurrentProcessFolders()
     return render_template('index.html', 
-                processos_list=cache.get('processos_list'), dados=None)
+                processos_list=cache.get('processos_list'), 
+                work_folder=config['processos_path'],
+                dados=None)
 
 @app.route('/select', methods=['GET'])
 def select():    
@@ -125,11 +137,8 @@ def select():
 def details():
     key = request.args.get('process')
     print(f'process is {key}', file=sys.stderr)
-    return ProcessStorage[key]._pages['basic']['html']    
+    return ProcessStorage[key]._pages['basic']['html']   
 
-
-
-    
 @app.route('/update', methods=['POST'])
 def update():
     data = request.get_json()        

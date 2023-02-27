@@ -94,6 +94,18 @@
         document.title = "Work"; /* set window name to easy work */
       {% endif %} 
 
+      // F5 or refresh page event
+      // $(windows).unload(function() {
+      //   // could put an animation here also 
+      //   // put an information of processes loaded from database
+      //   fetch("/", {
+      //     method: "GET"          
+      //   }).then(function(response) {
+      //     $("body").css("cursor", "default"); /* default cursor */
+      //   });  
+      //   return "Handler for .unload() called.";
+      // });
+
     });
   </script>
   <style>
@@ -173,13 +185,20 @@
   </style>  
 </head> 
 <body>
-  {% if processos_list %}
+  {% if processos_list %}    
     <h2>Pick a process</h2>
     <ol>
     {% for process_, dados_ in processos_list %}  
       <li><a href="/select?selected={{ process_.replace('/','-') }}" target="_blank">{{ process_ }}</a> &#9830; SEI: <a class="copyprocess1" href="/copynup" >{{ dados_['NUP'] }} </a> &#9830; <a href='/process?process={{ process_ }}' target="_blank">SCM</a></li>
       {% endfor %}
     </ol>
+    <div style="display:flex;">
+      <div style="font-weight: bold;">Working folder:</div>
+      <div>{{ work_folder }} </div>
+    </div>
+  <div style="display:flex;color: cornflowerblue;">
+    <div>Press F5 to reload</div>
+  </div>    
   {% else %}    
     <ul class="container">
       <li> <a>Prioridade: {{ dados['prioridade'] }}</a> </li>

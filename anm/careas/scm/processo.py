@@ -563,9 +563,6 @@ class ProcessFactoryStorageClass(dict):
         super().__init__()      
         self.save_on_set = save_on_set        
         self.debug = debug
-        with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn: # context manager already commits and closes connection
-            self.ondb = conn.execute("SELECT name FROM storage").fetchall()             
-
        
     def __insert_to_sqlite(self, key):
         with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn: # context manager already commits and closes connection
@@ -671,8 +668,7 @@ class ProcessFactoryStorageClass(dict):
                     print(f"Did not find process html at {process_path}", file=sys.stderr)   
         
             
-ProcessStorage = ProcessFactoryStorageClass()
-threading.Thread(target=ProcessStorage.loadAll, args=(True,)).start() # load processes saved on start      
+ProcessStorage = ProcessFactoryStorageClass()   
 """Container and Factory of processes to avoid 
 1. connecting/open page of SCM again
 2. parsing all information again    
@@ -680,6 +676,16 @@ threading.Thread(target=ProcessStorage.loadAll, args=(True,)).start() # load pro
 * key : unique `fmtPname` process string
 * value : `scm.Processo` object
 """
+def ProcessStorageUpdate():
+    """Update (or Load) Process Storage Dictionary from sqlite Database.
+    Any new data or change on the database will be replicated since dict `.update` method is used """
+    threading.Thread(target=ProcessStorage.loadAll, args=(True,)).start() 
+    
+ProcessStorageUpdate()
+# load processes saved on start   
+
+
+
 
 # cannot be obj hook json loads due circular reference
 # database must be already fully populated with objects
