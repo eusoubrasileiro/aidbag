@@ -46,7 +46,7 @@ cache = Cache(app)
 def setCurrentProcessFolders():        
     processos = [] 
     for process in wf.currentProcessGet():
-        processos.append((process, ProcessStorage[process]._dados.copy()))
+        processos.append((process, ProcessStorage[process].dict_dados()))    
     cache.set('processos_list', processos)
 
 cache.set('selected', None)

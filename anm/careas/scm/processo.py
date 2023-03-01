@@ -105,8 +105,8 @@ class Processo:
     
     def __contains__(self, key):
         """check if property exist on self._dados"""
-        return key in self._dados
-         
+        return key in self._dados    
+        
     @property
     def associados(self):
         """key : value - processo name : {attributes}
@@ -392,7 +392,11 @@ class Processo:
                     print('Some error on poligonal page cant read poligonal table', file=sys.stderr)           
                 else:
                     process._dados['run']['polygonal'] = True                  
-        return process            
+        return process     
+
+    def dict_dados(self) -> dict:
+        """return dict of dados string only (str). No other object class packed."""
+        return json.loads(json.dumps(self._dados, default=str))    
             
     def toJSON(self):
         """
