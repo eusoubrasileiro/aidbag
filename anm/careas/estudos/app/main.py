@@ -82,7 +82,7 @@ def htmlTable(table):
     # insert checkboxes on first row of each process 'Prior' column for click-check prioridade
     for main_row in html_table.findall(".//tbody/tr[@evindex='0']"):                    
         if '1' in main_row[0].text:            
-            etree.SubElement(main_row[0], "input", { 'type': 'checkbox', 'checked': 'true'}) 
+            etree.SubElement(main_row[0], "input", { 'type': 'checkbox', 'checked': ''}) 
         else:
             etree.SubElement(main_row[0], "input", { 'type': 'checkbox'})  
         main_row[0].text = ''   
