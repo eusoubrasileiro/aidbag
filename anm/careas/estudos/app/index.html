@@ -50,20 +50,6 @@
           }); 
         }        
       });
-      $("input[type='checkbox']").click(function(event) {
-        $("body").css("cursor", "progress"); /* wait cursor */
-        var data = {};        
-        parent = event.target.parentElement.parentElement.getAttribute('group');          
-        data['process'] = parent;
-        data['state'] = event.target.checked;        
-        fetch("/update", {
-          method: "POST",
-          headers: {'Content-Type': 'application/json'}, 
-          body: JSON.stringify(data)
-        }).then(function(response) {
-          $("body").css("cursor", "default"); /* default cursor */
-        });        
-      });
 
       $("input[type='checkbox']").click(function(event) {
         $("body").css("cursor", "progress"); /* wait cursor */
@@ -77,7 +63,12 @@
           body: JSON.stringify(data)
         }).then(function(response) {
           $("body").css("cursor", "default"); /* default cursor */
-        });        
+        });     
+        // to keep html in sync with DOM objects (not only on loading page)
+        if(event.target.checked)
+          event.target.setAttribute('checked', '')
+        else
+          event.target.removeAttribute('checked')
       });
 
       $("tr[evindex='0']:not([evn='1']) td:nth-child(3)").wrap(function() {        
