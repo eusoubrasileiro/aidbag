@@ -24,7 +24,7 @@
 
       $("tr[evindex='0']:not([evn='1']) td:nth-child(6)").click(function(event) {
         element = $(this).parent();
-        if( element != 'INPUT' ){ /* to avoid colapse on click on checkbox */
+        if( element != 'INPUT' ){ /* to avoid collapse on click on checkbox */
           $("body").css("cursor", "progress"); /* wait cursor */
           //open up the events - toggle from the process atribute 
           pgroup = element.attr('group');  
@@ -40,7 +40,7 @@
             var data = {};
             data['process'] = pgroup;
             data['style'] = $(this).css('display'); 
-            fetch("/update", {
+            fetch("/update_events_view", {
               method: "POST",
               headers: {'Content-Type': 'application/json'}, 
               body: JSON.stringify(data)
@@ -52,23 +52,20 @@
       });
 
       $("input[type='checkbox']").click(function(event) {
-        $("body").css("cursor", "progress"); /* wait cursor */
-        var data = {};        
-        parent = event.target.parentElement.parentElement.getAttribute('group');          
-        data['process'] = parent;
-        data['state'] = event.target.checked;        
-        fetch("/update", {
+        $("body").css("cursor", "progress"); /* wait cursor */               
+        var data = []; 
+        // get state of all checkboxes and update backend for all
+        $("input[type='checkbox']").each(function(i, element) {          
+          parent = element.parentElement.parentElement.getAttribute('group');          
+          data.push([parent, element.checked]); // fill in list/array
+        });
+        fetch("/update_checkbox", {
           method: "POST",
           headers: {'Content-Type': 'application/json'}, 
           body: JSON.stringify(data)
         }).then(function(response) {
           $("body").css("cursor", "default"); /* default cursor */
-        });     
-        // to keep html in sync with DOM objects (not only on loading page)
-        if(event.target.checked)
-          event.target.setAttribute('checked', '')
-        else
-          event.target.removeAttribute('checked')
+        });          
       });
 
       $("tr[evindex='0']:not([evn='1']) td:nth-child(3)").wrap(function() {        

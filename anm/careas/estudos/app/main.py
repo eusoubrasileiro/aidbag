@@ -138,27 +138,33 @@ def details():
     print(f'process is {key}', file=sys.stderr)
     return ProcessStorage[key]._pages['basic']['html']   
 
-@app.route('/update', methods=['POST'])
-def update():
-    data = request.get_json()        
-    if 'state' in data: # checkbox state        
-        save(data['process'], data['state'], 'state ')
-    elif 'style' in data: # toggle style state
-        save(data['process'], data['style'], 'style')
+@app.route('/update_checkbox', methods=['POST'])
+def update_checkbox():
+    datapkg = request.get_json()  
+    for process, state in datapkg:          
+        update(process, state, 'state')
+    update('', '', '', save=True) # only save now on disk
     return Response(status=204)
 
-def save(processo, data, what='state'):    
-    """update cached estudo table and estudo file on disk"""    
-    table = cache.get('table')          
+@app.route('/update_events_view', methods=['POST'])
+def update_collapse():
+    data = request.get_json()        
+    update(data['process'], data['style'], 'style', save=True)
+    return Response(status=204)
+
+def update(processo, data, what='state', save=False):    
+    """update cached estudo table and estudo file on disk if `save=True`"""    
+    table = cache.get('table')       
     if table is not None:          
         if 'state' in what:
             table.loc[table.Processo == processo, 'Prior'] = '1' if data else '0'                
         if 'style' in what:                        
             table.loc[table.loc[table.Processo == processo].index[1:], 'style'] = f'display: {data}' 
-        cache.set('table', table)
-        table = prettyTabelaInterferenciaMaster(table, view=False)
-        with open(cache.get('json_path'), 'w') as f:
-            table.to_json(f)
+        cache.set('table', table)        
+        if save:        
+            table = prettyTabelaInterferenciaMaster(table, view=False)
+            with open(cache.get('json_path'), 'w') as f:
+                table.to_json(f)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
