@@ -183,7 +183,9 @@ def inferWork(process, folder):
     # search/parse process object
     if infos['pdf_interferencia']:
         pdf_interferencia_text = readPdfText(infos['pdf_interferencia'].absolute())
-        if 'ENGLOBAMENTO' in pdf_interferencia_text:
+        if '(Áreas de Bloqueio)' in  pdf_interferencia_text:
+            print(f" { process['NUP'] } com bloqueio ",file=sys.stderr)
+        elif 'ENGLOBAMENTO' in pdf_interferencia_text:
             infos['interferencia'] = 'ok' 
         else:
             area_text="PORCENTAGEM ENTRE ESTA ÁREA E A ÁREA ORIGINAL DO PROCESSO:" # para cada area poligonal 

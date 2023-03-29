@@ -74,6 +74,8 @@
 
       $(".copyprocess1, .copyprocess2").click(function(event) {
         event.preventDefault();
+        // property doesnt exist if not running from localhost or https 
+        // TODO: check -> window.isSecureContext and alert
         navigator.clipboard.writeText($(this).text());
       })
 

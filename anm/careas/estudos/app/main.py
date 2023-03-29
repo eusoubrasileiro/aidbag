@@ -75,9 +75,9 @@ def htmlTable(table):
             'group', 'evindex', 'evn', 'style']] 
     # rename columns 
     table.rename(columns={'DataPrior' : 'Protocolo'}, inplace=True)
-    row_attrs = ['Ativo', 'group', 'evindex', 'evn', 'style'] # List of columns to write as attributes in row element.
+    row_attrs = ['Ativo', 'group', 'evindex', 'evn', 'style'] # List of columns add as attributes in each row element.
     row_cols = table.columns.to_list() # List of columns to write as children in row element. By default, all columns
-    row_cols = [ v for v in row_cols if v not in ['group', 'evindex', 'evn', 'style'] ]        
+    row_cols = [ v for v in row_cols if v not in ['group', 'evindex', 'evn', 'style'] ] # dont use these as columns 
     html_table = dataframe_to_html(table, row_attrs, row_cols)
     # insert checkboxes on first row of each process 'Prior' column for click-check prioridade
     for main_row in html_table.findall(".//tbody/tr[@evindex='0']"):                    
@@ -122,7 +122,7 @@ def select():
         except RuntimeError:
             table = None
     cache.set('table', table)    
-    html_table = htmlTable(table) if table is not None else 'No table!'
+    html_table = htmlTable(table) if table is not None else '<h3>No interf. table!</h3>'
     response = make_response(render_template('index.html', processo=key, dados=ProcessStorage[key]._dados,
                 pandas_table=html_table) )
     # disable cache so checkbox and display hidden dont get cached
