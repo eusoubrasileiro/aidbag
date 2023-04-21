@@ -46,6 +46,7 @@ networkx
 ntlm-auth
 numpy
 outcome
+openpyxl
 packaging
 pandas
 parso
