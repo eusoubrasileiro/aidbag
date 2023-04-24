@@ -571,9 +571,6 @@ class ProcessFactoryStorageClass(dict):
     def __insert_to_sqlite(self, key):
         with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn: # context manager already commits and closes connection
             cursor = conn.cursor()    
-            # cursor.execute("SELECT * FROM storage WHERE name = ?", key)
-            # process_row = cursor.fetchone()
-            # if process_row:
             cursor.execute("INSERT INTO storage VALUES (?,?,?,?,?)", self[key].toSqliteTuple())   
             if self.debug:
                 print(f"Just inserted or modified {conn.total_changes} rows on database", file=sys.stderr)

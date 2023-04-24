@@ -51,7 +51,6 @@ def setCurrentProcessFolders():
 
 cache.set('selected', None)
 cache.set('table', None)
-cache.set('json_path', None)
 cache.set('done', False)
 setCurrentProcessFolders()
 
@@ -109,14 +108,11 @@ def select():
     if 'iestudo' not in processo: # status of finished priority check on table
         processo._dados.update( {'iestudo' : {'done' : False } })    
         processo.changed() # force database update
-    json_path = (pathlib.Path(wf.ProcessPathStorage[key]) / (config['interferencia']['file_prefix'] 
-                 + '_' + '_'.join([number, year])+'.json'))          
-    cache.set('json_path', json_path)
-    try: # json first         
-        table = pd.read_json(json_path)
-    except Exception as e: # legacy then         
+    if 'iestudo_table' in processo._dados: 
+        table = pd.read_json(processo._dados['iestudo_table'])
+    else:
         try:
-            print("Not using local json! Loading from legacy excel table.", file=sys.stderr)
+            print("Not using database json! Loading from legacy excel table.", file=sys.stderr)
             estudo = Interferencia.from_excel(wf.ProcessPathStorage[key])        
             table = estudo.tabela_interf_master
         except RuntimeError:
@@ -153,7 +149,8 @@ def update_collapse():
     return Response(status=204)
 
 def update(processo, data, what='state', save=False):    
-    """update cached estudo table and estudo file on disk if `save=True`"""    
+    """update cached estudo table and estudo file on database DADOS column 
+    if `save=True`"""    
     table = cache.get('table')       
     if table is not None:          
         if 'state' in what:
@@ -162,9 +159,10 @@ def update(processo, data, what='state', save=False):
             table.loc[table.loc[table.Processo == processo].index[1:], 'style'] = f'display: {data}' 
         cache.set('table', table)        
         if save:        
-            table = prettyTabelaInterferenciaMaster(table, view=False)
-            with open(cache.get('json_path'), 'w') as f:
-                table.to_json(f)
+            processo = ProcessStorage[cache.get('selected')]
+            table = prettyTabelaInterferenciaMaster(table, view=False)                 
+            processo._dados.update( {'iestudo_table' : table.to_json() }) # add or update 'iestudo_table' key   
+            processo.changed() # force database update for this process    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
