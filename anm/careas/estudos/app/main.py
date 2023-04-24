@@ -109,7 +109,7 @@ def select():
         processo._dados.update( {'iestudo' : {'done' : False } })    
         processo.changed() # force database update
     if 'iestudo_table' in processo._dados: 
-        table = pd.read_json(processo._dados['iestudo_table'])
+        table = pd.DataFrame.from_dict(processo._dados['iestudo_table'])
     else:
         try:
             print("Not using database json! Loading from legacy excel table.", file=sys.stderr)
@@ -161,8 +161,15 @@ def update(processo, data, what='state', save=False):
         if save:        
             processo = ProcessStorage[cache.get('selected')]
             table = prettyTabelaInterferenciaMaster(table, view=False)                 
-            processo._dados.update( {'iestudo_table' : table.to_json() }) # add or update 'iestudo_table' key   
+            processo._dados.update( {'iestudo_table' : table.to_dict() }) # add or update 'iestudo_table' key   
             processo.changed() # force database update for this process    
+
+@app.route('/get_ietable', methods=['POST'])
+def get_iestudo_table():
+    processo = ProcessStorage[cache.get('selected')]
+    if 'iestudo_table' in processo._dados:
+        return processo['iestudo_table'] # json iestudo table 
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
