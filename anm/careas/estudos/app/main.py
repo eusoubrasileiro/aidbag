@@ -56,6 +56,8 @@ def setCurrentProcessFolders():
 cache.set('selected', None)
 cache.set('table', None)
 cache.set('done', False)
+cache.set('dbloaded', 0)
+cache.set('time_spent', int(999e6))
 setCurrentProcessFolders()
 
 
@@ -92,11 +94,20 @@ def htmlTable(table):
     html_table = etree.tostring(html_table, encoding='unicode', method='xml')         
     return html_table   
 
+
 @app.route('/', methods=['GET'])
-def chooseProcess():        
-    dbloaded, time_spent = ProcessStorageUpdate(False, background=False) # update processes from sqlite database
-    wf.ProcessPathStorage.clear() # update processes folder from working folder
-    setCurrentProcessFolders()
+def chooseProcess():                  
+    fast_refresh = request.headers.get('fast-refresh', 'false')  # use request header information identify it
+    if fast_refresh == 'true': # frequent refresh by setInterval javascript 15 seconds
+        print("Making a fast-refresh", file=sys.stderr)
+    else:         
+        print("Making a slow-refresh re-reading the entire database", file=sys.stderr)
+        dbloaded, time_spent = ProcessStorageUpdate(False, background=False) # update processes from sqlite database    
+        cache.set('dbloaded', dbloaded)
+        cache.set('time_spent', time_spent)
+    dbloaded = cache.get('dbloaded')
+    time_spent = cache.get('time_spent')
+    setCurrentProcessFolders()  # update processes folder from working folder
     return render_template('index.html', 
                 processos_list=cache.get('processos_list'), 
                 work_folder=config['processos_path'],
@@ -189,6 +200,9 @@ def iestudo_finish():
     processo._dados.update( {'iestudo' : {'done' : True } })
     processo.changed() # force database update
     return Response(status=204)
+
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

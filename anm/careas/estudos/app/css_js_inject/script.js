@@ -9,10 +9,15 @@
 checked_dict = {}; // get dict of processes marked on database
 var mainprocess;
 
+function getmainprocess(){
+    // Needs aidbag anm estudos work app running on localhost
+    return $("table#ctl00_cphConteudo_gvLowerLeft tbody tr td:first-child")[0].innerText;
+}
+
 function highlight_checkboxes_prioridade(){
-  // Needs aidbag anm estudos work app running on localhost
-  mainprocess = $("table#ctl00_cphConteudo_gvLowerLeft tbody tr td:first-child")[0].innerText;
+
   console.log(`Process in analysis is ${mainprocess}`)
+  mainprocess = getmainprocess();
   fetch(`http://127.0.0.1:5000/get_prioridade?process=${mainprocess}`)
   .then(res => res.json()
   .then( data => { 
@@ -35,13 +40,15 @@ function highlight_checkboxes_prioridade(){
 }
 
 $( document ).ready(function() {
-  // to count number of of checkboxes checked and unchecked
+
+  // navbar to count number of of checkboxes checked and unchecked
   const header_html = `
-    <div class="navbar">
-        <div class="count-checkboxes-wrapper"> checkboxes
-          total: <span id="count-checkboxes">0</span> 
-          checked: <span id="count-checked-checkboxes">0</span>
-        </div>
+    <div class="navbarcontainer">
+      <div class="navbar">
+          <div class="navrow h1"> ${getmainprocess()} </div>
+          <div class="navrow h2"> checkboxes <span id="count-checkboxes">0</span> </div> 
+          <div class="navrow h2"> checked <span id="count-checked-checkboxes">0</span> </div>        
+      </div>
     </div>
   `;
   document.querySelector("body").insertAdjacentHTML("afterbegin", header_html);  
@@ -73,6 +80,9 @@ $( document ).ready(function() {
       highlight_checkboxes_prioridade();
     }
   });
+
+  // force refresh of checkboxes navbar
+  $checkboxes.change();
 
 });
 

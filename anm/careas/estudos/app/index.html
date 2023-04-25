@@ -77,7 +77,24 @@
         // property doesnt exist if not running from localhost or https 
         // TODO: check -> window.isSecureContext and alert
         navigator.clipboard.writeText($(this).text());
-      })
+      });      
+
+      function update_iestudo_status() {
+        // use custom headers to sign that this is a fast refresh
+        // don't need to reload the database
+        fetch('/', {
+          headers: {
+            'fast-refresh': 'true'
+          }
+        }).then(function(response) {          
+          return response.text();
+        })
+        .then(function(html) {
+          document.documentElement.innerHTML = html;
+        });
+      }
+      // code to be executed every 15 seconds
+      setInterval(update_iestudo_status, 15000);
 
     });
 
@@ -87,10 +104,14 @@
       document.title = "Work"; /* set window name to easy work */
     {% endif %} 
 
+
+
     // F5 or refresh page event: changes the cursor
     $(window).on("beforeunload", function() {
       $("*").css("cursor", "progress");      
     });    
+
+
 
   </script>
   <style>
@@ -209,6 +230,8 @@
             <div class="col">
               {% if 'iestudo' in dados_ and dados_['iestudo']['done'] %}
               <a id="iestudo">&#9989;</a>            
+              {% elif 'iestudo' in dados_ and dados_['iestudo']['doing'] %}
+              <a id="iestudo">&#x23F3;</a>                         
               {% else %}
               <a id="iestudo">&#10060;</a>
               {% endif %}
@@ -223,7 +246,7 @@
       <div>{{ work_folder }} </div>
     </div>
   <div style="display:flex;color: cornflowerblue;">
-    <div>Press F5 to reload</div>
+    <div>Press F5 to reload database</div>    
   </div>    
   <footer>Loaded {{ dbloaded }} processes from database in {{ time_spent }} seconds. </footer>  
   {% else %}    

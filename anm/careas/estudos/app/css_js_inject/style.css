@@ -1,15 +1,37 @@
 body {  
-    padding-top: 20px;   /* avoid navbar overlapping content  */
-    margin: 0; 
+  padding-top: 70px;   /* avoid navbar overlapping content  */
+  margin: 0; 
 }
-
-.navbar { 
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  background-color: gray;
-  position: fixed;
+.navbarcontainer {  
+  right: 0;  
   top: 0;
+  position: fixed;
+  overflow: hidden;
+  background-color: gray;  
+}
+.navbar {   
+  display: flex;      
+  flex-direction: column;  
   width: 100%;
-  height: 20px;
+  height: 70px;
+}
+.navrow {
+  margin-left: auto;
+  display: flex;
+  flex-direction: row;
+  column-gap: 5px;
+  row-gap: 0px;
+}
+.h1 {
+  font-weight: bold;
+  font-size: 14px;
+  font-family: system-ui;
+  color: white;    
+  padding: 4px;
+}
+.h2 {  
+  font-family: system-ui;
+  font-size: 14px;
+  color: blue;    
+  padding: 4px;
 }
