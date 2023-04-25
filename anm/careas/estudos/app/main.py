@@ -167,6 +167,10 @@ def update(processo, data, what='state', save=False):
             processo._dados.update( {'iestudo_table' : table.to_dict() }) # add or update 'iestudo_table' key   
             processo.changed() # force database update for this process    
 
+#
+# routines regarding the `css_js_inject` chrome extension helper injection tool
+#
+
 @app.route('/get_prioridade', methods=['GET'])  # like /get_prioridade?process=830.691/2023
 def get_prioridade():
     """return list (without dot on name) of interferentes with process if checked-market or not
@@ -177,6 +181,14 @@ def get_prioridade():
         dict_ = pd.DataFrame.from_dict(processo._dados['iestudo_table']).groupby("Processo", sort=False).first().to_dict()['Prior'] # json iestudo table 
         return { key.replace(".", "") : value for key, value in dict_.items() } # remove dot for javascript use
 
+@app.route('/iestudo_finish', methods=['GET'])  
+def iestudo_finish():
+    """css_js_inject tool reports estudo finished"""
+    key = request.args.get('process')    
+    processo = ProcessStorage[fmtPname(key)] # since html comes without dot
+    processo._dados.update( {'iestudo' : {'done' : True } })
+    processo.changed() # force database update
+    return Response(status=204)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

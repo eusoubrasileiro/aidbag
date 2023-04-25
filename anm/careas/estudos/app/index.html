@@ -162,10 +162,33 @@
     .container li {
       background: burlywood;
       text-decoration: none;
-      justify-content: baseline;
+      align-items: center;
+      flex-shrink: 0; 
       display: flex;      
       padding: 0.5em;      
       border: 3px solid white;
+    }
+    .SCM
+    {
+      font-weight: bold;
+      font-size: 14px;
+      color: #ffffff;
+      font-family: Tahoma;
+      background-color: #668DB1;
+      padding: 4px;
+    }
+    .flexcontainer, .row 
+    {
+      display: flex;      
+      align-items: center;
+      align-content: center;
+      gap: 15px;
+    }
+    .col {
+      flex-shrink: 0; 
+      align-items: center;
+      display: flex;
+      gap: 5px;
     }
   </style>  
 </head> 
@@ -174,7 +197,25 @@
     <h2>Pick a process</h2>
     <ol>
     {% for process_, dados_ in processos_list %}  
-      <li><a href="/select?selected={{ process_.replace('/','-') }}" target="_blank">{{ process_ }}</a> &#9830; SEI: <a class="copyprocess1" href="/copynup" >{{ dados_['NUP'] }} </a> &#9830; <a href='/process?process={{ process_ }}' target="_blank">SCM</a></li>
+      <li>
+        <div class="flexcontainer">
+          <div class="row">
+            <div class="col"> <a href="/select?selected={{ process_.replace('/','-') }}" target="_blank">{{ process_ }}</a> </div>
+            <div class="col"> 
+              <div><img src="https://sei.anm.gov.br/imagens/sei_logo_azul_celeste.jpg"></div>
+              <div><a class="copyprocess1" href="/copynup" >{{ dados_['NUP'] }} </a> </div>
+            </div>
+            <div class="col"> <a class="SCM" href='/process?process={{ process_ }}' target="_blank">SCM</a> </div>
+            <div class="col">
+              {% if 'iestudo' in dados_ and dados_['iestudo']['done'] %}
+              <a id="iestudo">&#9989;</a>            
+              {% else %}
+              <a id="iestudo">&#10060;</a>
+              {% endif %}
+            </div>  
+          </div>
+        </div>
+      </li>
       {% endfor %}
     </ol>
     <div style="display:flex;">
@@ -197,7 +238,14 @@
           {{ 'None' }}
         {% endif %}
       </a> </li>
-      <li> <a id="iestudo">Done</a> </li>     
+      <li>          
+          {% if dados['iestudo']['done'] %}
+          <a id="iestudo">&#9989;</a>            
+          {% else %}
+          <a id="iestudo">&#10060;</a>
+          {% endif %}
+        </a> 
+      </li>     
     </ul>     
     {{ pandas_table|safe }}     
   {% endif %}    
