@@ -23,6 +23,8 @@ from flask import (
         Response
     )
 
+from flask_cors import CORS
+
 from ...config import config
 from ... import workflows as wf 
 from .....web.pandas_html import dataframe_to_html 
@@ -39,6 +41,8 @@ from ...estudos.interferencia import (
 curpath = os.path.dirname(os.path.abspath(__file__))
    
 app = Flask(__name__, template_folder=curpath)
+# to allow the anm domain (js,html injection) request this app on localhost
+CORS(app) # This will enable CORS for all routes
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 30*60 # 30 mins in seconds
 app.config['CACHE_TYPE'] = 'SimpleCache'  # only 1 connection (1 thread/session/client)
 cache = Cache(app)
@@ -102,8 +106,7 @@ def chooseProcess():
 @app.route('/select', methods=['GET'])
 def select():    
     cache.set('selected', fmtPname(request.args.get('selected')))
-    key = cache.get('selected')
-    number, year = numberyearPname(key)
+    key = cache.get('selected')    
     processo = ProcessStorage[key]
     if 'iestudo' not in processo: # status of finished priority check on table
         processo._dados.update( {'iestudo' : {'done' : False } })    
@@ -128,7 +131,7 @@ def select():
     response.headers['Cache-Control'] = 'public, max-age=0'
     return response
 
-@app.route('/process', methods=['GET'])
+@app.route('/process', methods=['GET']) # like /process?process=830.691/2023
 def details():
     key = request.args.get('process')
     print(f'process is {key}', file=sys.stderr)
@@ -164,11 +167,15 @@ def update(processo, data, what='state', save=False):
             processo._dados.update( {'iestudo_table' : table.to_dict() }) # add or update 'iestudo_table' key   
             processo.changed() # force database update for this process    
 
-@app.route('/get_ietable', methods=['POST'])
-def get_iestudo_table():
-    processo = ProcessStorage[cache.get('selected')]
-    if 'iestudo_table' in processo._dados:
-        return processo['iestudo_table'] # json iestudo table 
+@app.route('/get_prioridade', methods=['GET'])  # like /get_prioridade?process=830.691/2023
+def get_prioridade():
+    """return list (without dot on name) of interferentes with process if checked-market or not
+    for use on css_js_inject tool"""
+    key = request.args.get('process')    
+    processo = ProcessStorage[fmtPname(key)] # since html comes without dot
+    if 'iestudo_table' in processo._dados:        
+        dict_ = pd.DataFrame.from_dict(processo._dados['iestudo_table']).groupby("Processo", sort=False).first().to_dict()['Prior'] # json iestudo table 
+        return { key.replace(".", "") : value for key, value in dict_.items() } # remove dot for javascript use
 
 
 if __name__ == "__main__":
