@@ -7,8 +7,8 @@
     crossorigin="anonymous">
   </script>
   <script language="javascript" type="text/javascript">
-
-    $(window).on("load", function() {
+    
+    function load_everything(){
 
       $("tbody tr[evindex='0']").each(function(index) { /* add class c1/c2 even/odd rows */
         if (index % 2 === 0) { 
@@ -49,7 +49,7 @@
               $("body").css("cursor", "default"); /* default cursor */
             });     
           }); 
-        }        
+        }                
       });
 
       $("input[type='checkbox']").click(function(event) {
@@ -96,26 +96,29 @@
             // document.body.innerHTML - could try this to avoid replacing the entire html
             // would not work --- scripts, listeners would break
             // only react etc. to rewrite all this messy code
+            load_everything();
           });
       }
       // code to be executed every 15 seconds
       setInterval(update_iestudo_status, 15000);
 
+      {% if processo is defined %}
+        document.title = "{{ processo }}"; /* set window name to easy work */
+      {% else %}  
+        document.title = "Work"; /* set window name to easy work */
+      {% endif %} 
+
+      // F5 or refresh page event: changes the cursor
+      $(window).on("beforeunload", function() {
+        $("*").css("cursor", "progress");      
+      });  
+
+    }
+
+    $(document).ready(function(){
+      // due update_iestudo_status replacing entire innerHTML 
+      load_everything();
     });
-
-    {% if processo is defined %}
-      document.title = "{{ processo }}"; /* set window name to easy work */
-    {% else %}  
-      document.title = "Work"; /* set window name to easy work */
-    {% endif %} 
-
-
-
-    // F5 or refresh page event: changes the cursor
-    $(window).on("beforeunload", function() {
-      $("*").css("cursor", "progress");      
-    });    
-
 
 
   </script>
@@ -232,6 +235,7 @@
               <div><a class="copyprocess1" href="/copynup" >{{ dados_['NUP'] }} </a> </div>
             </div>
             <div class="col"> <a class="SCM" href='/process?process={{ process_ }}' target="_blank">SCM</a> </div>
+            <div class="col"> {{ dados_['tipo'] }} </div>
             <div class="col">
               {% if 'iestudo' in dados_ and dados_['iestudo']['done'] %}
               <a id="iestudo">&#9989;</a>            

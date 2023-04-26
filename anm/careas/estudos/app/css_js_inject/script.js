@@ -39,52 +39,54 @@ function highlight_checkboxes_prioridade(){
     });  
 }
 
-$( document ).ready(function() {
+// to make sure we are at r. interferencia page not estudo=10,2,3,5 or any other 
+if(document.querySelector('body form').getAttribute('action') == 'Mapa.aspx?estudo=1')
+  $( document ).ready(function() {
 
-  // navbar to count number of of checkboxes checked and unchecked
-  const header_html = `
-    <div class="navbarcontainer">
-      <div class="navbar">
-          <div class="navrow h1"> ${getmainprocess()} </div>
-          <div class="navrow h2"> checkboxes <span id="count-checkboxes">0</span> </div> 
-          <div class="navrow h2"> checked <span id="count-checked-checkboxes">0</span> </div>        
+    // navbar to count number of of checkboxes checked and unchecked
+    const header_html = `
+      <div class="navbarcontainer">
+        <div class="navbar">
+            <div class="navrow h1"> ${getmainprocess()} </div>
+            <div class="navrow h2"> checkboxes <span id="count-checkboxes">0</span> </div> 
+            <div class="navrow h2"> checked <span id="count-checked-checkboxes">0</span> </div>        
+        </div>
       </div>
-    </div>
-  `;
-  document.querySelector("body").insertAdjacentHTML("afterbegin", header_html);  
-  var $checkboxes = $("table#ctl00_cphConteudo_gvLowerRight tbody tr td input[type='checkbox']");
-  var total = $checkboxes.length;
-  $('#count-checkboxes').text(total);    
-  $checkboxes.change(function(){
-    let countCheckedCheckboxes = $checkboxes.filter(':checked').length;
-    $('#count-checked-checkboxes').text(countCheckedCheckboxes);
+    `;
+    document.querySelector("body").insertAdjacentHTML("afterbegin", header_html);  
+    var $checkboxes = $("table#ctl00_cphConteudo_gvLowerRight tbody tr td input[type='checkbox']");
+    var total = $checkboxes.length;
+    $('#count-checkboxes').text(total);    
+    $checkboxes.change(function(){
+      let countCheckedCheckboxes = $checkboxes.filter(':checked').length;
+      $('#count-checked-checkboxes').text(countCheckedCheckboxes);
+    });
+
+    highlight_checkboxes_prioridade();
+
+    // adding callback to update on database when estudo is finished 9th and 10th tr on toolbar
+    document.onmousedown = function (event) {
+      if (!event) {event = window.event;}
+      // console.info("mousedown  target is "+ event.target + " target parent is " + event.target.parentElement + " parent attributes");
+      parent_id = event.target.parentElement.getAttribute("id")
+      console.log("parent id attribute " + parent_id);
+      if (parent_id == 'ctl00_cphConteudo_Toolbar1ExecutarEstudo' || 
+          parent_id == 'ctl00_cphConteudo_Toolbar1GerarRelatorio' ||
+          parent_id == 'ctl00_cphConteudo_Toolbar1FinalizarEstudo' )
+        fetch(`http://127.0.0.1:5000/iestudo_finish?process=${mainprocess}`); // make database know this estudo is finished
+    };
+
+    // didn't load list of checkbox reload it on ENTER
+    $(document).keypress(function(e) { 
+      if(e.which == 13) {
+        highlight_checkboxes_prioridade();
+      }
+    });
+
+    // force refresh of checkboxes navbar
+    $checkboxes.change();
+
   });
-
-  highlight_checkboxes_prioridade();
-
-  // adding callback to update on database when estudo is finished 9th and 10th tr on toolbar
-  document.onmousedown = function (event) {
-    if (!event) {event = window.event;}
-    // console.info("mousedown  target is "+ event.target + " target parent is " + event.target.parentElement + " parent attributes");
-    parent_id = event.target.parentElement.getAttribute("id")
-    console.log("parent id attribute " + parent_id);
-    if (parent_id == 'ctl00_cphConteudo_Toolbar1ExecutarEstudo' || 
-        parent_id == 'ctl00_cphConteudo_Toolbar1GerarRelatorio' ||
-        parent_id == 'ctl00_cphConteudo_Toolbar1FinalizarEstudo' )
-      fetch(`http://127.0.0.1:5000/iestudo_finish?process=${mainprocess}`); // make database know this estudo is finished
-  };
-
-  // didn't load list of checkbox reload it on ENTER
-  $(document).keypress(function(e) { 
-    if(e.which == 13) {
-      highlight_checkboxes_prioridade();
-    }
-  });
-
-  // force refresh of checkboxes navbar
-  $checkboxes.change();
-
-});
 
 
 
