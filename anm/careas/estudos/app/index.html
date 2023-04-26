@@ -82,16 +82,17 @@
       function update_iestudo_status() {
         // use custom headers to sign that this is a fast refresh
         // don't need to reload the database
-        fetch('/', {
-          headers: {
-            'fast-refresh': 'true'
-          }
-        }).then(function(response) {          
-          return response.text();
-        })
-        .then(function(html) {
-          document.documentElement.innerHTML = html;
-        });
+        if(window.location.pathname == '/')
+          fetch('/', {
+            headers: {
+              'fast-refresh': 'true'
+            }
+          }).then(function(response) {          
+            return response.text();
+          })
+          .then(function(html) {
+            document.documentElement.innerHTML = html;
+          });
       }
       // code to be executed every 15 seconds
       setInterval(update_iestudo_status, 15000);
