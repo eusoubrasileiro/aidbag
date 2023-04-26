@@ -57,7 +57,7 @@ cache.set('selected', None)
 cache.set('table', None)
 cache.set('done', False)
 cache.set('dbloaded', 0)
-cache.set('time_spent', int(999e6))
+cache.set('time_spent', 99999.99e6)
 setCurrentProcessFolders()
 
 
@@ -104,15 +104,13 @@ def chooseProcess():
         print("Making a slow-refresh re-reading the entire database", file=sys.stderr)
         dbloaded, time_spent = ProcessStorageUpdate(False, background=False) # update processes from sqlite database    
         cache.set('dbloaded', dbloaded)
-        cache.set('time_spent', time_spent)
-    dbloaded = cache.get('dbloaded')
-    time_spent = cache.get('time_spent')
+        cache.set('time_spent', round(time_spent,2))
     setCurrentProcessFolders()  # update processes folder from working folder
     return render_template('index.html', 
                 processos_list=cache.get('processos_list'), 
                 work_folder=config['processos_path'],
                 dados=None,
-                dbloaded=dbloaded, time_spent=round(time_spent,2))
+                dbloaded=cache.get('dbloaded'), time_spent=cache.get('time_spent'))
 
 @app.route('/select', methods=['GET'])
 def select():    

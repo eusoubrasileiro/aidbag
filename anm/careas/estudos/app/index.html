@@ -4,7 +4,8 @@
   <script
     src="https://code.jquery.com/jquery-3.6.1.min.js"
     integrity="sha256-o88AwQnZB+VDvE9tvIXrMQaPlFFSUTR+nldQm1LuPXQ="
-    crossorigin="anonymous"></script>
+    crossorigin="anonymous">
+  </script>
   <script language="javascript" type="text/javascript">
 
     $(window).on("load", function() {
@@ -92,6 +93,9 @@
           })
           .then(function(html) {
             document.documentElement.innerHTML = html;
+            // document.body.innerHTML - could try this to avoid replacing the entire html
+            // would not work --- scripts, listeners would break
+            // only react etc. to rewrite all this messy code
           });
       }
       // code to be executed every 15 seconds
