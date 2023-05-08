@@ -9,6 +9,8 @@
 checked_dict = {}; // get dict of processes marked on database
 var mainprocess;
 
+const backend_url = 'http://127.0.0.1:5000/flask'
+
 function getmainprocess(){
     // Needs aidbag anm estudos work app running on localhost
     return $("table#ctl00_cphConteudo_gvLowerLeft tbody tr td:first-child")[0].innerText;
@@ -18,7 +20,7 @@ function highlight_checkboxes_prioridade(){
 
   console.log(`Process in analysis is ${mainprocess}`)
   mainprocess = getmainprocess();
-  fetch(`http://127.0.0.1:5000/get_prioridade?process=${mainprocess}`)
+  fetch(`${backend_url}/get_prioridade?process=${mainprocess}`)
   .then(res => res.json()
   .then( data => { 
     checked_dict = data
@@ -64,17 +66,17 @@ if(document.querySelector('body form').getAttribute('action') == 'Mapa.aspx?estu
 
     highlight_checkboxes_prioridade();
 
-    // adding callback to update on database when estudo is finished 9th and 10th tr on toolbar
-    document.onmousedown = function (event) {
-      if (!event) {event = window.event;}
-      // console.info("mousedown  target is "+ event.target + " target parent is " + event.target.parentElement + " parent attributes");
-      parent_id = event.target.parentElement.getAttribute("id")
-      console.log("parent id attribute " + parent_id);
-      if (parent_id == 'ctl00_cphConteudo_Toolbar1ExecutarEstudo' || 
-          parent_id == 'ctl00_cphConteudo_Toolbar1GerarRelatorio' ||
-          parent_id == 'ctl00_cphConteudo_Toolbar1FinalizarEstudo' )
-        fetch(`http://127.0.0.1:5000/iestudo_finish?process=${mainprocess}`); // make database know this estudo is finished
-    };
+  // adding callback to update on database when estudo is finished 9th and 10th tr on toolbar
+  document.onmousedown = function (event) {
+    if (!event) {event = window.event;}
+    // console.info("mousedown  target is "+ event.target + " target parent is " + event.target.parentElement + " parent attributes");
+    parent_id = event.target.parentElement.getAttribute("id")
+    console.log("parent id attribute " + parent_id);
+    if (parent_id == 'ctl00_cphConteudo_Toolbar1ExecutarEstudo' || 
+        parent_id == 'ctl00_cphConteudo_Toolbar1GerarRelatorio' ||
+        parent_id == 'ctl00_cphConteudo_Toolbar1FinalizarEstudo' )
+      fetch(`${backend_url}/iestudo_finish?process=${mainprocess}`); // make database know this estudo is finished
+  };
 
     // didn't load list of checkbox reload it on ENTER
     $(document).keypress(function(e) { 

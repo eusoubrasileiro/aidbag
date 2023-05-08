@@ -49,8 +49,10 @@ def prettyTabelaInterferenciaMaster(tabela_interf_eventos, view=True):
     dataformat = (lambda x: x.strftime("%d/%m/%Y %H:%M:%S"))
     if is_datetime(table.Data):        
         table.Data = table.Data.apply(dataformat)
-    if is_datetime(table.DataPrior):        
+    if hasattr(table, 'DataPrior') and is_datetime(table.DataPrior):        
         table.DataPrior = table.DataPrior.apply(dataformat)    
+    if hasattr(table, 'Protocolo') and is_datetime(table.Protocolo):        
+        table.Protocolo = table.Protocolo.apply(dataformat) 
     table.fillna('', inplace=True) # fill nan to ''
     table = table.astype(str)    
     if view:
