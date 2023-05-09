@@ -6,33 +6,25 @@ python -m aidbag.anm.careas.estudos.app.main
 or to run on background
 nohup python -m aidbag.anm.careas.estudos.app.main 
 """
-from inspect import trace
 import os, sys 
 import pandas as pd 
 import argparse
-import pathlib
-from threading import Thread
-import xml.etree.ElementTree as etree
 
+from flask_cors import CORS
 from flask_caching import Cache
 from flask import (
-        make_response,
         Flask, 
-        render_template, 
         request, 
         Response
     )
 
-from flask_cors import CORS
-
 from ...config import config
 from ... import workflows as wf 
-from .....web.pandas_html import dataframe_to_html 
 from ...scm.processo import (
         ProcessStorageUpdate,
         ProcessStorage
     )
-from ...scm.util import fmtPname, numberyearPname
+from ...scm.util import fmtPname
 from ...estudos.interferencia import (
         Interferencia, 
         prettyTabelaInterferenciaMaster
@@ -47,134 +39,144 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 30*60 # 30 mins in seconds
 app.config['CACHE_TYPE'] = 'SimpleCache'  # only 1 connection (1 thread/session/client)
 cache = Cache(app)
 
-def setCurrentProcessFolders():        
-    processos = [] 
-    for process in wf.currentProcessGet():
-        processos.append((process, ProcessStorage[process].dict_dados()))    
-    cache.set('processos_list', processos)
 
-cache.set('selected', None)
-cache.set('table', None)
-cache.set('done', False)
-cache.set('dbloaded', 0)
-cache.set('time_spent', 99999.99e6)
-setCurrentProcessFolders()
-
-
-def htmlTable(table): 
-    """crate a html code for a pretty view of dataframe `table` """
+def htmlTableList(table): 
+    """create data to be send as JSON to frontend to create <table><tr><th><td> etc. """
     # additional columns created for stilying or UI/UX with css, jquery, jscript
+    if table is None: 
+        return None 
     table = table.copy()
-    table['group'] = table.Processo # which process group it belongs
     table['evindex'] = None 
-    table['evn'] = None 
-    if 'style' not in table.columns: # legay table or jsons
-        table['style'] = '' # missing column for display porpouses     
+    table['evn'] = None   
     for _, group in table.groupby(table.Processo):
         table.loc[group.index, 'evn'] = len(group) 
-        table.loc[group.index, 'evindex'] = list(range(len(group)))
-    table = prettyTabelaInterferenciaMaster(table, view=True)  # some prettify     
+        table.loc[group.index, 'evindex'] = list(range(len(group)))        
     # for backward compatibility rearrange columns
     table = table[['Prior', 'Ativo', 'Processo', 'Evento', 'EvSeq', 'Descrição', 'Data', 
             'DataPrior', 'EvPrior', 'Inativ', 'Obs', 'DOU', 'Dads', 'Sons',
-            'group', 'evindex', 'evn', 'style']] 
+            'evindex', 'evn']] 
     # rename columns 
-    table.rename(columns={'DataPrior' : 'Protocolo'}, inplace=True)
-    row_attrs = ['Ativo', 'group', 'evindex', 'evn', 'style'] # List of columns add as attributes in each row element.
+    if 'DataPrior' in table.columns:
+        table.rename(columns={'DataPrior' : 'Protocolo'}, inplace=True)
+    row_attrs = ['Ativo', 'evindex', 'evn'] # List of columns add as attributes in each row element.
     row_cols = table.columns.to_list() # List of columns to write as children in row element. By default, all columns
-    row_cols = [ v for v in row_cols if v not in ['group', 'evindex', 'evn', 'style'] ] # dont use these as columns 
-    html_table = dataframe_to_html(table, row_attrs, row_cols)
-    # insert checkboxes on first row of each process 'Prior' column for click-check prioridade
-    for main_row in html_table.findall(".//tbody/tr[@evindex='0']"):                    
-        if '1' in main_row[0].text:            
-            etree.SubElement(main_row[0], "input", { 'type': 'checkbox', 'checked': ''}) 
+    row_cols = [ v for v in row_cols if v not in ['evindex', 'evn'] ] # dont use these as columns 
+    table_pretty = prettyTabelaInterferenciaMaster(table, view=True)  # some prettify
+    # States information using pretty table (checkboxes, eventview)
+    query = table_pretty.query("Prior != ''")[['Processo', 'Prior']]
+    checkboxes = { tp.Processo: True if (tp.Prior=='1') else False  for (i,tp) in query.iterrows()}
+    eventview = { tp.Processo: True for (i,tp) in query.iterrows()} # create default view all
+    indexes = query.index.values.astype(str)
+    groups = list(zip(indexes[:-1],indexes[1:]))
+    # process group rows indexes start/end  
+    groupindexes = dict(zip(query.Processo, groups+[[indexes[-1],str(table_pretty.shape[0])]]))    
+    states = {'checkboxes' : checkboxes, 'eventview' : eventview, 'groupindexes' : groupindexes}
+    return table_pretty[row_cols].values.tolist(), row_cols, table[row_attrs].values.tolist(), row_attrs, states 
+
+
+@app.route('/flask/analyze', methods=['POST'])
+def startTableAnalysis():
+    name = request.get_json()['name']
+    processobj = ProcessStorage[name]
+    data = processobj.dict_dados()
+    table_pd = None # pandas table
+    if 'iestudo' not in data: # status of finished priority check on table
+        iestudo = {'iestudo' : {'done' : False } }        
+        processobj._dados.update(iestudo)  
+        processobj.changed() # db save
+        data.update(iestudo)
+    if 'iestudo' in data and 'table' in data['iestudo']: 
+        table_pd = pd.DataFrame.from_dict(data['iestudo']['table'])
+    else:
+        try:
+            print(f"{data['NUP']} Not using database json! Loading from legacy excel table.", file=sys.stderr)
+            estudo = Interferencia.from_excel(wf.ProcessPathStorage[name])        
+            table_pd = estudo.tabela_interf_master
+            table_pd = prettyTabelaInterferenciaMaster(table_pd, view=False)
+            processobj._dados.update({'iestudo' : { 'table' : table_pd.to_dict() }})  
+            processobj.changed() # db save
+        except RuntimeError:
+            table_pd = None
+    if table_pd is not None:      
+        # those are payload data dont mistake it with the real dados dict saved on database
+        # ONLY: 'states' and 'table' pandas dict are saved on database dados dict      
+        table, headers, attrs, attrs_names, states = htmlTableList(table_pd)                    
+        data['iestudo']['table'] = table                                    
+        data['iestudo']['headers'] = headers            
+        data['iestudo']['attrs'] = attrs
+        data['iestudo']['attrs_names'] = attrs_names
+        # states 'checkboxes''eventview'will be saved on DB when onClick or onChange
+        if 'states' in data['iestudo']: 
+            # ['groupindexes'] is not saved on DB but we need it to plot
+            data['iestudo']['states'].update({'groupindexes' : states['groupindexes']})
+            if not 'checkboxes' in data['iestudo']['states']:
+                data['iestudo']['states'].update({'checkboxes' : states['checkboxes']})
+            if not 'eventview' in data['iestudo']['states']:
+                data['iestudo']['states'].update({'eventview' : states['eventview']})
         else:
-            etree.SubElement(main_row[0], "input", { 'type': 'checkbox'})  
-        main_row[0].text = ''   
-    html_table = etree.tostring(html_table, encoding='unicode', method='xml')         
-    return html_table   
+            data['iestudo']['states'] = states
+    return data 
+
+def setCurrentProcessFolders():        
+    processos = {} 
+    for process in wf.currentProcessGet():
+        processobj = ProcessStorage[process]
+        dados = processobj.dict_dados() # must be able to cache no obj reference
+        processos.update({process : dados})  
+    cache.set('processos_dict', processos)
 
 
-@app.route('/', methods=['GET'])
-def chooseProcess():                  
+@app.route('/flask/list', methods=['GET'])
+def getProcessos():                  
     fast_refresh = request.headers.get('fast-refresh', 'false')  # use request header information identify it
     if fast_refresh == 'true': # frequent refresh by setInterval javascript 15 seconds
         print("Making a fast-refresh", file=sys.stderr)
     else:         
         print("Making a slow-refresh re-reading the entire database", file=sys.stderr)
-        dbloaded, time_spent = ProcessStorageUpdate(False, background=False) # update processes from sqlite database    
+        dbloaded, timespent = ProcessStorageUpdate(False, background=False) # update processes from sqlite database    
         cache.set('dbloaded', dbloaded)
-        cache.set('time_spent', round(time_spent,2))
-    setCurrentProcessFolders()  # update processes folder from working folder
-    return render_template('index.html', 
-                processos_list=cache.get('processos_list'), 
-                work_folder=config['processos_path'],
-                dados=None,
-                dbloaded=cache.get('dbloaded'), time_spent=cache.get('time_spent'))
+        cache.set('timespent', round(timespent,2))
+        setCurrentProcessFolders()  # update processes folder from working folder
+    return { 
+            'processos' : cache.get('processos_dict'),
+            'status'    : { 
+                'workfolder' : config['processos_path'],             
+                'dbloaded' : cache.get('dbloaded'), 
+                'timespent' : cache.get('timespent') 
+                }
+            }
 
-@app.route('/select', methods=['GET'])
-def select():    
-    cache.set('selected', fmtPname(request.args.get('selected')))
-    key = cache.get('selected')    
-    processo = ProcessStorage[key]
-    if 'iestudo' not in processo: # status of finished priority check on table
-        processo._dados.update( {'iestudo' : {'done' : False } })    
-        processo.changed() # force database update
-    if 'iestudo_table' in processo._dados: 
-        table = pd.DataFrame.from_dict(processo._dados['iestudo_table'])
-    else:
-        try:
-            print("Not using database json! Loading from legacy excel table.", file=sys.stderr)
-            estudo = Interferencia.from_excel(wf.ProcessPathStorage[key])        
-            table = estudo.tabela_interf_master
-        except RuntimeError:
-            table = None
-    cache.set('table', table)    
-    html_table = htmlTable(table) if table is not None else '<h3>No interf. table!</h3>'
-    response = make_response(render_template('index.html', processo=key, dados=ProcessStorage[key]._dados,
-                pandas_table=html_table) )
-    # disable cache so checkbox and display hidden dont get cached
-    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
-    response.headers['Cache-Control'] = 'public, max-age=0'
-    return response
+def updatedb(name, data, what='eventview', save=False):    
+    """update cached estudo table and estudo file on database DADOS column"""    
+    process = ProcessStorage[name]            
+    iestudo = {}
+    if 'iestudo' in process._dados:
+        iestudo = process._dados['iestudo']    
+        if 'states' not in iestudo:
+            iestudo['states'] = {}
+        if 'checkboxes' in what:            
+            iestudo['states'].update({'checkboxes' : data })
+        elif 'eventview' in what:
+            iestudo['states'].update({'eventview' : data })            
+        process._dados.update({'iestudo' : iestudo})  # add or update ['iestudo'] fields key   
+        process.changed() # force database update for this process -> turns dict -> JSON 
 
-@app.route('/process', methods=['GET']) # like /process?process=830.691/2023
-def details():
-    key = request.args.get('process')
-    print(f'process is {key}', file=sys.stderr)
-    return ProcessStorage[key]._pages['basic']['html']   
 
-@app.route('/update_checkbox', methods=['POST'])
+@app.route('/flask/update_checkbox', methods=['POST'])
 def update_checkbox():
-    datapkg = request.get_json()  
-    for process, state in datapkg:          
-        update(process, state, 'state')
-    update('', '', '', save=True) # only save now on disk
-    return Response(status=204)
+    payload = request.get_json() 
+    print('pkg checkboxes', payload['name'], payload['data'], file=sys.stderr);
+    updatedb(payload['name'], payload['data'], 'checkboxes')    
+    return Response(status=204)     
 
-@app.route('/update_events_view', methods=['POST'])
+@app.route('/flask/update_eventview', methods=['POST'])
 def update_collapse():
-    data = request.get_json()        
-    update(data['process'], data['style'], 'style', save=True)
+    payload = request.get_json()  
+    print('pkg eventview', payload['name'], payload['data'], file=sys.stderr);  
+    updatedb(payload['name'], payload['data'], 'eventview')     
     return Response(status=204)
 
-def update(processo, data, what='state', save=False):    
-    """update cached estudo table and estudo file on database DADOS column 
-    if `save=True`"""    
-    table = cache.get('table')       
-    if table is not None:          
-        if 'state' in what:
-            table.loc[table.Processo == processo, 'Prior'] = '1' if data else '0'                
-        if 'style' in what:                        
-            table.loc[table.loc[table.Processo == processo].index[1:], 'style'] = f'display: {data}' 
-        cache.set('table', table)        
-        if save:        
-            processo = ProcessStorage[cache.get('selected')]
-            table = prettyTabelaInterferenciaMaster(table, view=False)                 
-            processo._dados.update( {'iestudo_table' : table.to_dict() }) # add or update 'iestudo_table' key   
-            processo.changed() # force database update for this process    
+
 
 #
 # routines regarding the `css_js_inject` chrome extension helper injection tool
@@ -186,8 +188,8 @@ def get_prioridade():
     for use on css_js_inject tool"""
     key = request.args.get('process')    
     processo = ProcessStorage[fmtPname(key)] # since html comes without dot
-    if 'iestudo_table' in processo._dados:        
-        dict_ = pd.DataFrame.from_dict(processo._dados['iestudo_table']).groupby("Processo", sort=False).first().to_dict()['Prior'] # json iestudo table 
+    if 'iestudo' in processo._dados and 'table' in processo._dados:        
+        dict_ = pd.DataFrame.from_dict(processo._dados['iestudo']['table']).groupby("Processo", sort=False).first().to_dict()['Prior'] # json iestudo table 
         return { key.replace(".", "") : value for key, value in dict_.items() } # remove dot for javascript use
 
 @app.route('/iestudo_finish', methods=['GET'])  
@@ -199,13 +201,14 @@ def iestudo_finish():
     processo.changed() # force database update
     return Response(status=204)
 
-
-
+cache.set('dbloaded', 0)
+cache.set('timespent', 99999.99e6)
+setCurrentProcessFolders()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-d','--debug', default=True, action='store_true')    
     args = parser.parse_args()    
     app.config['Debug'] = args.debug
-    app.run(host='0.0.0.0', debug=args.debug)
-    
+    app.run(host='0.0.0.0', debug=args.debug)    
+
