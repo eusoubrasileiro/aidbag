@@ -6,16 +6,18 @@ python -m aidbag.anm.careas.estudos.app.main
 or to run on background
 nohup python -m aidbag.anm.careas.estudos.app.main 
 """
-import os, sys 
+import sys, pathlib
 import pandas as pd 
 import argparse
+import tempfile
 
 from flask_cors import CORS
 from flask_caching import Cache
 from flask import (
         Flask, 
         request, 
-        Response
+        Response,
+        send_from_directory
     )
 
 from ...config import config
@@ -30,15 +32,18 @@ from ...estudos.interferencia import (
         prettyTabelaInterferenciaMaster
     )
 
-curpath = os.path.dirname(os.path.abspath(__file__))
+curpath = pathlib.Path(__file__).absolute().parents[0]
    
-app = Flask(__name__, template_folder=curpath)
+app = Flask(__name__, static_folder=curpath/'build')
+
 # to allow the anm domain (js,html injection) request this app on localhost
 CORS(app) # This will enable CORS for all routes
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 30*60 # 30 mins in seconds
-app.config['CACHE_TYPE'] = 'SimpleCache'  # only 1 connection (1 thread/session/client)
+# Flask-Cache package
+app.config['CACHE_THRESHOLD'] = 10000
+app.config['CACHE_DIR'] = pathlib.Path(tempfile.gettempdir())/"workapp" #  temporary directory
+app.config['CACHE_TYPE'] = 'FileSystemCache' 
 cache = Cache(app)
-
 
 def htmlTableList(table): 
     """create data to be send as JSON to frontend to create <table><tr><th><td> etc. """
@@ -205,10 +210,20 @@ cache.set('dbloaded', 0)
 cache.set('timespent', 99999.99e6)
 setCurrentProcessFolders()
 
-if __name__ == "__main__":
+
+# Serve React App
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve(path):
+    if path != "" and pathlib.Path(app.static_folder + '/' + path).exists():
+        return send_from_directory(app.static_folder, path)
+    else:
+        return send_from_directory(app.static_folder, 'index.html')
+
+if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-d','--debug', default=True, action='store_true')    
     args = parser.parse_args()    
     app.config['Debug'] = args.debug
-    app.run(host='0.0.0.0', debug=args.debug)    
-
+    app.run(host='0.0.0.0', use_reloader=True, debug=args.debug, threaded=True, port=5000)   
+    
