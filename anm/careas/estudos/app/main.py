@@ -38,10 +38,10 @@ app = Flask(__name__, static_folder=curpath/'build')
 
 # to allow the anm domain (js,html injection) request this app on localhost
 CORS(app) # This will enable CORS for all routes
-app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 30*60 # 30 mins in seconds
+app.config['CACHE_DEFAULT_TIMEOUT'] = 31536000 # 1 year of cache
 # Flask-Cache package
 app.config['CACHE_THRESHOLD'] = 10000
-app.config['CACHE_DIR'] = pathlib.Path(tempfile.gettempdir())/"workapp" #  temporary directory
+app.config['CACHE_DIR'] = pathlib.Path("~/.workapp/cache") #  temporary directory that don't gets erased timely
 app.config['CACHE_TYPE'] = 'FileSystemCache' 
 cache = Cache(app)
 
