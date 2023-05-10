@@ -73,8 +73,8 @@ def htmlTableList(table):
     eventview = { tp.Processo: True for (i,tp) in query.iterrows()} # create default view all
     indexes = query.index.values.astype(str)
     groups = list(zip(indexes[:-1],indexes[1:]))
-    # process group rows indexes start/end  
-    groupindexes = dict(zip(query.Processo, groups+[[indexes[-1],str(table_pretty.shape[0])]]))    
+    # process group rows indexes start/end  - orders matters to jscript so must be list not dict 
+    groupindexes = list(zip(query.Processo, groups+[[indexes[-1],str(table_pretty.shape[0])]]))
     states = {'checkboxes' : checkboxes, 'eventview' : eventview, 'groupindexes' : groupindexes}
     return table_pretty[row_cols].values.tolist(), row_cols, table[row_attrs].values.tolist(), row_attrs, states 
 
@@ -187,23 +187,27 @@ def update_collapse():
 # routines regarding the `css_js_inject` chrome extension helper injection tool
 #
 
-@app.route('/get_prioridade', methods=['GET'])  # like /get_prioridade?process=830.691/2023
+@app.route('/flask/get_prioridade', methods=['GET'])  # like /get_prioridade?process=830.691/2023
 def get_prioridade():
     """return list (without dot on name) of interferentes with process if checked-market or not
     for use on css_js_inject tool"""
     key = request.args.get('process')    
     processo = ProcessStorage[fmtPname(key)] # since html comes without dot
-    if 'iestudo' in processo._dados and 'table' in processo._dados:        
-        dict_ = pd.DataFrame.from_dict(processo._dados['iestudo']['table']).groupby("Processo", sort=False).first().to_dict()['Prior'] # json iestudo table 
+    if ('iestudo' in processo._dados and 
+        'states' in processo._dados['iestudo'] and 
+        'checkboxes' in processo._dados['iestudo']['states']):        
+        dict_ =  processo._dados['iestudo']['states']['checkboxes'] # json iestudo table 
         return { key.replace(".", "") : value for key, value in dict_.items() } # remove dot for javascript use
+    return {}
 
-@app.route('/iestudo_finish', methods=['GET'])  
+@app.route('/flask/iestudo_finish', methods=['GET'])  
 def iestudo_finish():
     """css_js_inject tool reports estudo finished"""
     key = request.args.get('process')    
     processo = ProcessStorage[fmtPname(key)] # since html comes without dot
-    processo._dados.update( {'iestudo' : {'done' : True } })
-    processo.changed() # force database update
+    if 'iestudo' in processo._dados:
+        processo._dados['iestudo']['done'] = True
+        processo.changed() # force database update
     return Response(status=204)
 
 cache.set('dbloaded', 0)

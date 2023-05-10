@@ -252,8 +252,12 @@ class Processo:
             self._expandAssociados()            
             
         if self.associados: # not dealing with grupamento many parents yet
-            graph, root = ancestry.createGraphAssociados(self)
-            self._dados['prioridadec'] = ProcessStorage[root]['prioridade']
+            try:
+                graph, root = ancestry.createGraphAssociados(self)
+                self._dados['prioridadec'] = ProcessStorage[root]['prioridade']
+            except RecursionError:
+                # TODO analyse case of graph with closed loop etc.
+                pass 
 
         self._dados['run']['ancestry'] = True
         return self['prioridadec']

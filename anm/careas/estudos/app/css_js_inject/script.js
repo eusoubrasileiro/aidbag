@@ -23,18 +23,21 @@ function highlight_checkboxes_prioridade(){
   fetch(`${backend_url}/get_prioridade?process=${mainprocess}`)
   .then(res => res.json()
   .then( data => { 
-    checked_dict = data
-    $("table#ctl00_cphConteudo_gvLowerRight tbody tr td label[onclick='IdentificarProcesso(this);']").each(
-      function(i, element) { 
-          let process = element.innerText;
-          console.log(`${process} is ${checked_dict[process]}`);
-          element.style.fontWeight = 'bolder';
-          element.style.fontStyle = 'oblique';
-          if(checked_dict[process] == '0'){ // style to red the ones to uncheck
-            element.style.color = 'red';
-          }
-      }
-    );
+    checked_dict = data;
+    if(Object.keys(checked_dict).length === 0 )
+      console.warn('No checkbox data. No table?');
+    else
+      $("table#ctl00_cphConteudo_gvLowerRight tbody tr td label[onclick='IdentificarProcesso(this);']").each(
+        function(i, element) { 
+            let process = element.innerText;
+            console.log(`${process} is ${checked_dict[process]}`);
+            element.style.fontWeight = 'bolder';
+            element.style.fontStyle = 'oblique';
+            if(checked_dict[process] == '0'){ // style to red the ones to uncheck
+              element.style.color = 'red';
+            }
+        }
+      );
     }))
     .catch((error) => {
       alert(`Erro no helper applet ${error}`);
