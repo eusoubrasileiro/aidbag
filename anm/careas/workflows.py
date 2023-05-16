@@ -55,7 +55,7 @@ def currentProcessGet(path=None, sort='name', clear=True):
     * return: list [ pathlib.Path's ...]
         current process folders working on from default careas working env.
         
-    * clear : default False
+    * clear : default True
         clear `ProcessPathStorage` before updating (ignore json file)
         
     Hint: 
@@ -185,7 +185,8 @@ def inferWork(process, folder):
         pdf_interferencia_text = readPdfText(infos['pdf_interferencia'].absolute())
         if '(Áreas de Bloqueio)' in  pdf_interferencia_text:
             print(f" { process['NUP'] } com bloqueio ",file=sys.stderr)
-        elif 'ENGLOBAMENTO' in pdf_interferencia_text:
+            # this is not enough - bloqueio provisório é o que importa              
+        if 'ENGLOBAMENTO' in pdf_interferencia_text:
             infos['interferencia'] = 'ok' 
         else:
             area_text="PORCENTAGEM ENTRE ESTA ÁREA E A ÁREA ORIGINAL DO PROCESSO:" # para cada area poligonal 

@@ -24,8 +24,10 @@ config['interferencia']['html_prefix'] = {'this' : 'interferencia', 'legacy': 's
 config['interferencia']['file_prefix'] = 'eventos_prioridade'
 
 def SetHome(home=str(Path.home())): # default get userhome folder
-    """for mounted disk on linux, set windows home user path
-    to find `Controle_Areas` path"""
+    """
+    For mounted disk on linux, set windows home user path to find `Controle_Areas` path.  
+    Default is '~' that will become '~\Documents\Controle_Areas'
+    """
     config['secor_path'] = os.path.join(home, 'Documents', 'Controle_Areas')  # os independent     
     config['eventos_scm'] = os.path.join(config['secor_path'], 'secorpy', 'eventos_scm_12032020.xls')    
     config['sei']['doc_templates'] = os.path.join(config['secor_path'], 'secorpy', 'docs_models')  # os independent 
