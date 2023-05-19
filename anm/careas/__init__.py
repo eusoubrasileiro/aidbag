@@ -21,8 +21,8 @@ from ...web import (
 )
 
 from .workflows import (
-    IncluiDocumentosSEIFolder, 
+    IncluiDocumentosSEI, 
     EstudoBatchRun,
-    IncluiDocumentosSEIFoldersFirstN,
+    IncluiDocumentosSEIFirstN,
     folder_process
 )

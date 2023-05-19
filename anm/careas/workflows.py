@@ -1,4 +1,3 @@
-import glob
 import os
 import pathlib
 import sys
@@ -12,7 +11,10 @@ from PyPDF2 import PdfReader
 from . import estudos
 from .config import config
 from . import scm
-from .scm.util import regex_process
+from .scm.util import (
+    regex_process,
+    fmtPname
+    )
 
 from .scm.parsing import (
     select_fields
@@ -34,7 +36,11 @@ from .estudos.util import downloadMinuta
 # with this being another .py 
 
 ProcessPathStorage = {} 
-"""stores paths for current process being worked on """
+"""
+stores paths for current process being worked on 
+uses `config['processos_path']` to search for process work folders
+"""
+
 
 # try: # Read paths for current process being worked on from file 
 #     with open(config['wf_processpath_json'], "r") as f:
@@ -149,7 +155,7 @@ def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False, overwr
                 proc = estudo.processo              
             elif tipo == 'opção':
                 proc = scm.Processo.Get(processo, wpage, dados=scm.SCM_SEARCH.BASICOS_POLIGONAL, verbose=verbose)
-                proc.salvaPageScmHtml(config.processPathSecor(proc), 'basic', overwrite)
+                proc.salvaPageScmHtml(config['processos_path'], 'basic', overwrite)
         except estudos.DownloadInterferenciaFailed as e:            
             failed_NUPS.append((scm.ProcessStorage[scm.fmtPname(processo)]['NUP'], f" Message: {str(e)}"))                       
         except Exception as e:              
@@ -167,44 +173,51 @@ def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False, overwr
     return succeed_NUPs, failed_NUPS
 
 
-def inferWork(process, folder):
+def inferWork(process, folder=None):
     """
     From Processo object and work-folder try to infer the work and docs to create or add.
     
     returns dict with lots of infos key,value pairs    
     """
-    infos = {}    
-    # search/parse local folder
-    # Estudo de Interferência deve chamar 'R.pdf' glob.glob("R*.pdf")[0] seja o primeiro
-    pdf_interferencia = [ file for file in folder.glob("R*.pdf") ]
-    # turn empty list to None
-    infos['pdf_interferencia'] = pdf_interferencia[0] if pdf_interferencia else None
-    infos['pdf_adicional'] = None
-    # search/parse process object
-    if infos['pdf_interferencia']:
-        pdf_interferencia_text = readPdfText(infos['pdf_interferencia'].absolute())
-        if '(Áreas de Bloqueio)' in  pdf_interferencia_text:
-            print(f" { process['NUP'] } com bloqueio ",file=sys.stderr)
-            # this is not enough - bloqueio provisório é o que importa              
-        if 'ENGLOBAMENTO' in pdf_interferencia_text:
-            infos['interferencia'] = 'ok' 
+    infos = {}   
+
+    infos['pdf_interferencia'] = None
+    infos['pdf_adicional'] = None 
+
+    if folder is not None:
+        # search/parse local folder
+        # Estudo de Interferência deve chamar 'R.pdf' glob.glob("R*.pdf")[0] seja o primeiro
+        pdf_interferencia = [ file for file in folder.glob("R*.pdf") ]
+        # turn empty list to None
+        infos['pdf_interferencia'] = pdf_interferencia[0] if pdf_interferencia else None
+        # search/parse process object
+        if infos['pdf_interferencia']:
+            pdf_interferencia_text = readPdfText(infos['pdf_interferencia'].absolute())
+            if '(Áreas de Bloqueio)' in  pdf_interferencia_text:
+                print(f" { process['NUP'] } com bloqueio ",file=sys.stderr)
+                # this is not enough - bloqueio provisório é o que importa              
+            if 'ENGLOBAMENTO' in pdf_interferencia_text:
+                infos['interferencia'] = 'ok' 
+            else:
+                area_text="PORCENTAGEM ENTRE ESTA ÁREA E A ÁREA ORIGINAL DO PROCESSO:" # para cada area poligonal 
+                count = pdf_interferencia_text.count(area_text)            
+                infos['areas'] = {'count' : count}
+                infos['areas'] = {'perc' : []}
+                if count == 0:
+                    infos['interferencia'] = 'total'
+                elif count > 0: # só uma área
+                    if count == 1:
+                        infos['interferencia'] = 'ok'
+                    if count > 1:
+                        infos['interferencia'] = 'opção'
+                    percs = re.findall(f"(?<={area_text}) +([\d,]+)", pdf_interferencia_text)
+                    percs = [ float(x.replace(',', '.')) for x in percs ]  
+                    infos['areas']['perc'] = percs                 
         else:
-            area_text="PORCENTAGEM ENTRE ESTA ÁREA E A ÁREA ORIGINAL DO PROCESSO:" # para cada area poligonal 
-            count = pdf_interferencia_text.count(area_text)            
-            infos['areas'] = {'count' : count}
-            infos['areas'] = {'perc' : []}
-            if count == 0:
-                infos['interferencia'] = 'total'
-            elif count > 0: # só uma área
-                if count == 1:
-                    infos['interferencia'] = 'ok'
-                if count > 1:
-                    infos['interferencia'] = 'opção'
-                percs = re.findall(f"(?<={area_text}) +([\d,]+)", pdf_interferencia_text)
-                percs = [ float(x.replace(',', '.')) for x in percs ]  
-                infos['areas']['perc'] = percs                 
-    else:
-        RuntimeError('Nao encontrou pdf R*.pdf')
+            RuntimeError('Nao encontrou pdf R*.pdf')
+
+        if 'ok' in infos['interferencia']:                
+            infos['pdf_adicional'] = folder / "minuta.pdf"
         
     def editalGetDadNUP(processo):
         if len(process['associados']) > 1:
@@ -256,23 +269,53 @@ def inferWork(process, folder):
         print(infos)              
     return infos 
     
+def disponibilidadeSonSearch(wp, process_name):
+    """fetch son from dad relation leilão or oferta pública"""
+    def fetch_poligonal(proc):
+        proc._wpage = wp.copy()
+        if 'poligon' not in proc or not proc['poligon']: # still means poligon html failed somehow                
+            print(f'poligon not in proc {proc.name}')             
+            proc._dados.update(scm.default_run_state())  # force download again
+            proc.runTask(scm.SCM_SEARCH.BASICOS_POLIGONAL) 
+        return proc['poligon']
     
+    Dad = scm.ProcessStorage[process_name]
+    son_data = {}
+    for son_name, attrs in scm.ProcessStorage[process_name].associados.items():
+        edital_tipo = None            
+        print('son: ', son_name, attrs, file=sys.stdout)
+        Son = attrs['obj']
+        tipo = Son['tipo'].lower()        
+        fetch_poligonal(Son) # to guarantee
+        fetch_poligonal(Dad)
+        if not 'poligon' in Son: #ignore 
+            continue 
+        areadiff = abs(Dad['poligon']['area']-Son['poligon']['area'])            
+        son_data = {
+            'NUP' : Son['NUP'], 
+            'area' : Son['poligon']['area'], 
+            'areadiff' : areadiff
+            }     
+        if 'leilão' in tipo:
+            edital_tipo = 'Leilão'
+        elif 'oferta' in tipo:                
+            edital_tipo = 'Oferta Pública'
+        print('data: ', son_data, file=sys.stdout)
+        if areadiff <= 0.1 and edital_tipo is not None:
+            break # found    
+    return son_data 
 
-def IncluiDocumentosSEIFolder(sei, process_folder, wpage, activity=None, 
+
+def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, 
         empty=False, termo_abertura=False, verbose=True):
     """
-    Inclui process documents from specified folder:
-    `__secor_path__\\path\\process_folder`
-    Follow order of glob(*) using `chdir(tipo) + chdir(path)`
+    Inclui process documents from folder specified on `ProcessPathStorage`
 
     * sei : class
         selenium chrome webdriver instance
         
-    * process_folder: string or pathlib.Path 
-        string name of process folder where documentos are placed
-        eg. 832125-2005 (MUST use name xxxxxx-xxx format)        
-        or 
-        pathlib.Path for process folder 
+    * process_name: string of name of process 
+        folder where documentos are placed will be obtained from `ProcessPathStorage`
 
     * wpage: wPageNtlm 
         baixa NUP e outros from html salvo
@@ -292,19 +335,22 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, activity=None,
         To add for process older than < 2020
                 
     """
-    if type(process_folder) is str: 
-        process_folder = pathlib.Path(config['processos_path']).joinpath(process_folder)
+    
+    if not ProcessPathStorage: # empty process path storage
+        currentProcessGet() # get current list of processes
 
-    # get process from folder name    
-    name = scm.findfmtPnames(process_folder.absolute().stem)[0]
-    process = scm.ProcessStorage[name]
-        
+    process_name = fmtPname(process_name) 
+    process_folder = None
+    if process_name in ProcessPathStorage:
+        process_folder = scm.ProcessPathStorage[name]
+    process = scm.ProcessStorage[process_name]        
     info = inferWork(process, process_folder)
 
     if verbose and __debugging__:
-        print("Main path: ", process_folder.parent)     
-        print("Process path: ", process_folder.absolute())
-        print("Current dir: ", os.getcwd())
+        if process_folder:
+            print("Main path: ", process_folder.parent)     
+            print("Process path: ", process_folder.absolute())
+            print("Current dir: ", os.getcwd())
         print(f"activity {activity} \n info dict {info}")      
    
     psei = Processo.fromSei(sei, process['NUP'])            
@@ -320,8 +366,6 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, activity=None,
         # Inclui Estudo Interferência pdf como Doc Externo no SEI
         psei.insereDocumentoExterno(0, str(info['pdf_interferencia'].absolute()))                    
         if activity in WORK_ACTIVITY.REQUERIMENTO_EDITAL:
-            if 'ok' in info['interferencia']:                
-                info['pdf_adicional'] = process_folder / "minuta.pdf"
             if not info['pdf_adicional'].exists():
                 downloadMinuta(wpage, process.name, 
                         str(info['pdf_adicional'].absolute()), info['minuta']['code'])
@@ -335,7 +379,6 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, activity=None,
             elif 'opção' in info['interferencia']:
                 psei.insereNotaTecnicaRequerimento("opção", info)                            
             elif 'ok' in info['interferencia']:                
-                info['pdf_adicional'] = process_folder / "minuta.pdf"
                 if not info['pdf_adicional'].exists():
                     downloadMinuta(wpage, process.name, 
                                 str(info['pdf_adicional'].absolute()), info['minuta']['code'])
@@ -352,7 +395,6 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, activity=None,
     elif activity in WORK_ACTIVITY.DIREITO_RLAVRA_FORMULARIO_1:
         psei.insereDocumentoExterno(0, str(info['pdf_interferencia'].absolute())) 
         if 'ok' in info['interferencia']:                
-            info['pdf_adicional'] = process_folder / "minuta.pdf"
             if not info['pdf_adicional'].exists():
                 downloadMinuta(wpage, process.name, 
                                 str(info['pdf_adicional'].absolute()), info['minuta']['code'])
@@ -389,58 +431,53 @@ def IncluiDocumentosSEIFolder(sei, process_folder, wpage, activity=None,
     elif activity in WORK_ACTIVITY.REQUERIMENTO_EDITAL_DAD:
         # Possible to get first son with tipo leilão or oferta publica, when multiple                        
         if len(process['associados']) > 1:
-            print('Mais de um associado! Àrea Menor no Leilão? Something wrong?', process.name)
-        # get 'son' by poligon matching area or first on the list 
-        sons = []
-        edital_tipo = None 
-        for name, attrs in scm.ProcessStorage[name].associados.items():
-            son = attrs['obj']
-            tipo = son['tipo'].lower()
-            if 'leilão' in tipo:
-                sons.append([son['NUP'], son['poligon']['area'], abs(process['poligon']['area']-son['poligon']['area'])])     
-                edital_tipo = 'Leilão'           
-            elif 'oferta' in tipo:
-                sons.append([son['NUP'], son['poligon']['area'], abs(process['poligon']['area']-son['poligon']['area'])])
-                edital_tipo = 'Oferta Pública'
-        if not sons: # could not find son or sons 
-            raise Exception('Something wrong! Não é advindo de edital!', process.name)
+            print('Mais de um associado! Àrea Menor no Leilão? Or vindo de outro leilão?', process.name)
+        # get 1'st 'son' by poligon matching area on the list and edital/oferta tipo
+        son = disponibilidadeSonSearch(wpage, process_name)
+        if not son: # could not find son or sons 
+            raise Exception('Something wrong! Não é advindo de edital!', process_name)
         # TODO deal with more participants on edital                
-        if sons[0] > 0.1: # # compare areas if difference > 0.1 ha stop! - not same area
-           raise NotImplemented('Not same Area!')            
+        if son['areadiff'] > 0.1: # # compare areas if difference > 0.1 ha stop! - not same area
+           raise NotImplementedError('Not same Area!')            
         psei.insereNotaTecnicaRequerimento("edital_dad", info, edital=edital_tipo, 
-                            processo_filho=sons[0][0])#['NUP']
+                            processo_filho=son['NUP'])
 
     psei.insereMarcador(config['sei']['marcador_default'])
     psei.atribuir(config['sei']['atribuir_default'])
     # should also close the openned text window - going to previous state
-    psei.closeOtherWindows()    
-    
+    psei.closeOtherWindows()        
     if verbose:
-        print(process['NUP'])
+        print(process['NUP'])    
+    # TODO: I need another database to save these - like an Archive
+    # process._dados['iestudo'].update( {'sei-sent': True, 'time' : datetime.datetime.now()} )
+    # process.changed() # update database 
 
 
-def IncluiDocumentosSEIFolders(sei, wpage, process_folders, **kwargs):
+
+def IncluiDocumentosSEI_list(sei, wpage, process_names, **kwargs):
     """
-    Wrapper for `IncluiDocumentosSEIFolder` 
+    Wrapper for `IncluiDocumentosSEI` 
     
     Aditional args should be passed as keyword arguments
+
+    Use list of names of process to incluir documents on SEI, folder don't need to exist.
     """
-    for process_folder in process_folders:
+    for process_name in process_names:
         try:
-            IncluiDocumentosSEIFolder(sei, process_folder, wpage, **kwargs)
+            IncluiDocumentosSEI(sei, process_name, wpage, **kwargs)
         except Exception:
-            print("Process {:} Exception: ".format(process_folder), traceback.format_exc(), file=sys.stderr)           
+            print("Process {:} Exception: ".format(process_name), traceback.format_exc(), file=sys.stderr)           
             continue        
 
 
-def IncluiDocumentosSEIFoldersFirstN(sei, wpage, nfirst=1, path=None, **kwargs):
+def IncluiDocumentosSEIFirstN(sei, wpage, nfirst=1, path=None, **kwargs):
     """
     Inclui first process folders `nfirst` (list of folders) docs on SEI. Follow order of glob(*) 
     
-    Wrapper for `IncluiDocumentosSEIFolder` 
+    Wrapper for `IncluiDocumentosSEI` 
     
     Aditional args should be passed as keyword arguments
     """
     currentProcessGet(path)    
     process_folders = list(ProcessPathStorage.values())[:nfirst]
-    IncluiDocumentosSEIFolders(sei, wpage, process_folders, **kwargs)
+    IncluiDocumentosSEI(sei, wpage, process_folders, **kwargs)
