@@ -575,7 +575,7 @@ class ProcessFactoryStorageClass(dict):
     def __insert_to_sqlite(self, key):
         with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn: # context manager already commits and closes connection
             cursor = conn.cursor()    
-            cursor.execute("INSERT INTO storage VALUES (?,?,?,?,?)", self[key].toSqliteTuple())   
+            cursor.execute("INSERT or REPLACE INTO storage VALUES (?,?,?,?,?)", self[key].toSqliteTuple())   
             if self.debug:
                 print(f"Just inserted or modified {conn.total_changes} rows on database", file=sys.stderr)
             
@@ -638,11 +638,11 @@ class ProcessFactoryStorageClass(dict):
             self.update(dbdict)            
             # process object database created now remake links from references
             for _, process in ProcessStorage.items(): 
-                if 'associados' in process and process['run']['associados']:           
+                if 'associados' in process:           
                     # cannot be obj hook json loads due circular reference
                     # database must be already fully populated with objects
                     for name in process['associados']:                         
-                         process['associados'][name]['obj'] = ProcessStorage[name]    
+                         process['associados'][name]['obj'] = ProcessStorage[name] if name in ProcessStorage else None
             n, dt = len(self),time.time()-start         
             if verbose:
                 print(f"Loading, creating, relinking references of {n} processes from database took {dt:.2f} seconds")

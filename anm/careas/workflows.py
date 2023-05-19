@@ -8,6 +8,8 @@ import re
 import tqdm
 from PyPDF2 import PdfReader
 
+from aidbag.web.json import json_to_path, path_to_json
+
 from . import estudos
 from .config import config
 from . import scm
@@ -37,16 +39,9 @@ from .estudos.util import downloadMinuta
 
 ProcessPathStorage = {} 
 """
-stores paths for current process being worked on 
-uses `config['processos_path']` to search for process work folders
+Stores paths for current process being worked on style { 'xxx.xxx/xxxx' : pathlib.Path() }.  
+Uses `config['processos_path']` to search for process work folders.
 """
-
-
-# try: # Read paths for current process being worked on from file 
-#     with open(config['wf_processpath_json'], "r") as f:
-#         ProcessPathStorage = json.load(f)
-# except:
-#     pass 
 
 def currentProcessGet(path=None, sort='name', clear=True):
     """
@@ -68,7 +63,14 @@ def currentProcessGet(path=None, sort='name', clear=True):
         * use .keys() for list of process
         * use .values() for list of paths `pathlib.Path` object
     """
-    if not path:
+    global ProcessPathStorage
+    if clear: # ignore json file 
+        ProcessPathStorage.clear()
+    else: # Read paths for current process being worked on from file 
+        with open(config['wf_processpath_json'], "r") as f:
+            ProcessPathStorage = json.load(f, object_hook=json_to_path)   
+        return ProcessPathStorage
+    if not path: # default work folder of processes
         path = config['processos_path']        
     path = pathlib.Path(path)    
     process_folders = []
@@ -77,14 +79,12 @@ def currentProcessGet(path=None, sort='name', clear=True):
         paths = sorted(paths, key=os.path.getmtime)[::-1]        
     elif 'name' in sort:
         paths = sorted(paths)   
-    if clear: # ignore json file 
-        ProcessPathStorage.clear()
     for cur_path in paths: # remove what is NOT a process folder
         if regex_process.search(str(cur_path)) and cur_path.is_dir():
             process_folders.append(cur_path.absolute())   
-            ProcessPathStorage.update({ scm.fmtPname(str(cur_path)) : str(cur_path.absolute())})        
+            ProcessPathStorage.update({ scm.fmtPname(str(cur_path)) : cur_path.absolute()})            
     with open(config['wf_processpath_json'], "w") as f: # Serialize data into file
-        json.dump(ProcessPathStorage, f)
+        json.dump(ProcessPathStorage, f, default=path_to_json)
     return ProcessPathStorage
     
     
@@ -116,13 +116,13 @@ def currentProcessMove(process_str, dest_folder='Concluidos',
     """    
     process_str = scm.fmtPname(process_str) # just to make sure it is unique
     dest_path =  pathlib.Path(rootpath).joinpath(dest_folder).joinpath(folder_process(process_str)).resolve() # resolve, solves "..\" to an absolute path 
-    shutil.move(ProcessPathStorage[process_str], dest_path)    
+    shutil.move(ProcessPathStorage[process_str].absolute(), dest_path)    
     if delpath: 
         del ProcessPathStorage[process_str]
     else:
-        ProcessPathStorage[process_str] = str(dest_path)
+        ProcessPathStorage[process_str] = dest_path
     with open(config['wf_processpath_json'], "w") as f: # Serialize 
-        json.dump(ProcessPathStorage, f)
+        json.dump(ProcessPathStorage, f, default=path_to_json)
 
     
 def readPdfText(filename):
@@ -342,7 +342,7 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None,
     process_name = fmtPname(process_name) 
     process_folder = None
     if process_name in ProcessPathStorage:
-        process_folder = scm.ProcessPathStorage[name]
+        process_folder = ProcessPathStorage[process_name]
     process = scm.ProcessStorage[process_name]        
     info = inferWork(process, process_folder)
 
@@ -479,5 +479,5 @@ def IncluiDocumentosSEIFirstN(sei, wpage, nfirst=1, path=None, **kwargs):
     Aditional args should be passed as keyword arguments
     """
     currentProcessGet(path)    
-    process_folders = list(ProcessPathStorage.values())[:nfirst]
-    IncluiDocumentosSEI(sei, wpage, process_folders, **kwargs)
+    process_folders = list(ProcessPathStorage.keys())[:nfirst]
+    IncluiDocumentosSEI_list(sei, wpage, process_folders, **kwargs)
