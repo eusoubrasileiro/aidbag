@@ -92,7 +92,7 @@ class Processo:
         self._pages = { 'basic'   : {'html' : '' , 'url': '', 'session' : None},
                         'poligon' : {'html' : '' , 'url': '', 'session' : None} 
                       } # 'html' is the request.response.text property : bytes unicode decoded or infered      
-        self.birth = datetime.datetime.now() 
+        self.modified = datetime.datetime.now() 
         """when this process was requested for the first time"""
         self.onchange = None
         """pointer to function - called when process changes either _pages or _dados
@@ -372,7 +372,7 @@ class Processo:
         poligon = self._pages['poligon']['html']
         poligon = poligon if poligon is not None else ''        
         return (  self.name,                                     
-                  self.birth.isoformat(),
+                  self.modified.isoformat(),
                   # datetime convertion default function to JSON string                  
                   json.dumps(self._dados, default=datetime_to_json),
                   zlib.compress(basicos.encode('utf-8')),
@@ -381,9 +381,9 @@ class Processo:
     
     @staticmethod
     def fromSqliteTuple(tuplesqlite, reparse=False, verbose=False):
-        name, birth, _dados, page_basicos, page_poligon = tuplesqlite
+        name, modified, _dados, page_basicos, page_poligon = tuplesqlite
         process = Processo(name, None, False)
-        process.birth = datetime.datetime.fromisoformat(birth)      
+        process.modified = datetime.datetime.fromisoformat(modified)      
         process._dados = json.loads(_dados, object_hook=json_to_datetime)        
         process._pages['basic']['html'] = zlib.decompress(page_basicos).decode('utf-8')
         process._pages['poligon']['html'] = zlib.decompress(page_poligon).decode('utf-8')
@@ -412,7 +412,7 @@ class Processo:
         """
         # create a dict of the object and then to json 
         pdict = { 'name'   : self.name,                                     
-                  'birth' : self.birth,
+                  'modified' : self.modified,
                   '_pages' : self._pages,
                   '_dados' : self._dados
                 }
@@ -430,8 +430,8 @@ class Processo:
         return fname
     
     def changed(self):
-        """something changed so birth datetime changes"""
-        self.birth = datetime.datetime.now() 
+        """something changed so modified datetime changes"""
+        self.modified = datetime.datetime.now() 
         if self.onchange is not None:
             self.onchange(self)            
 
@@ -444,7 +444,7 @@ class Processo:
         """
         jsondict = json.loads(strJSON, object_hook=json_to_datetime)            
         process = Processo(jsondict['name'], None, False)
-        process.birth = jsondict['birth']        
+        process.modified = jsondict['modified']        
         process._dados = jsondict['_dados']        
         process._pages = jsondict['_pages']                        
         if 'run' not in process: # backward compatibility
@@ -520,7 +520,7 @@ class Processo:
         if ProcessStorage.get(processostr) is not None:
             processo = ProcessStorage[processostr] #  storage doesn't keep wpage
             processo._wpage = wPageNtlm(wpagentlm.user, wpagentlm.passwd)
-            if processo.birth + config['scm']['process_expire'] < datetime.datetime.now():         
+            if processo.modified + config['scm']['process_expire'] < datetime.datetime.now():         
                 if verbose:       
                     print("Processo placing on storage ", processostr, file=sys.stderr)
                 processo = Processo(processostr, wpagentlm,  verbose)  # store newer guy             
@@ -543,7 +543,7 @@ class Processo:
 # with sqlite3.connect('process_storage.db') as conn: # already commits and closes
 #    sql = f"""CREATE TABLE STORAGE(
 #       NAME CHAR(12) NOT NULL,   
-#       BIRTH TIMESTAMP,
+#       MODIFIED TIMESTAMP,
 #       DADOS TEXT,
 #       PAGE_BASIC BLOB, 
 #       PAGE_POLIGON BLOB,
