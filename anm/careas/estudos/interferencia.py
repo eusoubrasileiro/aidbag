@@ -123,6 +123,8 @@ class Interferencia:
         * exceptions: 
             `DownloadInterferenciaFailed`, `CancelaUltimoEstudoFailed`
         """
+        if overwrite and processostr in ProcessStorage: # delete from database in case of overwrite            
+            del ProcessStorage[processostr]
         estudo = Interferencia(wpage, processostr, task=SCM_SEARCH.ALL, verbose=verbose)
         estudo.processo.salvaPageScmHtml(estudo.processo_path, 'basic', overwrite)
         estudo.processo.salvaPageScmHtml(estudo.processo_path, 'poligon', overwrite)                    

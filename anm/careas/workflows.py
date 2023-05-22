@@ -156,8 +156,8 @@ def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False, overwr
             elif tipo == 'opção':
                 proc = scm.Processo.Get(processo, wpage, dados=scm.SCM_SEARCH.BASICOS_POLIGONAL, verbose=verbose)
                 proc.salvaPageScmHtml(config['processos_path'], 'basic', overwrite)
-        except estudos.DownloadInterferenciaFailed as e:            
-            failed_NUPS.append((scm.ProcessStorage[scm.fmtPname(processo)]['NUP'], f" Message: {str(e)}"))                       
+        except scm.ErrorProcessSCM as e:
+            print(f"Process {processo} Exception: {traceback.format_exc()}", file=sys.stderr)   
         except Exception as e:              
             print(f"Process {processo} Exception: {traceback.format_exc()}", file=sys.stderr)                       
             failed_NUPS.append((scm.ProcessStorage[scm.fmtPname(processo)]['NUP'],''))            
@@ -280,9 +280,9 @@ def disponibilidadeSonSearch(wp, process_name):
         return proc['poligon']
     
     Dad = scm.ProcessStorage[process_name]
-    son_data = {}
+    son_data = {'edital_tipo' : None}
     for son_name, attrs in scm.ProcessStorage[process_name].associados.items():
-        edital_tipo = None            
+        son_data['edital_tipo'] = None
         print('son: ', son_name, attrs, file=sys.stdout)
         Son = attrs['obj']
         tipo = Son['tipo'].lower()        
@@ -291,17 +291,17 @@ def disponibilidadeSonSearch(wp, process_name):
         if not 'poligon' in Son: #ignore 
             continue 
         areadiff = abs(Dad['poligon']['area']-Son['poligon']['area'])            
-        son_data = {
+        son_data.update({
             'NUP' : Son['NUP'], 
             'area' : Son['poligon']['area'], 
-            'areadiff' : areadiff
-            }     
+            'areadiff' : areadiff            
+            })     
         if 'leilão' in tipo:
-            edital_tipo = 'Leilão'
+            son_data['edital_tipo'] = 'Leilão'
         elif 'oferta' in tipo:                
-            edital_tipo = 'Oferta Pública'
+            son_data['edital_tipo'] = 'Oferta Pública'
         print('data: ', son_data, file=sys.stdout)
-        if areadiff <= 0.1 and edital_tipo is not None:
+        if areadiff <= 0.1 and son_data['edital_tipo'] is not None:
             break # found    
     return son_data 
 
@@ -439,7 +439,7 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None,
         # TODO deal with more participants on edital                
         if son['areadiff'] > 0.1: # # compare areas if difference > 0.1 ha stop! - not same area
            raise NotImplementedError('Not same Area!')            
-        psei.insereNotaTecnicaRequerimento("edital_dad", info, edital=edital_tipo, 
+        psei.insereNotaTecnicaRequerimento("edital_dad", info, edital=son['edital_tipo'], 
                             processo_filho=son['NUP'])
 
     psei.insereMarcador(config['sei']['marcador_default'])

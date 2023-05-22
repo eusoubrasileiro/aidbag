@@ -582,7 +582,7 @@ class ProcessFactoryStorageClass(dict):
     def __select_from_sqlite(self, key):
         with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn:
             cursor = conn.cursor()    
-            cursor.execute("SELECT * FROM storage WHERE name='{:}'".format(key))
+            cursor.execute(f"SELECT * FROM storage WHERE name='{key}'")
             process_row = cursor.fetchone()
             if process_row:
                 return Processo.fromSqliteTuple(process_row)
@@ -601,6 +601,13 @@ class ProcessFactoryStorageClass(dict):
         except KeyError:
             return None 
         return result    
+    
+    def __delitem__(self, key):
+        if key in self:                   
+            super().__delitem__(key)
+            with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn:
+                cursor = conn.cursor()    
+                cursor.execute(f"DELETE FROM storage WHERE name = '{key}'")            
     
     # def __contains__(self, __o: object) -> bool:
     #     return super().__contains__(__o)         

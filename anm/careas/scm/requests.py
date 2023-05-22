@@ -15,8 +15,14 @@ urls = { 'basic' : scm_dados_processo_main_url,
          'poligon' : scm_dados_processo_main_url } 
 
 class ErrorProcessSCM(Exception):
-    """Object reference not set to an instance of an object. 
-    Could not fetch process from SCM. Probably missing or corrupted on the database."""
+    """ Scm Page Request errors.
+    
+    Like: 
+    Object reference not set to an instance of an object. 
+    Could not fetch process from SCM. Probably missing or corrupted on the database.
+
+    Or others like not found errors
+    """
 
 def pageRequest(pagename, processostr, wpage, fmtName=True):
     """   Get & Post na página dados do Processo do Cadastro  Mineiro (SCM)
@@ -51,7 +57,10 @@ def pageRequest(pagename, processostr, wpage, fmtName=True):
             if "Object reference not set to an instance of an object" in wpage.response.text:                
                 raise ErrorProcessSCM(f"Processo {processostr} corrupted on SCM database. Couldn't download.")
             else: # connection, authentication errors or others... must re-raise
-                raise        
+                raise                
+        # alert('Processo não encontrado') present
+        if "Processo não encontrado" in wpage.response.text:            
+            raise ErrorProcessSCM(f"Processo {processostr} not found! Couldn't download.") 
     elif pagename == 'poligon': # first connection to 'dadosbasicos' above MUST have been made before
         html, _, session = pageRequest('basic', processostr, wpage) # ask basicos first
         wpage.session = session # MUST re-use session

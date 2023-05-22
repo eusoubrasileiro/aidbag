@@ -12,3 +12,7 @@ from .processo import (
     SCM_SEARCH,
     default_run_state
 )
+
+from .requests import (
+    ErrorProcessSCM   
+)
