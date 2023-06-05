@@ -172,6 +172,79 @@ def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False, overwr
         print(nup)
     return succeed_NUPs, failed_NUPS
 
+def editalTipo(obj):
+    tipo = obj['tipo'].lower()  
+    if 'leilão' in tipo:
+        return 'Leilão'
+    elif 'oferta' in tipo:                
+        return 'Oferta Pública' 
+    return None
+
+def dispDadSon(name, infer=True, areatol=0.1):
+    """
+    return 'dad' and 'son' from name
+    * infer: bool (defaul True)
+        infer from area-fase
+    * areatol: float (default 0.1)
+        tolerance area in heactare to found process 
+        if infer=True
+    """
+    def dispSearch(name):
+        """
+        Try to infer based on search on 
+            * Same área 
+            * Fase name: disponibilidade/leilão/oferta
+        Search for son-dad (or vice-versa) relation leilão or oferta pública.
+            Get first son with tipo leilão or oferta publica, when multiple                        
+            get 1'st 'son' by poligon matching area on the list and edital/oferta tipo
+        return standard name or None
+        """   
+        root = scm.ProcessStorage[name]
+        found = False
+        for ass_name, attrs in scm.ProcessStorage[name].associados.items():            
+            # print('associdado: ', ass_name, attrs, file=sys.stdout)
+            Obj = attrs['obj']
+            if not 'poligon' in Obj: #ignore 
+                continue 
+            areadiff = abs(root['poligon']['area']-Obj['poligon']['area'])                        
+            edital_tipo = editalTipo(Obj)
+            if areadiff <= areatol and edital_tipo is not None:
+                found = ass_name
+                break # found    
+        if not found:
+            print('associdados: ', scm.ProcessStorage[name].associados, file=sys.stdout)
+            raise Exception(f'`dispSearch` did not found son-dad from {name}')                
+        return found
+    p = scm.ProcessStorage[scm.fmtPname(name)]
+    nparents = len(p['parents'])
+    nsons = len(p['sons'])
+    if nparents > 1 or nsons > 1:        
+        if infer:
+            print(f"`dispDadSon` Infering from area-fase {name}", file=sys.stderr)
+        # Mais de um associado! Àrea Menor no Leilão? Advindo de Disponibilidade?
+        if nsons == 1:
+            son = p['sons'][0]
+            # search for parent 
+            dad = dispSearch(son)
+        elif nparents == 1:
+            # search for son
+            dad = p['dad'][0]
+            son = dispSearch(dad)
+        else: 
+            raise Exception(f'Mais de 1 pai e 1 filho at once {name}')                
+    if nparents:
+        son, dad = name, p['parents'][0]           
+    elif nsons:
+        son, dad = p['sons'][0], name 
+    return dad, son 
+
+def dispGetNUP(processo, dad=False):
+    """get disponibilidade 'dad' or 'son' if dad=False (default)"""    
+    dad, son = dispDadSon(processo.name)
+    if dad:
+        return scm.ProcessStorage[dad]['NUP'] 
+    return scm.ProcessStorage[son]['NUP']  
+
 
 def inferWork(process, folder=None):
     """
@@ -219,11 +292,7 @@ def inferWork(process, folder=None):
         if 'ok' in infos['interferencia']:                
             infos['pdf_adicional'] = folder / "minuta.pdf"
         
-    def editalGetDadNUP(processo):
-        if len(process['associados']) > 1:
-            raise Exception('Something wrong! Mais de um associado! Àrea Menor no Leilão? ', processo.name)   
-        return scm.ProcessStorage[processo['parents'][0]]['NUP']         
-   
+
     # 'doc_ext' from config.docs_externos
     infos['minuta']  =  {'de' : '', 'code': 0, 'doc_ext': -1}
     infos['edital'] = {}
@@ -261,49 +330,13 @@ def inferWork(process, folder=None):
             # advindos de editais de disponibilidade (leilão ou oferta pública)               
             if 'leilão' in process['tipo'].lower():   
                   infos['work'] = WORK_ACTIVITY.REQUERIMENTO_EDITAL    
-                  infos['edital'] = {'tipo' : 'Leilão', 'pai' : editalGetDadNUP(process)}                  
+                  infos['edital'] = {'tipo' : 'Leilão', 'pai' : dispGetNUP(process)}                  
             if 'pública' in process['tipo'].lower():   
                   infos['work'] = WORK_ACTIVITY.REQUERIMENTO_EDITAL    
-                  infos['edital'] = {'tipo' : 'Oferta Pública', 'pai' : editalGetDadNUP(process)}    
+                  infos['edital'] = {'tipo' : 'Oferta Pública', 'pai' : dispGetNUP(process)}    
     if __debugging__:
         print(infos)              
     return infos 
-    
-def disponibilidadeSonSearch(wp, process_name):
-    """fetch son from dad relation leilão or oferta pública"""
-    def fetch_poligonal(proc):
-        proc._wpage = wp.copy()
-        if 'poligon' not in proc or not proc['poligon']: # still means poligon html failed somehow                
-            print(f'poligon not in proc {proc.name}')             
-            proc._dados.update(scm.default_run_state())  # force download again
-            proc.runTask(scm.SCM_SEARCH.BASICOS_POLIGONAL) 
-        return proc['poligon']
-    
-    Dad = scm.ProcessStorage[process_name]
-    son_data = {'edital_tipo' : None}
-    for son_name, attrs in scm.ProcessStorage[process_name].associados.items():
-        son_data['edital_tipo'] = None
-        print('son: ', son_name, attrs, file=sys.stdout)
-        Son = attrs['obj']
-        tipo = Son['tipo'].lower()        
-        fetch_poligonal(Son) # to guarantee
-        fetch_poligonal(Dad)
-        if not 'poligon' in Son: #ignore 
-            continue 
-        areadiff = abs(Dad['poligon']['area']-Son['poligon']['area'])            
-        son_data.update({
-            'NUP' : Son['NUP'], 
-            'area' : Son['poligon']['area'], 
-            'areadiff' : areadiff            
-            })     
-        if 'leilão' in tipo:
-            son_data['edital_tipo'] = 'Leilão'
-        elif 'oferta' in tipo:                
-            son_data['edital_tipo'] = 'Oferta Pública'
-        print('data: ', son_data, file=sys.stdout)
-        if areadiff <= 0.1 and son_data['edital_tipo'] is not None:
-            break # found    
-    return son_data 
 
 
 def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, 
@@ -353,14 +386,15 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None,
             print("Current dir: ", os.getcwd())
         print(f"activity {activity} \n info dict {info}")      
    
-    psei = Processo.fromSei(sei, process['NUP'])            
-    # inclui vários documentos, se desnecessário é só apagar
-    # Inclui termo de abertura de processo eletronico se data < 2020 (protocolo digital nov/2019)
-    if termo_abertura and process['data_protocolo'].year < 2020:  
-        psei.InsereTermoAberturaProcessoEletronico()        
-    
     if not activity:
         activity = info['work'] # get from infer
+
+    if not activity in WORK_ACTIVITY.REQUERIMENTO_EDITAL_DAD:
+        psei = Processo.fromSei(sei, process['NUP'])            
+        # inclui vários documentos, se desnecessário é só apagar
+        # Inclui termo de abertura de processo eletronico se data < 2020 (protocolo digital nov/2019)
+        if termo_abertura and process['data_protocolo'].year < 2020:  
+            psei.InsereTermoAberturaProcessoEletronico()    
         
     if activity in WORK_ACTIVITY.REQUERIMENTO_GENERICO:
         # Inclui Estudo Interferência pdf como Doc Externo no SEI
@@ -429,19 +463,20 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None,
         # IncluiDespacho(sei, nup, 13)  # despacho  análise de plano alvará
         raise NotImplementedError() 
     elif activity in WORK_ACTIVITY.REQUERIMENTO_EDITAL_DAD:
-        # Possible to get first son with tipo leilão or oferta publica, when multiple                        
-        if len(process['associados']) > 1:
-            print('Mais de um associado! Àrea Menor no Leilão? Or vindo de outro leilão?', process.name)
-        # get 1'st 'son' by poligon matching area on the list and edital/oferta tipo
-        son = disponibilidadeSonSearch(wpage, process_name)
-        if not son: # could not find son or sons 
-            raise Exception('Something wrong! Não é advindo de edital!', process_name)
+        # doesn't matter if son or dad was passed, here it's sorted!
+        dad, son = dispDadSon(process_name)
+        dad, son = scm.ProcessStorage[dad], scm.ProcessStorage[son]     
+        # this is where we will put documents  
+        psei = Processo.fromSei(sei, dad['NUP']) 
+        # calculate again: check in case area was not checked by infer method
+        areadiff = dad['poligon']['area']-son['poligon']['area']
+        # SOMETIMES it'll fail before comming here, when son not found
         # TODO deal with more participants on edital                
-        if son['areadiff'] > 0.1: # # compare areas if difference > 0.1 ha stop! - not same area
-           raise NotImplementedError('Not same Area!')            
-        psei.insereNotaTecnicaRequerimento("edital_dad", info, edital=son['edital_tipo'], 
+        if areadiff > 0.1: # compare areas if difference > 0.1 ha stop! - not same area
+            raise NotImplementedError(f"Not same Area! dad {dad['poligon']['area']:.2f} ha son {son['poligon']['area']:.2f} ha")
+        psei.insereNotaTecnicaRequerimento("edital_dad", info, edital=editalTipo(son), 
                             processo_filho=son['NUP'])
-
+        process = dad # this is what was done
     psei.insereMarcador(config['sei']['marcador_default'])
     psei.atribuir(config['sei']['atribuir_default'])
     # should also close the openned text window - going to previous state
