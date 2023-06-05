@@ -254,6 +254,8 @@ class Processo:
         if self.associados: # not dealing with grupamento many parents yet
             try:
                 graph, root = ancestry.createGraphAssociados(self)
+                #TODO: This is WRONG! root is not the real oldest process is only the graph root
+                # should use 'parents' and 'sons' instead and `comparePnames`
                 self._dados['prioridadec'] = ProcessStorage[root]['prioridade']
             except RecursionError:
                 # TODO analyse case of graph with closed loop etc.
@@ -618,10 +620,11 @@ class ProcessFactoryStorageClass(dict):
         ProcessStorage[process.name] = process
         
     def __getitem__(self, key):
+        key = fmtPname(key)
         if key in self:
             return super().__getitem__(key)   
         process = self.__select_from_sqlite(key)        
-        if not process:
+        if not process:            
             raise KeyError(key)
         self[key] = process # store here for faster access        
         # add event listener when changed will get updated on database 
