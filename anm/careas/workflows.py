@@ -256,6 +256,7 @@ def inferWork(process, folder=None):
 
     infos['pdf_interferencia'] = None
     infos['pdf_adicional'] = None 
+    infos['nome_assinatura'] = config['sei']['nome_assinatura']
 
     if folder is not None:
         # search/parse local folder
@@ -347,7 +348,7 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None,
     * sei : class
         selenium chrome webdriver instance
         
-    * process_name: string of name of process 
+    * process_name: string of name of process - any format
         folder where documentos are placed will be obtained from `ProcessPathStorage`
 
     * wpage: wPageNtlm 
