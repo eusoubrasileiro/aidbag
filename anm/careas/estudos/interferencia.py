@@ -38,7 +38,7 @@ def prettyTabelaInterferenciaMaster(tabela_interf_eventos, view=True):
     """
     Prettify tabela interferencia master for display or view.
     
-        * tabela_interf_eventos: pandas dataframe
+        * tabela_interf_eventos: pandas dataframe - (read from saved excel)
         * view : bool
             - True - For display only! Many rows get values removed. Hence it's for display only!   
             - False - For exporting as json, excel etc.
@@ -53,6 +53,7 @@ def prettyTabelaInterferenciaMaster(tabela_interf_eventos, view=True):
         table.DataPrior = table.DataPrior.apply(dataformat)    
     if hasattr(table, 'Protocolo') and is_datetime(table.Protocolo):        
         table.Protocolo = table.Protocolo.apply(dataformat) 
+    table.Inativ = table.Inativ.map(float).astype(int)
     table.fillna('', inplace=True) # fill nan to ''
     table = table.astype(str)    
     if view:
@@ -267,7 +268,7 @@ class Interferencia:
             lambda row: 1 if row['Data'] <= processo_prioridade else 0, axis=1)
         ### fill-in column with inativam or ativam processo for each event
         ### using excel 'eventos_scm_09102019.xls'
-        eventos = pd.read_excel(config['eventos_scm'])
+        eventos = pd.read_excel(config['eventos_scm'], dtype={'code' : int, 'Inativ' : int})
         eventos.drop(columns=['nome'],inplace=True)
         eventos.columns = ['Evento', 'Inativ'] # rename columns
         # join Inativ column -1/1 inativam or ativam processo
