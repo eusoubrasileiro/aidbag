@@ -38,7 +38,7 @@ def prettyTabelaInterferenciaMaster(tabela_interf_eventos, view=True):
     """
     Prettify tabela interferencia master for display or view.
     
-        * tabela_interf_eventos: pandas dataframe - (read from saved excel)
+        * tabela_interf_eventos: pandas dataframe - (READ from saved EXCEL)
         * view : bool
             - True - For display only! Many rows get values removed. Hence it's for display only!   
             - False - For exporting as json, excel etc.
@@ -201,12 +201,16 @@ class Interferencia:
                 self.tabela_assoc = pd.concat([self.tabela_assoc, assoc_items], sort=False, ignore_index=True, axis=0, join='outer')                
         return True
 
+
+
     def createTableMaster(self):
         """
         Create `tabela_interf_eventos` from `self.tabela_interf` previouly parsed,        
         Uses 'tabela de eventos' of processes 'interferentes'. 
         
         return False if no 'interferencia'          
+
+        TODO: remove useless columns and rename others already renamed on workapp
         """
         if not hasattr(self, 'tabela_interf'):
             if self.createTable(): # there is no interference !
