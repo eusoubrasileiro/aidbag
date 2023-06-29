@@ -573,13 +573,16 @@ class ProcessFactoryStorageClass(dict):
         super().__init__()      
         self.save_on_set = save_on_set        
         self.debug = debug
+        self.running_threads = 0
        
-    def __insert_to_sqlite(self, key):
+    def __insert_to_sqlite(self, key, threaded=False):
         with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn: # context manager already commits and closes connection
             cursor = conn.cursor()    
             cursor.execute("INSERT or REPLACE INTO storage VALUES (?,?,?,?,?)", self[key].toSqliteTuple())   
             if self.debug:
                 print(f"Just inserted or modified {conn.total_changes} rows on database", file=sys.stderr)
+        if threaded:
+            self.running_threads -= 1
             
     def __select_from_sqlite(self, key):
         with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn:
@@ -595,7 +598,8 @@ class ProcessFactoryStorageClass(dict):
         if not value.onchange: # on change callback of process
             value.onchange = ProcessStorage.__process_changed
         if self.save_on_set:
-            threading.Thread(target=self.__insert_to_sqlite, args=(key,)).start()        
+            self.running_threads += 1            
+            threading.Thread(target=self.__insert_to_sqlite, args=(key,True)).start()        
     
     def get(self, key):
         try:
