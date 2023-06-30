@@ -38,9 +38,10 @@ def prettyTabelaInterferenciaMaster(tabela_interf_eventos, view=True):
     """
     Prettify tabela interferencia master for display or view.
     
-        * tabela_interf_eventos: pandas dataframe - (READ from saved EXCEL)
+        * tabela_interf_eventos: pandas dataframe
         * view : bool
             - True - For display only! Many rows get values removed. Hence it's for display only!   
+              (READ from saved EXCEL)
             - False - For exporting as json, excel etc.
             
     Dataframe columns are converted to text. Nans to ''. Datetime to '%d/%m/%Y %H:%M:%S'    
@@ -185,7 +186,7 @@ class Interferencia:
             if self.verbose:
                 print(f"createTable: fetching data for associado {name} ", file=sys.stderr)                                
             processo  = Processo.Get(name, 
-                            self.wpage, SCM_SEARCH.ALL, self.verbose)
+                            self.wpage, SCM_SEARCH.BASICOS, self.verbose)
             self.interferentes[name] = processo # store Processo object
             indexes = (self.tabela_interf.Processo == name)
             self.tabela_interf.loc[indexes, 'Ativo'] = processo['ativo']
