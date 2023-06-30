@@ -574,6 +574,7 @@ class ProcessFactoryStorageClass(dict):
         self.save_on_set = save_on_set        
         self.debug = debug
         self.running_threads = 0
+        self._lock = threading.RLock()
        
     def __insert_to_sqlite(self, key, threaded=False):
         with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn: # context manager already commits and closes connection
@@ -593,13 +594,14 @@ class ProcessFactoryStorageClass(dict):
                 return Processo.fromSqliteTuple(process_row)
             return None
                    
-    def __setitem__(self, key, value):        
-        super().__setitem__(key, value)     
-        if not value.onchange: # on change callback of process
-            value.onchange = ProcessStorage.__process_changed
-        if self.save_on_set:
-            self.running_threads += 1            
-            threading.Thread(target=self.__insert_to_sqlite, args=(key,True)).start()        
+    def __setitem__(self, key, value): 
+        with self._lock:       
+            super().__setitem__(key, value)     
+            if not value.onchange: # on change callback of process
+                value.onchange = ProcessStorage.__process_changed
+            if self.save_on_set:
+                self.running_threads += 1            
+                threading.Thread(target=self.__insert_to_sqlite, args=(key,True)).start()        
     
     def get(self, key):
         try:
@@ -609,11 +611,12 @@ class ProcessFactoryStorageClass(dict):
         return result    
     
     def __delitem__(self, key):
-        if key in self:                   
-            super().__delitem__(key)
-            with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn:
-                cursor = conn.cursor()    
-                cursor.execute(f"DELETE FROM storage WHERE name = '{key}'")            
+        with self._lock:  
+            if key in self:                   
+                super().__delitem__(key)
+                with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn:
+                    cursor = conn.cursor()    
+                    cursor.execute(f"DELETE FROM storage WHERE name = '{key}'")            
     
     # def __contains__(self, __o: object) -> bool:
     #     return super().__contains__(__o)         
@@ -624,16 +627,17 @@ class ProcessFactoryStorageClass(dict):
         ProcessStorage[process.name] = process
         
     def __getitem__(self, key):
-        key = fmtPname(key)
-        if key in self:
-            return super().__getitem__(key)   
-        process = self.__select_from_sqlite(key)        
-        if not process:            
-            raise KeyError(key)
-        self[key] = process # store here for faster access        
-        # add event listener when changed will get updated on database 
-        process.onchange = ProcessStorage.__process_changed
-        return process
+        with self._lock:  
+            key = fmtPname(key)
+            if key in self:
+                return super().__getitem__(key)   
+            process = self.__select_from_sqlite(key)        
+            if not process:            
+                raise KeyError(key)
+            self[key] = process # store here for faster access        
+            # add event listener when changed will get updated on database 
+            process.onchange = ProcessStorage.__process_changed
+            return process
         
     def loadAll(self, verbose=False):        
         """Load all processes from sqlite database on self
