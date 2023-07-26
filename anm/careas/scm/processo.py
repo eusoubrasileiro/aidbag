@@ -383,6 +383,18 @@ class Processo:
     
     @staticmethod
     def fromSqliteTuple(tuplesqlite, reparse=False, verbose=False):
+        """
+        Convert a tuple from SQLite database into a Processo object.
+
+        Args:
+            tuplesqlite (tuple): The tuple representing the data from the SQLite database. 
+            name (str), modified (str), _dados (str), page_basicos (bytes), page_poligon (bytes).
+            reparse (bool, optional): Should be re-parsed? Defaults to False.
+            verbose (bool, optional): Defaults to False.
+
+        Returns:
+            Processo: The Processo object created from the provided tuple.
+        """
         name, modified, _dados, page_basicos, page_poligon = tuplesqlite
         process = Processo(name, None, False)
         process.modified = datetime.datetime.fromisoformat(modified)      
@@ -400,9 +412,19 @@ class Processo:
                     process._dados['run']['polygonal'] = True                  
         return process     
 
+
     def dict_dados(self) -> dict:
-        """return dict of dados string only (str). No other object class packed."""
-        return json.loads(json.dumps(self._dados, default=str))    
+        """return dict of dados string only (str). No other object class packed.
+        everything becomes str string after this function"""
+        return json.loads(json.dumps(self._dados, default=str))
+
+    def copy_dados(self, key) -> dict:
+        """return deep copy of self._dados[key]
+        use this only for parsed data or strings 
+        don't copy 'obj' from associados
+        unless you know what you are doing"""
+        return copy.deepcopy(self._dados[key])
+
             
     def toJSON(self):
         """
@@ -575,6 +597,10 @@ class ProcessFactoryStorageClass(dict):
         self.debug = debug
         self.running_threads = 0
         self._lock = threading.RLock()
+
+    # create context manager to hold lock?
+    # no need for get, set and del that are thread safe (using threading.RLock)
+    # but modify dict inside Processo is not thread safe so need to use lock
        
     def __insert_to_sqlite(self, key, threaded=False):
         with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn: # context manager already commits and closes connection
@@ -639,9 +665,50 @@ class ProcessFactoryStorageClass(dict):
             process.onchange = ProcessStorage.__process_changed
             return process
         
+
+    def updateAll(self):
+        """
+        Update all process stored here from the sqlite3 database (if needed)
+         1. check by time of last change column 'modified'
+         2. check by new processes not found on this dict
+        Safe for concurrent access (multithreading)
+        """
+        fname = config['scm']['process_storage_file'] + '.db'          
+        if not os.path.exists(fname):
+            print(f"Process Storage database file not found {fname}", file=sys.stderr)
+            return 
+        with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn:
+            start = time.time()            
+            for row in conn.execute("SELECT * FROM storage").fetchall():                                
+                modified = datetime.datetime.fromisoformat(row[1])    
+                # only replaces processes which modified > process.modified
+                # or absents
+                if row[0] not in self or modified > self[row[0]].modified:
+                    process = Processo.fromSqliteTuple(row)
+                    process.onchange = ProcessStorage.__process_changed
+                    # replaces existing
+                    with self._lock:
+                        self.update({ row[0] : process }) 
+            # process object database created now remake links from references
+            for _, process in ProcessStorage.items(): 
+                if 'associados' in process:           
+                    # cannot be obj hook json loads due circular reference
+                    # database must be already fully populated with objects
+                    for name in process['associados']:                         
+                        process['associados'][name]['obj'] = ProcessStorage[name] if name in ProcessStorage else None
+            n, dt = len(self),time.time()-start         
+            if verbose:
+                print(f"Updating, re-creating, relinking references of {n} processes from database took {dt:.2f} seconds")
+            else:
+                return (n, dt)        
+
     def loadAll(self, verbose=False):        
-        """Load all processes from sqlite database on self
-        returns tuple (time spent, number of processes) """
+        """
+        Load all processes from sqlite database on self
+        returns tuple (time spent, number of processes) 
+        WARNING: never run this more than once (only for startup). 
+        Not safe for concurrent access.
+        """
         fname = config['scm']['process_storage_file'] + '.db'          
         if not os.path.exists(fname):
             print(f"Process Storage database file not found {fname}", file=sys.stderr)
@@ -660,7 +727,7 @@ class ProcessFactoryStorageClass(dict):
                     # cannot be obj hook json loads due circular reference
                     # database must be already fully populated with objects
                     for name in process['associados']:                         
-                         process['associados'][name]['obj'] = ProcessStorage[name] if name in ProcessStorage else None
+                        process['associados'][name]['obj'] = ProcessStorage[name] if name in ProcessStorage else None
             n, dt = len(self),time.time()-start         
             if verbose:
                 print(f"Loading, creating, relinking references of {n} processes from database took {dt:.2f} seconds")
@@ -703,15 +770,14 @@ ProcessStorage = ProcessFactoryStorageClass()
 * key : unique `fmtPname` process string
 * value : `scm.Processo` object
 """
-def ProcessStorageUpdate(verbose, background=True):
-    """Update (or Load) Process Storage Dictionary from sqlite Database.
-    Any new data or change on the database will be replicated since dict `.update` method is used """
+def ProcessStorageLoad(verbose, background=True):
+    """Load Process Storage Dictionary from sqlite Database."""
     if background:
         threading.Thread(target=ProcessStorage.loadAll, args=(verbose,)).start() 
     else:
         return ProcessStorage.loadAll(verbose)        
     
-ProcessStorageUpdate(True, background=True)
+ProcessStorageLoad(True, background=True)
 # load processes on this module load
 
 
