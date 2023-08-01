@@ -11,9 +11,8 @@ from ..config import config
 from ..scm import (
     fmtPname,
     SCM_SEARCH,
-    ProcessStorage,
     util,
-    Processo    
+    ProcessManager
 )
 from ....web import htmlscrap 
 from .scraping import (
@@ -125,8 +124,8 @@ class Interferencia:
         * exceptions: 
             `DownloadInterferenciaFailed`, `CancelaUltimoEstudoFailed`
         """
-        if overwrite and processostr in ProcessStorage: # delete from database in case of overwrite            
-            del ProcessStorage[processostr]
+        if overwrite and processostr in ProcessManager: # delete from database in case of overwrite            
+            del ProcessManager[processostr]
         estudo = Interferencia(wpage, processostr, task=SCM_SEARCH.ALL, verbose=verbose)
         estudo.processo.salvaPageScmHtml(estudo.processo_path, 'basic', overwrite)
         estudo.processo.salvaPageScmHtml(estudo.processo_path, 'poligon', overwrite)                    
@@ -185,17 +184,16 @@ class Interferencia:
         for name in list(set(self.tabela_interf.Processo)): # Unique Process Only
             if self.verbose:
                 print(f"createTable: fetching data for associado {name} ", file=sys.stderr)                                
-            processo  = Processo.Get(name, 
+            processo  = ProcessManager.GetorCreate(name, 
                             self.wpage, SCM_SEARCH.BASICOS, self.verbose)
             self.interferentes[name] = processo # store Processo object
             indexes = (self.tabela_interf.Processo == name)
             self.tabela_interf.loc[indexes, 'Ativo'] = processo['ativo']
-            if processo.associados:
+            if processo['associados']:
                 self.tabela_interf.loc[indexes, 'Sons'] = len(processo['sons'])
                 self.tabela_interf.loc[indexes, 'Dads'] = len(processo['parents'])
-                assoc_items = pd.DataFrame({ "Main" : processo.name, "Target" : processo.associados.keys() })
-                assoc_items = assoc_items.join(pd.DataFrame(processo.associados.values()))
-                assoc_items.drop(columns='obj', inplace=True)
+                assoc_items = pd.DataFrame({ "Main" : processo.name, "Target" : processo['associados'].keys() })
+                assoc_items = assoc_items.join(pd.DataFrame(processo['associados'].values()))                
                 # not using prioridade of associados
                 # assoc_items['Prior'] = processo['prioridadec'] if processo['prioridadec'] else processo['prioridade']
                 # number of direct sons/ ancestors
@@ -404,7 +402,7 @@ class Interferencia:
     @staticmethod
     def from_excel(dir='.'):            
         name = util.findfmtPnames(pathlib.Path(dir).absolute().stem)[0]
-        processo = ProcessStorage[name]
+        processo = ProcessManager[name]
         estudo = Interferencia(None, processo.name, verbose=False, getprocesso=False)     
         estudo.processo = processo 
         estudo.processo_path = estudo.processPath(processo)      
@@ -417,7 +415,7 @@ class Interferencia:
     @staticmethod
     def from_json(dir='.'):
         name = util.findfmtPnames(pathlib.Path(dir).absolute().stem)[0]
-        processo = ProcessStorage[name]
+        processo = ProcessManager[name]
         estudo = Interferencia(None, processo.name, verbose=False, getprocesso=False)     
         estudo.processo = processo 
         estudo.processo_path = estudo.processPath(processo)     

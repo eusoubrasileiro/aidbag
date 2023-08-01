@@ -37,6 +37,8 @@ from .parsing import (
     getMissingTagsBasicos
 )
 
+from .requests import urls as requests_urls
+
 class SCM_SEARCH(enum.Flag):
     """what to search to fill in a `Processo` class"""
     NONE = enum.auto()
@@ -47,105 +49,108 @@ class SCM_SEARCH(enum.Flag):
     BASICOS_POLIGONAL = BASICOS | POLIGONAL
     ALL = BASICOS | ASSOCIADOS | PRIORIDADE | POLIGONAL
     
+from sqlalchemy import (
+    Column, Integer, String, Text, Date, DateTime, 
+    func,     
+    )
 
-def thread_safe(function):
-    """Decorator for methods of `Processo` or `ProcessStorage` needing thread safe execution using self->threading.RLock
-    Only one Thread can execute that method at time.
-    Classes must have self.lock field"""
-    @functools.wraps(function)
-    def wrapper(self, *args, **kwargs):            
-        if not self.lock.acquire(timeout=60.*2):
-            raise TimeoutError(f"Wait time-out in function {function.__name__} for process { self.name }")
-        result = function(self, *args, **kwargs)            
-        self.lock.release() # make it free
-        return result 
-    return wrapper
+from sqlalchemy.ext.declarative import declarative_base
 
 
 default_run_state = lambda: copy.deepcopy({ 'run' : 
     { 'basicos': False, 'associados': False, 'ancestry': False, 'polygonal': False } })
 """ start state of running parsing processes of process - without deepcopy all mess expected"""
 
-"""
-Use `Processo.Get` to avoid creating duplicate Processo's
-"""
-class Processo:    
-    def __init__(self, processostr, wpagentlm, verbose=True):
-        """
-        Hint: Use `Processo.Get` to avoid creating duplicate Processo's
-        """        
-        self.name = fmtPname(processostr) # `fmtPname` unique string process number/year
-        self.number, self.year = numberyearPname(self.name)
-        self.isdisp = True if str(self.number)[0] == 3 else False # if starts 3xx.xxx/xxx disponibilidade  
+Base = declarative_base()
+
+class Processodb(Base):
+    # structure of the database - class variables
+    __tablename__ = 'STORAGE'
+    _id = Column('id', Integer, primary_key=True, autoincrement=True)
+    _name = Column('NAME', String(12), unique=True)  # Unique constraint on the 'name' column    
+    _dados = Column('DADOS', JSON)  # Use JSON type to store the nested dictionary as a JSON string
+    # Alchemy will serialize the dict to JSON and the way back I don't need to care about it        
+    _basic_html = Column('PAGE_BASIC', Text)  
+    _polygon_html = Column('PAGE_POLIGON', Text)  
+    # New column for last modification timestamp (auto updated)
+    _modified = Column('MODIFIED', DateTime, default=func.now(), onupdate=func.now())  
+    def __init__(name):
+        # real data to store in the database - instance variables 
+        self._name = name
+        self._dados.update(default_run_state())
+        self.basic_html = ''
+        self.polygon_html = ''
+
+
+class Processo(Processodb):    
+    def __init__(self, processostr, wpagentlm=None, manager=None, verbose=False):
+        super().__init__(fmtPname(processostr))
+        # `fmtPname` unique string process number/year
+        self.number, self.year = numberyearPname(self._name)
+        self._isdisp = True if str(self.number)[0] == 3 else False # if starts 3xx.xxx/xxx disponibilidade  
         if wpagentlm: 
             self._wpage = wPageNtlm(wpagentlm.user, wpagentlm.passwd)
-        else: # might be None in case loading from JSON, html etc...
-            self._wpage = None 
-        self._verbose = verbose
-        self.lock = threading.RLock() # re-entrant can be acquired by same thread multiple times
-        """`threading.RLock` exists due 'associados' search with multiple threads"""
-        self._dados = {} 
-        # control to avoid from running again        
-        self._dados.update(default_run_state())                           
-        """dados parsed and processed """
-        # web pages are 'dadosbasicos' and 'poligonal'
-        self._pages = { 'basic'   : {'html' : '' , 'url': '', 'session' : None},
-                        'poligon' : {'html' : '' , 'url': '', 'session' : None} 
-                      } # 'html' is the request.response.text property : bytes unicode decoded or infered      
-        self.modified = datetime.datetime.now() 
-        """when this process was requested for the first time"""
-        self.onchange = None
-        """pointer to function - called when process changes either _pages or _dados
-           receives one argument the calling process (self)
-        """
+        # might be None in case loading from JSON, html etc...        
+        self._verbose = verbose                            
+        self._requests_session = None 
+        self._manager = manager
+
+
+    @classmethod
+    def fromProcessodb(cls, processodb):
+        """Create a new Processo instance from the Processodb instance"""
+        processo = cls(processodb._name)
+        return processo
+
+
+    @property 
+    def name(): # read-only
+        return _name
+
+
+    def update_database_on_finish(func):
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            with self._manager.session_scope() as session:
+                result = func(self, *args, **kwargs)
+                session.add(self)
+            return result
+        return wrapper        
+
 
     def __getitem__(self, key):
-        """get an property from the dados dictionary if exists"""        
-        return self._dados[key]           
+        """get a copy of property from the data dictionary if exists"""        
+        return copy.deepcopy(self._dados[key])
     
+
     def __contains__(self, key):
-        """check if property exist on self._dados"""
-        return key in self._dados    
+        """check if property exist on self.data"""
+        return key in self._dados
         
-    @property
-    def associados(self):
-        """key : value - processo name : {attributes}
-        attributes {} keys 'tipo', 'data' de associação, 'obj' scm.processo.Processo etc..."""        
-        return  self._dados['associados']   
 
-    @property
-    def pages(self):
-        return self._pages
-
-    @thread_safe
     def runTask(self, task=SCM_SEARCH.BASICOS, wpage=None):
-        """
-        Run task from enum SCM_SEARCH desired data.
-        
-        * task : enum
-            SCM_SEARCH
-        """
+        """Run task from enum SCM_SEARCH desired data."""
         if self._wpage is None: # to support being called without wp set 
             self._wpage = wpage
         if task in SCM_SEARCH: # passed argument to perform a default call without args
-            if SCM_SEARCH.BASICOS in task and not self['run']['basicos']:
+            if SCM_SEARCH.BASICOS in task and not self._dados['run']['basicos']:
                 self._dadosBasicosGetIf()
-            if SCM_SEARCH.POLIGONAL in task and not self['run']['polygonal']:
+            if SCM_SEARCH.POLIGONAL in task and not self._dados['run']['polygonal']:
                 self._dadosPoligonalGetIf()
-            if SCM_SEARCH.ASSOCIADOS in task and not self['run']['associados']:
+            if SCM_SEARCH.ASSOCIADOS in task and not self._dados['run']['associados']:
                 self._expandAssociados()
-            if SCM_SEARCH.PRIORIDADE in task and not self['run']['ancestry']:
+            if SCM_SEARCH.PRIORIDADE in task and not self._dados['run']['ancestry']:
                 self._ancestry()
 
 
-    @thread_safe
+    @update_database_on_finish
     def _expandAssociados(self, ass_ignore=''):
         """
-        Search and Load on `ProcessStorage` all processes associated with this. 
+        Search and Load on `ProcessManager` all processes associated with this. 
 
         * ass_ignore - to ignore in associados list (remove)
 
-        'associados' must be in self.dados dict to build anscestors and sons
+        'associados' must be in self._dados dict to build anscestors and sons
 
         The search is done using a ThreadPool for all 'associados'.
         That cascades searches for each 'associado' also using a ThreadPool. 
@@ -153,29 +158,28 @@ class Processo:
         the source of the search is always passed to be ignored on the next search.
 
         """
-        if not self['run']['basicos']:
+        if not self._dados['run']['basicos']:
             self._dadosBasicosGetIf()
 
         if self._verbose:
-            print("expandAssociados - getting associados: ", self.name,
+            print("expandAssociados - getting associados: ", self._name,
             ' - ass_ignore: ', ass_ignore, file=sys.stderr)
 
-        if self['run']['associados']: 
-            return self.associados       
+        if self._dados['run']['associados']: 
+            return self['associados']
 
         if not self.associados:
-            self['run']['associados'] = True
+            self._dados['run']['associados'] = True
             return
         
         # local copy for object search -> removing circular reference
-        associados = copy.copy(self.associados)      
+        associados = self['associados']      
         if ass_ignore: # equivalent to ass_ignore != ''
             # if its going to be ignored it's because it already exists 
             # being associated with someone 
             # !inconsistency! bug situations identified where A -> B but B !-> A on 
             # each of A and B SCM page -> SO check if ass_ignore exists on self.associados
-            if ass_ignore in self.associados:                                
-                self.associados[ass_ignore].update({'obj' : ProcessStorage[ass_ignore]})  
+            if ass_ignore in self._dados['associados']:
                 # for outward search ignore this process
                 del associados[ass_ignore] # removing circular reference    
             else: # !inconsistency! bug situation identified where A -> B but B !-> A 
@@ -184,15 +188,15 @@ class Processo:
                 # sendo que um dos grupamentos havia sido cancelado mas a associação não removida                    
                 inconsistency = ["Process {0} associado to this process but this is NOT associado to {0} on SCM".format(
                     ass_ignore)]
-                self._dados['inconsistencies'] = self._dados['inconsistencies'] + inconsistency 
+                self._dados['inconsistencies'] += inconsistency 
                 if self._verbose:
-                    print("expandAssociados - inconsistency: ", self.name,
+                    print("expandAssociados - inconsistency: ", self._name,
                     ' : ', inconsistency, file=sys.stderr)
         # helper function to search outward only
         def _expandassociados(name, wp, ignore, verbosity):
             """ *ass_ignore : must be set to avoid being waiting for parent-source 
                 Also make the search spread outward only"""
-            proc = Processo.Get(name, wp, SCM_SEARCH.BASICOS, verbosity)                
+            proc = self._manager.GetorCreate(name, wp, SCM_SEARCH.BASICOS, verbosity)                
             proc._expandAssociados(ignore)
             return proc
         # ignoring empty lists 
@@ -203,33 +207,32 @@ class Processo:
                 #future_processes = {process_name : executor.submit(Processo.Get, process_name, self.wpage, 1, self.verbose) 
                 #    for process_name in assprocesses_name}
                 future_processes = {process_name : executor.submit(_expandassociados, 
-                    process_name, self._wpage, self.name, self._verbose) 
+                    process_name, self._wpage, self._name, self._verbose) 
                     for process_name in associados}
-                futures.wait(future_processes.values())
+                futures.wait(future_processes.values()) 
                 #for future in concurrent.futures.as_completed(future_processes):         
                 for process_name, future_process in future_processes.items():               
-                    try:
-                        # add to process name, property 'obj' process objects                            
-                        self.associados[process_name].update({'obj': future_process.result()})
+                    try:                        
+                        future_process.result()
                     except Exception as e:                            
                         print(f"Exception raised while running expandAssociados thread for process {process_name}",
                             file=sys.stderr)     
                         if type(e) is requests.ErrorProcessSCM:
                             # MUST delete process if did not get scm page
                             # since basic data wont be on it, will break ancestry search etc... 
-                            del ProcessStorage[process_name]
-                            del self.associados[process_name]
+                            del self._manager[process_name]
+                            del self._dados['associados'][process_name]
                             print(str(e) + f" Removed from associados. Exception ignored!",
                                 file=sys.stderr)
                         else:
                             print(traceback.format_exc(), file=sys.stderr, flush=True)     
                             raise # re-raise                  
         if self._verbose:
-            print("expandAssociados - finished associados: ", self.name, file=sys.stderr)
-            
-        self._dados['run']['associados'] = True
-        self.changed()        
+            print("expandAssociados - finished associados: ", self._name, file=sys.stderr)
+        self._dados['run']['associados'] = True    
 
+
+    @update_database_on_finish
     def _ancestry(self):
         """
         Build graph of all associados.
@@ -239,111 +242,121 @@ class Processo:
             self._dadosBasicosGetIf()
 
         if self._verbose:
-            print("ancestrySearch - building graph: ", self.name, file=sys.stderr)    
+            print("ancestrySearch - building graph: ", self._name, file=sys.stderr)    
             
         if self['run']['ancestry']:
             return self['prioridadec']
 
         self._dados['prioridadec'] = self['prioridade']
-        if not self['run']['associados'] and not self.associados:             
+        if not self._dados['run']['associados'] and not self.associados:             
             self._dados['run']['ancestry'] = True            
             return self['prioridadec']
         else:
             self._expandAssociados()            
             
-        if self.associados: # not dealing with grupamento many parents yet
+        if self._dados['associados']: # not dealing with grupamento many parents yet
             try:
                 graph, root = ancestry.createGraphAssociados(self)
                 #TODO: This is WRONG! root is not the real oldest process is only the graph root
                 # should use 'parents' and 'sons' instead and `comparePnames`
-                self._dados['prioridadec'] = ProcessStorage[root]['prioridade']
+                self._dados['prioridadec'] = self._manager[root]['prioridade']
             except RecursionError:
                 # TODO analyse case of graph with closed loop etc.
                 pass 
 
         self._dados['run']['ancestry'] = True
         return self['prioridadec']
-    
+
+            
     def _dadosBasicosGetIf(self, **kwargs):
         """wrap around `_dadosBasicosGet`to download only if page html
         was not downloaded yet"""
-        if not self._pages['basic']['html']:
+        if not self._basic_html:
             self._dadosBasicosGet(**kwargs)
         else: 
             self._dadosBasicosGet(download=False, **kwargs)    
+
 
     def _pageRequest(self, name):
         """python requests page and get response unicode str decoded"""
         if not isinstance(self._wpage, wPageNtlm):
             raise Exception('Invalid `wPage` instance!')
         # str unicode page
-        html, url, session = requests.pageRequest(name, self.name, self._wpage, False)
-        self._pages[name].update({'html' : html, 'url' : url, 'session' : session}) 
-        self.changed()
+        html, _, session = requests.pageRequest(name, self._name, self._wpage, False)
+        self._requests_session = session
+        if name == 'basic':
+            self._basic_html = html
+        else:
+            self._polygon_html = html
 
+
+    @update_database_on_finish
     def _dadosBasicosGet(self, data_tags=None, download=True):
         """dowload the dados basicos scm main html page or 
         use the existing one stored at `self._pages` 
-        than parse all data_tags passed storing the resulting in `self.dados`
+        than parse all data_tags passed storing the resulting in `self._dados`
         return True if succeed on parsing every tag False ortherwise
         """
-        if not self['run']['basicos']: # if not done yet
+        if not self._dados['run']['basicos']: # if not done yet
             if data_tags is None: # data tags to fill in 'dados' with
                 data_tags = scm_data_tags.copy()
             if download: # download get with python.requests page html response            
                 self._pageRequest('basic')        
             if self._pages['basic']['html']:
                 if self._verbose:
-                    print("dadosBasicosGet - parsing: ", self.name, file=sys.stderr)        
+                    print("dadosBasicosGet - parsing: ", self._name, file=sys.stderr)        
                 # using class field directly       
-                dados = parseDadosBasicos(self._pages['basic']['html'], 
-                    self.name, self._verbose, data_tags)            
+                dados = parseDadosBasicos(self._basic_html, 
+                    self._name, self._verbose, data_tags)            
                 self._dados.update(dados)
                 self._dados['run']['basicos'] = True 
-                self.changed()   
                 
+
     def _dadosPoligonalGetIf(self, **kwargs):
         """wrap around `_dadosPoligonalGet`to download only if page html
         was not downloaded yet"""
-        if not self._pages['poligon']['html']:
+        if not self._polygon_html:
             self._dadosPoligonalGet(**kwargs)
         else: 
             self._dadosPoligonalGet(download=False, **kwargs)         
 
+
+    @update_database_on_finish
     def _dadosPoligonalGet(self, download=True):
         """dowload the dados scm poligonal html page or 
         use the existing one stored at `self._pages` 
-        than parse all data_tags passed storing the resulting in `self.dados['poligonal']`
+        than parse all data_tags passed storing the resulting in `self._dados['poligonal']`
         return True           
           * note: not used by self.run!
         """
-        if not self['run']['polygonal']: 
+        if not self._dados['run']['polygonal']: 
             if download: # download get with python.requests page html response  
                 self._pageRequest('poligon')
-            if self._pages['poligon']['html']:
+            if self._polygon_html:
                 if self._verbose:
-                    print("dadosPoligonalGet - parsing: ", self.name, file=sys.stderr)   
-                dados = parseDadosPoligonal(self._pages['poligon']['html'], self._verbose)
+                    print("dadosPoligonalGet - parsing: ", self._name, file=sys.stderr)   
+                dados = parseDadosPoligonal(self._polygon_html, self._verbose)
                 self._dados.update({'poligon' : dados })                       
-                self._dados['run']['polygonal'] = True
-                self.changed()        
+                self._dados['run']['polygonal'] = True                     
 
+
+    @update_database_on_finish
     def _dadosBasicosFillMissing(self):
         """try fill dados faltantes pelo processo associado (pai) 1. UF 2. substancias
             need to be reviewed, wrong assumption about parent process   
         """
-        if not self['run']['associados']:
+        if not self._dados['run']['associados']:
             self._expandAssociados()
-        if self.associados:
+        if self._dados['associados']:
             miss_data_tags = getMissingTagsBasicos(self._dados)        
-            father = Processo.Get(self._dados['parents'][0], self._wpage, verbose=self._verbose, run=False)
+            father = self._manager.GetorCreate(self._dados['parents'][0], self._wpage, verbose=self._verbose, run=False)
             father._dadosBasicosGetIf(data_tags=miss_data_tags)
             self._dados.update(father._dados)
-            self.changed()        
             return True
         else:
             return False
         
+
     def salvaPageScmHtml(self, html_path, pagename='basic', overwrite=False):
         """Save SCM Html page 'Basicos' or 'Poligonal' tab.
 
@@ -356,451 +369,16 @@ class Processo:
                                                 self.number+'_'+self.year)
         if not overwrite and path.with_suffix('.html').exists():
             return 
-        if not self._pages[pagename]['html']:
-            self._pageRequest(pagename) # get/fill-in _pages['']['session']          
-        if self._pages[pagename]['session']: # save html and page contents - full page  
+        if( (pagename == 'basic'and not self._basic_html) or
+            (pagename == 'poligon'and not self._polygon_html) ):
+                self._pageRequest(pagename) # get/fill-in self._requests_session          
+        html = self._basic_html if(pagename == 'basic') else self._polygon_html
+        if self._requests_session: # save html and page contents - full page  
             # MUST re-use session due ASP.NET authentication etc.           
-            saveFullHtmlPage(self._pages[pagename]['url'], str(path), self._pages[pagename]['session'], 
-                             self._pages[pagename]['html'])            
+            saveFullHtmlPage(urls[pagename], str(path), self._requests_session, html)          
         else: # save simple plain html text page
-            saveHtmlPage(str(path), self._pages[pagename]['html'])
- 
-            
-    def toSqliteTuple(self):
-        """Create a tuple of this process with complexes fields as json strings
-        to save on sqlite database"""
-        basicos = self._pages['basic']['html'] 
-        basicos = basicos if basicos is not None else ''        
-        poligon = self._pages['poligon']['html']
-        poligon = poligon if poligon is not None else ''        
-        return (  self.name,                                     
-                  self.modified.isoformat(),
-                  # datetime convertion default function to JSON string                  
-                  json.dumps(self._dados, default=datetime_to_json),
-                  zlib.compress(basicos.encode('utf-8')),
-                  zlib.compress(poligon.encode('utf-8'))
-                )    
-    
-    @staticmethod
-    def fromSqliteTuple(tuplesqlite, reparse=False, verbose=False):
-        """
-        Convert a tuple from SQLite database into a Processo object.
-
-        Args:
-            tuplesqlite (tuple): The tuple representing the data from the SQLite database. 
-            name (str), modified (str), _dados (str), page_basicos (bytes), page_poligon (bytes).
-            reparse (bool, optional): Should be re-parsed? Defaults to False.
-            verbose (bool, optional): Defaults to False.
-
-        Returns:
-            Processo: The Processo object created from the provided tuple.
-        """
-        name, modified, _dados, page_basicos, page_poligon = tuplesqlite
-        process = Processo(name, None, False)
-        process.modified = datetime.datetime.fromisoformat(modified)      
-        process._dados = json.loads(_dados, object_hook=json_to_datetime)        
-        process._pages['basic']['html'] = zlib.decompress(page_basicos).decode('utf-8')
-        process._pages['poligon']['html'] = zlib.decompress(page_poligon).decode('utf-8')
-        if 'run' not in process: # backward compatibility
-            process._dados.update(default_run_state())   
-        if reparse:
-            process._dadosBasicosGet(download=False)
-            if process._pages['poligon']['html']:            
-                if not process._dadosPoligonalGet(download=False) and verbose:
-                    print('Some error on poligonal page cant read poligonal table', file=sys.stderr)           
-                else:
-                    process._dados['run']['polygonal'] = True                  
-        return process     
+            saveHtmlPage(str(path), html)   
 
 
-    def dict_dados(self) -> dict:
-        """return dict of dados string only (str). No other object class packed.
-        everything becomes str string after this function"""
-        return json.loads(json.dumps(self._dados, default=str))
-
-    def copy_dados(self, key) -> dict:
-        """return deep copy of self._dados[key]
-        use this only for parsed data or strings 
-        don't copy 'obj' from associados
-        unless you know what you are doing"""
-        return copy.deepcopy(self._dados[key])
-
-            
-    def toJSON(self):
-        """
-        JSON serialize this process
-        mainly saves self.pages['html'] unicoded decoded string 
-
-        Note that everything to be parsed is there. It's safer than 
-        saving the parsed, processed data that might change in the future.
-        """
-        # create a dict of the object and then to json 
-        pdict = { 'name'   : self.name,                                     
-                  'modified' : self.modified,
-                  '_pages' : self._pages,
-                  '_dados' : self._dados
-                }
-        return json.dumps(pdict, default=datetime_to_json)
-
-    def toJSONfile(self, fname=None):
-        """
-        JSON serialize this process and saves to a file 
-        name given by `yearNumber`
-        """
-        if not fname:
-            fname = processUniqueNumber(self.name)+'.JSON'
-        with open(fname, 'w', encoding='utf-8') as f:
-            f.write(self.toJSON())
-        return fname
-    
-    def changed(self):
-        """something changed so modified datetime changes"""
-        self.modified = datetime.datetime.now() 
-        if self.onchange is not None:
-            self.onchange(self)            
-
-    @staticmethod
-    def fromJSON(strJSON, verbose=False, reparse=False):
-        """Create a `Processo` from a JSON str create with `toJSON` method.
-           only 'dados basicos' are parsed associados, ancestry need to be run
-           
-           * reparse : to parse data from html overwritting existing `._dados`
-        """
-        jsondict = json.loads(strJSON, object_hook=json_to_datetime)            
-        process = Processo(jsondict['name'], None, False)
-        process.modified = jsondict['modified']        
-        process._dados = jsondict['_dados']        
-        process._pages = jsondict['_pages']                        
-        if 'run' not in process: # backward compatibility
-            process._dados.update(default_run_state())  
-        if reparse:
-            process._dadosBasicosGet(download=False)
-            process._dados['run']['basicos'] = True                  
-            if process._pages['poligon']['html']:            
-                if not process._dadosPoligonalGet(download=False) and verbose:
-                    print('Some error on poligonal page cant read poligonal table', file=sys.stderr)           
-                process._dados['run']['polygonal'] = True        
-        return process
-
-    @staticmethod
-    def fromJSONfile(fname, verbose=False):
-        """Create a `Processo` from a JSON str create with `toJSON` method saved on file fname.
-        """
-        pJSON = ''
-        with open(fname, 'r', encoding='utf-8') as f:
-            pJSON = f.read()
-        return Processo.fromJSON(pJSON, verbose)
-
-    @staticmethod
-    def getNUP(processostr, wpagentlm):
-        response = requests.pageRequest('basic', processostr, wpagentlm, True)
-        return parseNUP(response.content)
-
-    @staticmethod
-    def fromStrHtml(processostr, html_basicos, html_poligonal=None, verbose=True):
-        """Create a `Processo` from a html str of basicos and poligonal (if available)
-            - main_html : str (optional)
-                directly from a request.response.content string previouly saved  
-                `processostr` must be set
-        """
-        processo = Processo(processostr, None, verbose=verbose)
-        processo._pages['basic']['html'] = html_basicos
-        processo._pages['poligon']['html'] = html_poligonal
-        processo._dadosBasicosGet(download=False) 
-        if html_poligonal:            
-            if not processo._dadosPoligonalGet(download=False) and verbose:
-                print('Some error on poligonal page cant read poligonal table', file=sys.stderr)
-        return processo
-
-    @staticmethod
-    def fromHtml(path='.', processostr=None, verbose=True):
-        """Try create a `Processo` from a html's of basicos and poligonal (optional)       
-        """
-        path = pathlib.Path(path)        
-        path_main_html = list(path.glob('*basicos*.html')) # html file on folder
-        path_poligon_html = list(path.glob('*poligonal*.html')) # html file on folder
-        if not path_main_html:
-            raise FileNotFoundError(".fromHtml main scm html file not found!")
-        if not processostr: # get process str name by file name
-            processostr= fmtPname(str(path_main_html[0]))
-        poligon_html = None
-        main_html = try_read_html(path_main_html[0])
-        if path_poligon_html: # if present
-            path_poligon_html = try_read_html(path_poligon_html[0])
-        elif verbose:            
-            print('Didnt find a poligonal page html saved', file=sys.stderr)                
-        return Processo.fromStrHtml(processostr, main_html, poligon_html, verbose=verbose)
-
-    @staticmethod
-    def Get(processostr, wpagentlm, task=SCM_SEARCH.ALL, verbose=True, run=True):
-        """
-        Create a new or get a Processo from ProcessStorage if it has not expired. (config['scm']['process_expire'])
-
-        processostr : numero processo format xxx.xxx/ano
-        wpage : wPage html webpage scraping class com login e passwd preenchidos
-        """
-        processo = None                
-        processostr = fmtPname(processostr)        
-        if ProcessStorage.get(processostr) is not None:
-            processo = ProcessStorage[processostr] #  storage doesn't keep wpage
-            processo._wpage = wPageNtlm(wpagentlm.user, wpagentlm.passwd)
-            if processo.modified + config['scm']['process_expire'] < datetime.datetime.now():         
-                if verbose:       
-                    print("Processo placing on storage ", processostr, file=sys.stderr)
-                processo = Processo(processostr, wpagentlm,  verbose)  # store newer guy             
-                ProcessStorage[processostr] = processo
-            else:
-                if verbose: 
-                    print("Processo getting from storage ", processostr, file=sys.stderr)            
-        else:
-            if verbose: 
-                print("Processo placing on storage ", processostr, file=sys.stderr)
-            processo = Processo(processostr, wpagentlm,  verbose)  # store new guy
-            ProcessStorage[processostr] = processo            
-        if run: # wether run the task, dont run when loading from file/str
-            processo.runTask(task)
-        return processo
-
-
-
-# create the sqlite database for processes
-# with sqlite3.connect('process_storage.db') as conn: # already commits and closes
-#    sql = f"""CREATE TABLE STORAGE(
-#       NAME CHAR(12) NOT NULL,   
-#       MODIFIED TIMESTAMP,
-#       DADOS TEXT,
-#       PAGE_BASIC BLOB, 
-#       PAGE_POLIGON BLOB,
-#       UNIQUE(NAME) ON CONFLICT REPLACE
-#    )"""
-#    conn.execute(sql)
-
-import sqlite3    
-
-# Inherits from dict since it is:
-# 1. the recommended global approach 
-# 2. thread safe for 'simple set/get'
-class ProcessFactoryStorageClass(dict):
-    """Container of processes to avoid 
-    1. connecting/open page of SCM again
-    2. parsing all information again    
-    * If it was already parsed save it in here { key : value }
-    * key : unique `fmtPname` process string
-    * value : `scm.Processo` object
-    """    
-    def __init__(self, save_on_set=True, debug=False): 
-        """
-        * save_on_set: save on database on set 
-        """        
-        super().__init__()      
-        self.save_on_set = save_on_set        
-        self.debug = debug
-        self.running_threads = 0
-        self._lock = threading.RLock()
-
-    # create context manager to hold lock?
-    # no need for get, set and del that are thread safe (using threading.RLock)
-    # but modify dict inside Processo is not thread safe so need to use lock
-       
-    def __insert_to_sqlite(self, key, threaded=False):
-        with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn: # context manager already commits and closes connection
-            cursor = conn.cursor()    
-            cursor.execute("INSERT or REPLACE INTO storage VALUES (?,?,?,?,?)", self[key].toSqliteTuple())   
-            if self.debug:
-                print(f"Just inserted or modified {conn.total_changes} rows on database", file=sys.stderr)
-        if threaded:
-            self.running_threads -= 1
-            
-    def __select_from_sqlite(self, key):
-        with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn:
-            cursor = conn.cursor()    
-            cursor.execute(f"SELECT * FROM storage WHERE name='{key}'")
-            process_row = cursor.fetchone()
-            if process_row:
-                return Processo.fromSqliteTuple(process_row)
-            return None
-                   
-    def __setitem__(self, key, value): 
-        with self._lock:       
-            super().__setitem__(key, value)     
-            if not value.onchange: # on change callback of process
-                value.onchange = ProcessStorage.__process_changed
-            if self.save_on_set:
-                self.running_threads += 1            
-                threading.Thread(target=self.__insert_to_sqlite, args=(key,True)).start()        
-    
-    def get(self, key):
-        try:
-            result = self[key]
-        except KeyError:
-            return None 
-        return result    
-    
-    def __delitem__(self, key):
-        with self._lock:  
-            if key in self:                   
-                super().__delitem__(key)
-                with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn:
-                    cursor = conn.cursor()    
-                    cursor.execute(f"DELETE FROM storage WHERE name = '{key}'")            
-    
-    # def __contains__(self, __o: object) -> bool:
-    #     return super().__contains__(__o)         
-    
-    @staticmethod
-    def __process_changed(process):
-        """update process on database"""
-        ProcessStorage[process.name] = process
-        
-    def __getitem__(self, key):
-        with self._lock:  
-            key = fmtPname(key)
-            if key in self:
-                return super().__getitem__(key)   
-            process = self.__select_from_sqlite(key)        
-            if not process:            
-                raise KeyError(key)
-            self[key] = process # store here for faster access        
-            # add event listener when changed will get updated on database 
-            process.onchange = ProcessStorage.__process_changed
-            return process
-        
-
-    def updateAll(self):
-        """
-        Update all process stored here from the sqlite3 database (if needed)
-         1. check by time of last change column 'modified'
-         2. check by new processes not found on this dict
-        Safe for concurrent access (multithreading)
-        """
-        fname = config['scm']['process_storage_file'] + '.db'          
-        if not os.path.exists(fname):
-            print(f"Process Storage database file not found {fname}", file=sys.stderr)
-            return 
-        with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn:
-            start = time.time()            
-            for row in conn.execute("SELECT * FROM storage").fetchall():                                
-                modified = datetime.datetime.fromisoformat(row[1])    
-                # only replaces processes which modified > process.modified
-                # or absents
-                if row[0] not in self or modified > self[row[0]].modified:
-                    process = Processo.fromSqliteTuple(row)
-                    process.onchange = ProcessStorage.__process_changed
-                    # replaces existing
-                    with self._lock:
-                        self.update({ row[0] : process }) 
-            # process object database created now remake links from references
-            for _, process in ProcessStorage.items(): 
-                if 'associados' in process:           
-                    # cannot be obj hook json loads due circular reference
-                    # database must be already fully populated with objects
-                    for name in process['associados']:                         
-                        process['associados'][name]['obj'] = ProcessStorage[name] if name in ProcessStorage else None
-            n, dt = len(self),time.time()-start         
-            if verbose:
-                print(f"Updating, re-creating, relinking references of {n} processes from database took {dt:.2f} seconds")
-            else:
-                return (n, dt)        
-
-    def loadAll(self, verbose=False):        
-        """
-        Load all processes from sqlite database on self
-        returns tuple (time spent, number of processes) 
-        WARNING: never run this more than once (only for startup). 
-        Not safe for concurrent access.
-        """
-        fname = config['scm']['process_storage_file'] + '.db'          
-        if not os.path.exists(fname):
-            print(f"Process Storage database file not found {fname}", file=sys.stderr)
-            return 
-        with sqlite3.connect(config['scm']['process_storage_file']+'.db') as conn:
-            start = time.time()
-            dbdict = {}
-            for row in conn.execute("SELECT * FROM storage").fetchall():
-                process = Processo.fromSqliteTuple(row)                
-                process.onchange = ProcessStorage.__process_changed
-                dbdict.update({ row[0] : process })
-            self.update(dbdict)            
-            # process object database created now remake links from references
-            for _, process in ProcessStorage.items(): 
-                if 'associados' in process:           
-                    # cannot be obj hook json loads due circular reference
-                    # database must be already fully populated with objects
-                    for name in process['associados']:                         
-                        process['associados'][name]['obj'] = ProcessStorage[name] if name in ProcessStorage else None
-            n, dt = len(self),time.time()-start         
-            if verbose:
-                print(f"Loading, creating, relinking references of {n} processes from database took {dt:.2f} seconds")
-            else:
-                return (n, dt)
-        #iterator = processes if not verbose else progressbar(processes, "Loading Processes: ")        
-        #self.update({process.name : process for process in map(Processo.fromJSON, iterator)})  
-    
-    def runTask(self, wp, *args, **kwargs):
-        """run `runTask` on every process on storage    
-
-        * wp : wPageNtlm
-            must be provided   
-
-        Any aditional args or keywork args for `runTask` can be passed.  
-
-        Like dados=Processo.SCM_SEARCH.BASICOS or any tuple (function, args) pair
-        """
-        for pname in progressbar(ProcessStorage):
-            #must be one independent requests.Session for each process otherwise mess            
-            ProcessStorage[pname]._wpage = wPageNtlm(wp.user, wp.passwd, ssl=True)             
-            ProcessStorage[pname].runTask(*args, **kwargs)
-    
-    def fromHtmls(self, paths, verbose=False):        
-        for process_path in tqdm.tqdm(paths):
-            try:   
-                processo = Processo.fromHtml(process_path, verbose=False)
-                processo.onchange = ProcessStorage.__process_changed
-                self.update({processo.name : processo})
-            except FileNotFoundError:
-                if verbose:
-                    print(f"Did not find process html at {process_path}", file=sys.stderr)   
         
             
-ProcessStorage = ProcessFactoryStorageClass()   
-"""Container and Factory of processes to avoid 
-1. connecting/open page of SCM again
-2. parsing all information again    
-* If it was already parsed save it in here { key : value }
-* key : unique `fmtPname` process string
-* value : `scm.Processo` object
-"""
-def ProcessStorageLoad(verbose, background=True):
-    """Load Process Storage Dictionary from sqlite Database."""
-    if background:
-        threading.Thread(target=ProcessStorage.loadAll, args=(verbose,)).start() 
-    else:
-        return ProcessStorage.loadAll(verbose)        
-    
-ProcessStorageLoad(True, background=True)
-# load processes on this module load
-
-
-# cannot be obj hook json loads due circular reference
-# database must be already fully populated with objects
-
-# def objects_to_json(obj, verbose=False):
-#     """json.dumps default function to use to json from datetime and process object conversion"""
-#     if isinstance(obj, datetime.datetime):
-#         return { '_isoformat': obj.isoformat() }
-#     if isinstance(obj, Processo):
-#         return { '_process_ref' : obj.name }
-#     else:
-#         if verbose:
-#             print(f"object of type {type(obj)} converted to '' in JSON file", file=sys.stderr) 
-#         return ''
-
-# def json_to_objects(obj):
-#     """json.loads object_hook function from json to datetime and process objects conversion"""
-#     _isoformat = obj.get('_isoformat')
-#     if _isoformat is not None:
-#         return datetime.datetime.fromisoformat(_isoformat)
-#     _process_ref = obj.get('_process_ref')
-#     if _process_ref is not None:
-#         return ProcessStorage[_process_ref]
-#     return obj
