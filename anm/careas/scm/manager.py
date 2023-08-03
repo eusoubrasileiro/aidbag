@@ -22,13 +22,13 @@ from ....web.htmlscrap import wPageNtlm
 from ....web.io import try_read_html
 
 
-class ProcessManagerClass():
+class ProcessManagerClass(dict):
     """Container and Factory of Processo objects 
-    uses SQLAlchemy session for storage 
+    uses SQLAlchemy sqlite3 for storage 
     Avoids:
         1. connecting/open page of SCM again
         2. parsing all information again    
-    * If it was already parsed save it in here { key : value }
+    * If it was already parsed save in the sqlite3 database
     * key : unique `fmtPname` process string
     * value : `scm.Processo` object
     """    
@@ -38,32 +38,35 @@ class ProcessManagerClass():
         """        
         super().__init__()      
         self._engine = create_engine(f"sqlite:///{config['scm']['process_storage_file']+'.db'}")                    
-        #self._engine = create_engine(f"sqlite:////home/andre/ProcessesStored.db")
-        self._session = sessionmaker(bind=self._engine)()
+        self.__session = scoped_session(sessionmaker(bind=self._engine))
         self.debug = debug   
-
   
-    def __delitem__(self, processo : Processodb):
-        self._session.delete(processo)
+    @property
+    def _session(self):
+        """thread-unique session due use of scoped_session"""
+        return self.__session()
+
+    def __delitem__(self, processo : Processo):        
+        self._session.delete(processo.db)
         self._session.commit()
+        super().__delitem__(processo.name)
     
-    # @staticmethod
-    # def __process_changed(process):
-    #     """update process on database"""
-    #     ProcessManager[process.name] = process
-        
     def __getitem__(self, key : str):
         key = fmtPname(key)    
-        # Check if the process is in the local session's identity map
-        processodb = self._session.query(Processodb).filter_by(name=key).first()
-        if processodb is not None:
-            processo = Processo(processodb.name, processodb=processodb, manager=self)            
-            return processo    
-        return None
+        if key in self:
+            return super().__getitem__(key)   
+        else:
+            processodb = self._session.query(Processodb).filter_by(name=key).first()
+            if processodb is not None:
+                processo = Processo(processodb.name, processodb=processodb, manager=self)   
+                self.update({processo.name : processo})
+                return processo    
+            return None
 
-    def __setitem__(self, key, process : Processodb):                   
-        self._session.add(process)            
+    def __setitem__(self, key, process : Processo):                           
+        self._session.add(process.db)            
         self._session.commit()
+        super().__setitem__(key, process)
     
     def runTask(self, wp, *args, **kwargs):
         """run `runTask` on every process on database    
@@ -90,14 +93,15 @@ class ProcessManagerClass():
         """
         processostr = fmtPname(processostr)        
         # try from database or self
-        processo = self[processostr]                
+        processo = self[processostr]                        
         if processo is not None:
+            processo._verbose = verbose
             processo._wpage = wPageNtlm(wpagentlm.user, wpagentlm.passwd)
             if processo.modified + config['scm']['process_expire'] < datetime.datetime.now():         
                 if verbose:       
                     print("Processo placing on storage ", processostr, file=sys.stderr)                
                 processo = Processo(processostr, wpagentlm, manager=self, verbose=verbose) # replace with a newer guy  
-                self[processostr] = processo.db
+                self[processostr] = processo
             else:
                 if verbose: 
                     print("Processo getting from storage ", processostr, file=sys.stderr)            
@@ -105,7 +109,7 @@ class ProcessManagerClass():
             if verbose: 
                 print("Processo placing on storage ", processostr, file=sys.stderr)
             processo = Processo(processostr, wpagentlm, manager=self, verbose=verbose)  # store new guy
-            self[processostr] = processo.db            
+            self[processostr] = processo            
         if run: # wether run the task, dont run when loading from file/str
             processo.runTask(task)
         return processo

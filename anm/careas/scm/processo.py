@@ -5,6 +5,7 @@ from concurrent import futures
 import enum
 import time
 import tqdm
+from threading import RLock
 from functools import wraps
 
 from ....general import progressbar 
@@ -35,7 +36,6 @@ from .parsing import (
 
 from .requests import urls as requests_urls
 from .sqlalchemy import Processodb
-from sqlalchemy.orm.attributes import flag_dirty
 
 default_run_state = lambda: copy.deepcopy({ 'run' : 
     { 'basicos': False, 'associados': False, 'ancestry': False, 'polygonal': False } })
@@ -53,11 +53,27 @@ class SCM_SEARCH(enum.Flag):
 
 
 def update_database_on_finish(method):
+    """Decorator that updates the database after the wrapped method is executed."""
     @wraps(method)
     def wrapper(self, *args, **kwargs):
         result = method(self, *args, **kwargs)
         self._manager._session.commit()
         return result
+    return wrapper
+
+def thread_safe(function):
+    """Decorator for methods of `Processo` needing thread safe execution.
+    The same 'Processo' may exist on different threads but method execution 
+    must be controled by `threading.RLock` so that only one thread can write on 
+    the database-object at a time.         
+    Uses self.lock field"""
+    @wraps(function)
+    def wrapper(self, *args, **kwargs):            
+        if not self.lock.acquire(timeout=60.*2):
+            raise TimeoutError(f"Wait time-out in function {function.__name__} for process { self.name }")
+        result = function(self, *args, **kwargs)            
+        self.lock.release() # make it free
+        return result 
     return wrapper
 
 class Processo():    
@@ -79,6 +95,7 @@ class Processo():
         # might be None in case loading from JSON, html etc...        
         self._verbose = verbose                            
         self._requests_session = None   
+        self.lock = RLock()
 
     @property
     def name(self):
@@ -110,6 +127,7 @@ class Processo():
             if SCM_SEARCH.PRIORIDADE in task and not self['run']['ancestry']:
                 self._ancestry()
 
+    @thread_safe
     @update_database_on_finish
     def _expandAssociados(self, ass_ignore=''):
         """
@@ -196,7 +214,7 @@ class Processo():
             print("expandAssociados - finished associados: ", self.name, file=sys.stderr)
         self.db.dados['run']['associados'] = True   
 
-
+    @thread_safe
     @update_database_on_finish
     def _ancestry(self):
         """
@@ -230,7 +248,6 @@ class Processo():
                 pass 
 
         self.db.dados['run']['ancestry'] = True
-
         return self['prioridadec']
 
             
@@ -242,6 +259,7 @@ class Processo():
         else: 
             self._dadosBasicosGet(download=False, **kwargs)    
 
+    @thread_safe
     @update_database_on_finish
     def _pageRequest(self, name):
         """python requests page and get response unicode str decoded"""
@@ -255,7 +273,7 @@ class Processo():
         else:
             self.db.polygon_html = html
 
-
+    @thread_safe
     @update_database_on_finish
     def _dadosBasicosGet(self, data_tags=None, download=True):
         """dowload the dados basicos scm main html page or 
@@ -286,7 +304,7 @@ class Processo():
         else: 
             self._dadosPoligonalGet(download=False, **kwargs)         
 
-
+    @thread_safe
     @update_database_on_finish
     def _dadosPoligonalGet(self, download=True):
         """dowload the dados scm poligonal html page or 
@@ -305,7 +323,7 @@ class Processo():
                 self.db.dados.update({'poligon' : dados })                       
                 self.db.dados['run']['polygonal'] = True                     
 
-
+    @thread_safe
     @update_database_on_finish
     def _dadosBasicosFillMissing(self):
         """try fill dados faltantes pelo processo associado (pai) 1. UF 2. substancias
@@ -341,7 +359,7 @@ class Processo():
         html = self.db.basic_html if(pagename == 'basic') else self.db.polygon_html
         if self._requests_session: # save html and page contents - full page  
             # MUST re-use session due ASP.NET authentication etc.           
-            saveFullHtmlPage(urls[pagename], str(path), self._requests_session, html)          
+            saveFullHtmlPage(requests_urls[pagename], str(path), self._requests_session, html)          
         else: # save simple plain html text page
             saveHtmlPage(str(path), html)   
 

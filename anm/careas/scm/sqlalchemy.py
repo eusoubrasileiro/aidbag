@@ -30,7 +30,7 @@ class JSONdt(TypeDecorator):
             return json.loads(value, object_hook=json_to_datetime)
         return value
 
-# uses sqlalchemy-json package for nested dict, list mutated types
+# uses sqlalchemy-json package to track changes on nested dict (dict, list) mutated types
 JSONDT = mutable_json_type(dbtype=JSONdt, nested=True)
 
 Base = declarative_base()
