@@ -1,20 +1,27 @@
+import sys 
+import datetime
+from threading import local
+from contextlib import contextmanager
+from sqlalchemy import create_engine
+from sqlalchemy.orm import (
+    Session,
+    scoped_session,
+    sessionmaker
+    )
+
 from ..config import config
 from .processo import (
     Processo, 
     Processodb,
     SCM_SEARCH
     )
+from .util import (
+    fmtPname
+    )
 from ....web.htmlscrap import wPageNtlm
 from ....web.io import try_read_html
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import (
-    sessionmaker,
-    scoped_session
-    )
 
-
- 
 class ProcessManagerClass():
     """Container and Factory of Processo objects 
     uses SQLAlchemy session for storage 
@@ -30,50 +37,33 @@ class ProcessManagerClass():
         * save_on_set: save on database on set 
         """        
         super().__init__()      
-        self._engine = create_engine(f"sqlite:///{config['scm']['process_storage_file']+'.db'}")            
-        self.session = scoped_session(sessionmaker(bind=self._engine))
-        self.debug = debug        
+        self._engine = create_engine(f"sqlite:///{config['scm']['process_storage_file']+'.db'}")                    
+        #self._engine = create_engine(f"sqlite:////home/andre/ProcessesStored.db")
+        self._session = sessionmaker(bind=self._engine)()
+        self.debug = debug   
 
-    @contextmanager
-    def session_scope(self):
-        """
-        Context manager that provides a session for executing database operations.                
-        For use on external alterations on `Processo` objects like:
-            with ProcessManager.session_scope() as session:
-        Internally used like:
-            with self.session_scope() as session:
-        """    
-        _session = self.session()
-        try:
-            yield _session
-            # The session will automatically track changes to 
-            # processos that changed and commit them when the block exits
-            _session.commit()
-        except Exception as e:
-            _session.rollback()
-            raise e
-        finally:
-            _session.close()
-   
-    def __delitem__(self, processo):
-        with self.session_scope() as session:
-            session.delete(processo)
+  
+    def __delitem__(self, processo : Processodb):
+        self._session.delete(processo)
+        self._session.commit()
     
     # @staticmethod
     # def __process_changed(process):
     #     """update process on database"""
     #     ProcessManager[process.name] = process
         
-    def __getitem__(self, key):
-        with self.session_scope() as session:
-            # Check if the process is in the local session's identity map
-            processodb = session.query(Processodb).filter_by(_name=key).first()
-            return Processo.fromProcessodb(processodb)
+    def __getitem__(self, key : str):
+        key = fmtPname(key)    
+        # Check if the process is in the local session's identity map
+        processodb = self._session.query(Processodb).filter_by(name=key).first()
+        if processodb is not None:
+            processo = Processo(processodb.name, processodb=processodb, manager=self)            
+            return processo    
+        return None
 
-    def __setitem__(self, key, process):
-        with self.session_scope() as session:            
-            session.add(process)
-
+    def __setitem__(self, key, process : Processodb):                   
+        self._session.add(process)            
+        self._session.commit()
     
     def runTask(self, wp, *args, **kwargs):
         """run `runTask` on every process on database    
@@ -84,13 +74,12 @@ class ProcessManagerClass():
         Any aditional args or keywork args for `runTask` can be passed. 
         Like dados=Processo.SCM_SEARCH.BASICOS or any tuple (function, args) pair
         """
-        with self.session_scope() as session: 
-            for processodb in progressbar(session.query(Processodb).all()):
-                processo = Processo.fromProcessodb(processodb)
-                #must be one independent requests.Session for each process otherwise mess            
-                processo._wpage = wPageNtlm(wp.user, wp.passwd, ssl=True)             
-                processo.runTask(*args, **kwargs)
-        
+        for processodb in progressbar(self._session.query(Processodb).all()):
+            processo = Processo(processodb.name, processodb=processodb, 
+                wpagentlm=wPageNtlm(wp.user, wp.passwd, ssl=True))
+            #must be one independent requests.Session for each process otherwise mess                        
+            processo.runTask(*args, **kwargs)
+        self._session.commit()
    
     def GetorCreate(self, processostr, wpagentlm, task=SCM_SEARCH.ALL, verbose=False, run=True):
         """
@@ -100,25 +89,23 @@ class ProcessManagerClass():
         wpage : wPage html webpage scraping class com login e passwd preenchidos
         """
         processostr = fmtPname(processostr)        
-        try: # try from database or self
-            result = self[key]
-        except KeyError:
-            processo = None             
+        # try from database or self
+        processo = self[processostr]                
         if processo is not None:
             processo._wpage = wPageNtlm(wpagentlm.user, wpagentlm.passwd)
-            if processo._modified + config['scm']['process_expire'] < datetime.datetime.now():         
+            if processo.modified + config['scm']['process_expire'] < datetime.datetime.now():         
                 if verbose:       
                     print("Processo placing on storage ", processostr, file=sys.stderr)                
-                processo = Processo(processostr, wpagentlm, self, verbose) # replace with a newer guy  
-                self[processostr] = processo
+                processo = Processo(processostr, wpagentlm, manager=self, verbose=verbose) # replace with a newer guy  
+                self[processostr] = processo.db
             else:
                 if verbose: 
                     print("Processo getting from storage ", processostr, file=sys.stderr)            
         else:
             if verbose: 
                 print("Processo placing on storage ", processostr, file=sys.stderr)
-            processo = Processo(processostr, wpagentlm,  self, verbose)  # store new guy
-            self[processostr] = processo            
+            processo = Processo(processostr, wpagentlm, manager=self, verbose=verbose)  # store new guy
+            self[processostr] = processo.db            
         if run: # wether run the task, dont run when loading from file/str
             processo.runTask(task)
         return processo
@@ -139,9 +126,9 @@ class ProcessManagerClass():
                 directly from a request.response.content string previouly saved  
                 `processostr` must be set
         """
-        processo = Processo(processostr, None, self, verbose=verbose)
-        processo._basic_html = html_basicos
-        processo._poligon_html = html_poligonal
+        processo = Processo(processostr, None, manager=self, verbose=verbose)
+        processo.db.basic_html = html_basicos
+        processo.db.poligon_html = html_poligonal
         processo._dadosBasicosGet(download=False) 
         if html_poligonal:            
             if not processo._dadosPoligonalGet(download=False) and verbose:
