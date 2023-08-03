@@ -85,7 +85,7 @@ class Interferencia:
         self.processo = None 
         self.processo_path = None 
         if getprocesso:
-            self.processo = Processo.Get(processostr, wpage, task, verbose)
+            self.processo = ProcessManager.GetorCreate(processostr, wpage, task, verbose)
             self.processo_path = Interferencia.processPath(self.processo)
         self.wpage = wpage
         self.verbose = verbose       
