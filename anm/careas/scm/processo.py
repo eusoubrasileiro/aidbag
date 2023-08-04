@@ -98,6 +98,14 @@ class Processo():
         self.lock = RLock()
 
     @property
+    def basic_html(self):
+        return self.db.basic_html
+
+    @property
+    def polygon_html(self):
+        return self.db.polygon_html
+
+    @property
     def name(self):
         return self.db.name
 
@@ -105,12 +113,16 @@ class Processo():
     def modified(self):
         return self.db.modified
 
+    @property
+    def dados(self):
+         return copy.deepcopy(self.db.dados)
+
     def __getitem__(self, key):
         """get a copy of property from the data dictionary if exists"""        
         return copy.deepcopy(self.db.dados[key])
 
     def __contains__(self, key):
-        """check if property exist on self.data"""
+        """check if property exist on self.dados"""
         return key in self.db.dados
 
     def runTask(self, task=SCM_SEARCH.BASICOS, wpage=None):
