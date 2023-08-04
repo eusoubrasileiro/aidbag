@@ -45,13 +45,13 @@ class ProcessManagerClass(dict):
     def _session(self):
         """thread-unique session due use of scoped_session"""
         return self.__session()
-
-    def __delitem__(self, processo : Processo):        
-        self._session.delete(processo.db)
+        
+    def __delitem__(self, key : str):        
+        self._session.delete(self[key].db)
         self._session.commit()
-        super().__delitem__(processo.name)
+        super().__delitem__(key)
     
-    def __getitem__(self, key : str):
+    def __getitem__(self, key : str) -> Processo:
         key = fmtPname(key)    
         if key in self:
             return super().__getitem__(key)   
@@ -67,6 +67,7 @@ class ProcessManagerClass(dict):
         self._session.add(process.db)            
         self._session.commit()
         super().__setitem__(key, process)
+
     
     def runTask(self, wp, *args, **kwargs):
         """run `runTask` on every process on database    
@@ -99,7 +100,8 @@ class ProcessManagerClass(dict):
             processo._wpage = wPageNtlm(wpagentlm.user, wpagentlm.passwd)
             if processo.modified + config['scm']['process_expire'] < datetime.datetime.now():         
                 if verbose:       
-                    print("Processo placing on storage ", processostr, file=sys.stderr)                
+                    print("Processo placing on storage ", processostr, file=sys.stderr)
+                del self[processostr] # delete here and on database before adding a new one               
                 processo = Processo(processostr, wpagentlm, manager=self, verbose=verbose) # replace with a newer guy  
                 self[processostr] = processo
             else:
