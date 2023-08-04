@@ -1,8 +1,10 @@
 import sys 
 import datetime
+from functools import wraps
 from threading import local
 from contextlib import contextmanager
 from sqlalchemy import create_engine
+from sqlalchemy.orm import object_session
 from sqlalchemy.orm import (
     Session,
     scoped_session,
@@ -43,20 +45,53 @@ class ProcessManagerClass(dict):
   
     @property
     def _session(self):
-        """thread-unique session due use of scoped_session"""
-        return self.__session()
-        
+        """
+        Thread-unique session to use as a context manager using the scoped_session
+        Always return the same session for the same thread. 
+        with ProcessManager._session() as session:
+            # do something ...
+        automatically closes the session making objects not bound to a session
+        """
+        return self.__session
+    
+    @property
+    def session(self):
+        """
+        Thread-unique session uses scoped_session but don't close it.
+        Always return the same session for the same thread. 
+        """
+        return self._session()
+
     def __delitem__(self, key : str):        
-        self._session.delete(self[key].db)
-        self._session.commit()
+        self.session.delete(self[key].db)
+        self.session.commit()
         super().__delitem__(key)
     
     def __getitem__(self, key : str) -> Processo:
+        """
+        Get process from local dictionary first or Database second
+        In case its session or thread was closed add it to the current new session.
+        Delete the previous in case is not closed yet.
+        (That's the case for a web application : each request is a new thread)
+        """
         key = fmtPname(key)    
         if key in self:
-            return super().__getitem__(key)   
+            processo = super().__getitem__(key)   
+            # in the case the session or thread that create it was closed add it back to a new session
+            # this will cause an exception if the previous session was not closed!
+            # Flask request request_context sometimes is closed and reopened 
+            # during the same request
+            # (which can happen due to the way threads are managed), the session you created
+            # is lost so we delete it and add a new one
+            # more bellow about that
+            session_db = object_session(processo.db)
+            if session_db is not self.session:    
+                if session_db is not None: 
+                    session_db.close()            
+                self.session.add(processo.db)
+            return processo
         else:
-            processodb = self._session.query(Processodb).filter_by(name=key).first()
+            processodb = self.session.query(Processodb).filter_by(name=key).first()
             if processodb is not None:
                 processo = Processo(processodb.name, processodb=processodb, manager=self)   
                 self.update({processo.name : processo})
@@ -64,8 +99,8 @@ class ProcessManagerClass(dict):
             return None
 
     def __setitem__(self, key, process : Processo):                           
-        self._session.add(process.db)            
-        self._session.commit()
+        self.session.add(process.db)            
+        self.session.commit()
         super().__setitem__(key, process)
 
     
@@ -78,12 +113,12 @@ class ProcessManagerClass(dict):
         Any aditional args or keywork args for `runTask` can be passed. 
         Like dados=Processo.SCM_SEARCH.BASICOS or any tuple (function, args) pair
         """
-        for processodb in progressbar(self._session.query(Processodb).all()):
+        for processodb in progressbar(self.session.query(Processodb).all()):
             processo = Processo(processodb.name, processodb=processodb, 
                 wpagentlm=wPageNtlm(wp.user, wp.passwd, ssl=True))
             #must be one independent requests.Session for each process otherwise mess                        
             processo.runTask(*args, **kwargs)
-        self._session.commit()
+        self.session.commit()
    
     def GetorCreate(self, processostr, wpagentlm, task=SCM_SEARCH.ALL, verbose=False, run=True):
         """
@@ -162,11 +197,82 @@ class ProcessManagerClass(dict):
 
 
 ProcessManager = ProcessManagerClass()   
-"""Container and Factory of processes to avoid 
-1. connecting/open page of SCM again
-2. parsing all information again    
-* If it was already parsed save it in here { key : value }
+"""Container and Factory of Processos's 
+Stores web-scrapped and parsed data on local dictionary and Database
 * key : unique `fmtPname` process string
 * value : `scm.Processo` object
-Not using any other layer of cache making sqlite3 queries everytime 
+Not using any other layer of cache making sqlite3 queries everytime.
+Everytime means: each object property access/modification is a new query by SQL Alchemy ORM standard. 
+Default behaviour is the scoped_session is never closed in each-thread until it closes itself. 
 """
+
+def sync_with_database(func):
+    """ProcessManager decorator that uses the session context manager 
+    and updates the database after the wrapped function/method is executed.
+    Uses the session given by scoped_session that's thread-local specific.
+    Closes the session at the end."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        with ProcessManager._session() as session:
+            result = func(*args, **kwargs)
+            session.commit()
+            session.close()
+        return result
+    return wrapper
+
+
+
+# More About the Request Context - Flask's Request Context
+# 
+
+# In Flask, the request context is a critical concept that allows you to access
+# various objects that are related to the current request, such as the request
+# and response objects, the current application, and more. Flask uses a context
+# stack to manage these objects in a way that is safe for concurrent requests.
+#
+# When a request is received by the Flask application, Flask pushes a new
+# context onto the context stack. This context is associated with the current
+# request and contains all the information and objects needed to handle that
+# specific request. Once the request is processed, the context is popped from
+# the stack, and any resources associated with that context are cleaned up.
+#
+# The request context is managed using Python's thread-local storage, which
+# ensures that each thread (request) has its own isolated context.
+
+# Threading and the Request Context:
+# In a typical WSGI server setup, such as with Flask, each incoming request is
+# handled by a separate thread. This is a common practice to achieve concurrency
+# and responsiveness in web applications. However, this threading model can
+# sometimes lead to unexpected behavior when it comes to managing sessions,
+# especially when you're manually managing sessions.
+#
+# For example, consider a scenario where you manually create a session at the
+# beginning of a request and then try to use that session later in the request.
+# If the request context is closed and reopened (which can happen due to the way
+# threads are managed), the session you created initially might no longer be
+# valid, leading to issues.
+
+# Managing Your Own Sessions:
+# When you're manually managing sessions in Flask, you need to be aware of the
+# request context and threading behavior. Here are some guidelines:
+
+# Create Sessions per Request: Create a new session at the beginning of each
+# request, and ensure that you're using the same session throughout that
+# request. This helps ensure that the session is properly scoped to the current
+# request context.
+
+# Explicitly Close Sessions: Explicitly close the session at the end of the
+# request. This helps release resources associated with the session and ensures
+# that you're not holding onto resources longer than necessary.
+
+# Avoid Sharing Sessions: Do not share sessions between different requests or
+# threads. Each request should have its own isolated session to avoid conflicts
+# and unexpected behavior.
+
+# Thread-Local Storage: Be aware that the request context and session management
+# use thread-local storage. If you're manually managing sessions, you need to be
+# mindful of how sessions are accessed and closed within the current thread's
+# context.
+
+# Exception Handling: Handle exceptions properly to ensure that sessions are
+# closed even in cases of errors.

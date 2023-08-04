@@ -57,7 +57,7 @@ def update_database_on_finish(method):
     @wraps(method)
     def wrapper(self, *args, **kwargs):
         result = method(self, *args, **kwargs)
-        self._manager._session.commit()
+        self._manager.session.commit()
         return result
     return wrapper
 
