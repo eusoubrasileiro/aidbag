@@ -46,7 +46,7 @@ def parseDadosBasicos(basicos_page, name, verbose, data_tags=scm_data_tags):
     dados['data_protocolo'] = datetime.strptime(dados['data_protocolo'], "%d/%m/%Y %H:%M:%S")    
     dados['inconsistencies'] = [] # tuple of inconsistencies found (tupple to be able to be hashed)
     # associados
-    if dados['associados'][0][0] == "Nenhum processo associado.":
+    if "Nenhum processo associado" in dados['associados'][0][0]:
         dados['associados'] = {} # overwrite by an empty dictionary 
     else:
         table_associados = dados['associados'] # it will be overwritten
@@ -85,7 +85,6 @@ def parseDadosBasicos(basicos_page, name, verbose, data_tags=scm_data_tags):
                         'data-ass'     : date_assoc, # associacao
                         'data-deass'   : date_deassoc, # deassociacao
                         'notes'        : table_associados[i][6], # observação
-                        'obj'          : None,
                     }
                 }
             )
@@ -94,7 +93,7 @@ def parseDadosBasicos(basicos_page, name, verbose, data_tags=scm_data_tags):
         dados['associados'] = { name : attrs for name, attrs in dados['associados'].items() 
                                 if not attrs['data-deass'] }
         # from here we get direct sons and parents/anscestors - from process names only
-        # 800.xxx/2005 -> 300.yyy/2005 - Not the full picture tough!
+        # 800.xxx/2005 -> 300.yyy/2005 - TODO: Not the full picture tough!
         dados['sons'] = []
         dados['parents'] = []
         for associado in dados['associados']:

@@ -88,13 +88,12 @@ def currentProcessGet(path=None, sort='name', clear=True):
     return ProcessPathStorage
     
     
-def ProcessStorageFromHtml(path=None):    
-    """fill in `scm.ProcessStorage` using html from folders of processes"""    
+def ProcessManagerFromHtml(path=None):    
+    """fill in `scm.ProcessManager` using html from folders of processes"""    
     if not path:
         path = pathlib.Path(config['processos_path']).joinpath("Concluidos")    
     currentProcessGet(path)
-    scm.ProcessStorage.fromHtmls(ProcessPathStorage.values())
-    scm.ProcessStorage.toJSONfile()
+    scm.ProcessManager.fromHtmls(ProcessPathStorage.values())
     
 
 def folder_process(process_str):
@@ -154,13 +153,13 @@ def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False, overwr
                 estudo = estudos.Interferencia.make(wpage, processo, verbose=verbose, overwrite=overwrite)   
                 proc = estudo.processo              
             elif tipo == 'opção':
-                proc = scm.Processo.Get(processo, wpage, dados=scm.SCM_SEARCH.BASICOS_POLIGONAL, verbose=verbose)
+                proc = scm.ProcessManager.GetorCreate(processo, wpage, dados=scm.SCM_SEARCH.BASICOS_POLIGONAL, verbose=verbose)
                 proc.salvaPageScmHtml(config['processos_path'], 'basic', overwrite)
         except scm.ErrorProcessSCM as e:
             print(f"Process {processo} Exception: {traceback.format_exc()}", file=sys.stderr)   
         except Exception as e:              
             print(f"Process {processo} Exception: {traceback.format_exc()}", file=sys.stderr)                       
-            failed_NUPS.append((scm.ProcessStorage[scm.fmtPname(processo)]['NUP'],''))            
+            failed_NUPS.append((scm.ProcessManager[scm.fmtPname(processo)]['NUP'],''))            
         else:
             succeed_NUPs.append(proc['NUP'])  
     # print all NUPS
@@ -199,9 +198,9 @@ def dispDadSon(name, infer=True, areatol=0.1):
             get 1'st 'son' by poligon matching area on the list and edital/oferta tipo
         return standard name or None
         """   
-        root = scm.ProcessStorage[name]
+        root = scm.ProcessManager[name]
         found = False
-        for ass_name, attrs in scm.ProcessStorage[name].associados.items():            
+        for ass_name, attrs in scm.ProcessManager[name]['associados'].items():            
             # print('associdado: ', ass_name, attrs, file=sys.stdout)
             Obj = attrs['obj']
             if not 'poligon' in Obj: #ignore 
@@ -212,10 +211,10 @@ def dispDadSon(name, infer=True, areatol=0.1):
                 found = ass_name
                 break # found    
         if not found:
-            print('associdados: ', scm.ProcessStorage[name].associados, file=sys.stdout)
+            print('associdados: ', scm.ProcessManager[name]['associados'], file=sys.stdout)
             raise Exception(f'`dispSearch` did not found son-dad from {name}')                
         return found
-    p = scm.ProcessStorage[scm.fmtPname(name)]
+    p = scm.ProcessManager[scm.fmtPname(name)]
     nparents = len(p['parents'])
     nsons = len(p['sons'])
     if nparents > 1 or nsons > 1:        
@@ -242,8 +241,8 @@ def dispGetNUP(processo, dad=False):
     """get disponibilidade 'dad' or 'son' if dad=False (default)"""    
     dad, son = dispDadSon(processo.name)
     if dad:
-        return scm.ProcessStorage[dad]['NUP'] 
-    return scm.ProcessStorage[son]['NUP']  
+        return scm.ProcessManager[dad]['NUP'] 
+    return scm.ProcessManager[son]['NUP']  
 
 
 def inferWork(process, folder=None):
@@ -377,7 +376,7 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None,
     process_folder = None
     if process_name in ProcessPathStorage:
         process_folder = ProcessPathStorage[process_name]
-    process = scm.ProcessStorage[process_name]        
+    process = scm.ProcessManager[process_name]        
     info = inferWork(process, process_folder)
 
     if verbose and __debugging__:
@@ -466,7 +465,7 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None,
     elif activity in WORK_ACTIVITY.REQUERIMENTO_EDITAL_DAD:
         # doesn't matter if son or dad was passed, here it's sorted!
         dad, son = dispDadSon(process_name)
-        dad, son = scm.ProcessStorage[dad], scm.ProcessStorage[son]     
+        dad, son = scm.ProcessManager[dad], scm.ProcessManager[son]     
         # this is where we will put documents  
         psei = Processo.fromSei(sei, dad['NUP']) 
         # calculate again: check in case area was not checked by infer method

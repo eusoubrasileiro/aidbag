@@ -8,11 +8,16 @@ from .util import (
 
 from .processo import (
     Processo, 
-    ProcessStorage,
     SCM_SEARCH,
     default_run_state
+)
+
+from .manager import (
+    ProcessManager,
+    sync_with_database
 )
 
 from .requests import (
     ErrorProcessSCM   
 )
+

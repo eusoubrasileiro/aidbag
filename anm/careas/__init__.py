@@ -2,7 +2,7 @@ from . import scm
 
 from .scm import (
     Processo, 
-    ProcessStorage, 
+    ProcessManager, 
     findfmtPnames,
     findPnames,
     fmtPname,

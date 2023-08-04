@@ -12,13 +12,14 @@ def graphAddEdges(process, G, ignore=''):
     * ignore : to avoid infinit-loop also builds outward
     * G : `networkx` graph undirected
     """
-    associados = copy.copy(process.associados)    
+    associados = copy.copy(process['associados'])    
     if ignore in associados:
         del associados[ignore]
     # add edge source, target, edge attributes dict
     G.add_edges_from([(process.name, associado, associados[associado]) for associado in associados.keys()])
     for associado in associados.values():
-        graphAddEdges(associado['obj'], G, process.name)
+        raise NotImplementedError("not implemented - need to fix bellow")
+        #graphAddEdges(associado['obj'], G, process.name)
 
 
 def createGraphAssociados(process):
@@ -40,6 +41,7 @@ def createGraphAssociados(process):
     data = { (u, v) : d for u, v, d in Gd.edges.data() }  # create a dict of { edge : data ...}
     nx.set_edge_attributes(Gdtree, data) # inexistent edges are ignored per networkx docs
     root = list(nx.topological_sort(Gdtree))[0] # assuming only one root
+    # this root is not the older process
     return Gdtree, root
 
 
@@ -68,7 +70,7 @@ def plotGraph(G, layout=nx.spring_layout, figsize=(9,9)):
 
 
 # G = nx.Graph()
-# graphAddEdges(careas.scm.ProcessStorage['832.547/2014'], G)
+# graphAddEdges(careas.scm.ProcessManager['832.547/2014'], G)
 # plotGraphAssociados(G)
 
 def plotDirectGraphAssociados(Gd, root=None):
