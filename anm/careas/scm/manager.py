@@ -79,11 +79,9 @@ class ProcessManagerClass(dict):
             processo = super().__getitem__(key)   
             # in the case the session or thread that create it was closed add it back to a new session
             # this will cause an exception if the previous session was not closed!
-            # Flask request request_context sometimes is closed and reopened 
-            # during the same request
-            # (which can happen due to the way threads are managed), the session you created
-            # is lost so we delete it and add a new one
-            # more bellow about that
+            # Flask request thread (request_context) sometimes is closed and reopened (during the same request)
+            # (which can happen due to the way threads are managed), the session you created is lost 
+            # so we delete it and add a new one - more bellow about that
             session_db = object_session(processo.db)
             if session_db is not self.session:    
                 if session_db is not None: 
@@ -206,19 +204,6 @@ Everytime means: each object property access/modification is a new query by SQL 
 Default behaviour is the scoped_session is never closed in each-thread until it closes itself. 
 """
 
-def sync_with_database(func):
-    """ProcessManager decorator that uses the session context manager 
-    and updates the database after the wrapped function/method is executed.
-    Uses the session given by scoped_session that's thread-local specific.
-    Closes the session at the end."""
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        with ProcessManager._session() as session:
-            result = func(*args, **kwargs)
-            session.commit()
-            session.close()
-        return result
-    return wrapper
 
 
 

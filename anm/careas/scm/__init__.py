@@ -12,10 +12,7 @@ from .processo import (
     default_run_state
 )
 
-from .manager import (
-    ProcessManager,
-    sync_with_database
-)
+from .manager import ProcessManager    
 
 from .requests import (
     ErrorProcessSCM   
