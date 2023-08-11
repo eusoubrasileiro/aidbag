@@ -46,9 +46,15 @@ class Processodb(Base):
     polygon_html = mapped_column('PAGE_POLYGON', Text)  
     # New column for last modification timestamp (auto updated)
     modified = mapped_column('MODIFIED', DateTime, default=func.now(), onupdate=func.now())    
+    version = mapped_column('VERSION', Integer, default=1, nullable=False, 
+        onupdate=lambda ctx: 
+        ctx.current_parameters['VERSION'] + 1 if ctx.current_parameters['VERSION'] is not None else 1)
+
     def __init__(self, name):
         # real data to store in the database - instance variables 
         self.name = name
         self.dados = {}        
         self.basic_html = ''
         self.polygon_html = ''        
+
+    
