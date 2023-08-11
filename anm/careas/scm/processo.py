@@ -65,7 +65,7 @@ def thread_safe(function):
     """Decorator for methods of `Processo` needing thread safe execution.
     The same 'Processo' may exist on different threads but method execution 
     must be controled by `threading.RLock` so that only one thread can write on 
-    the database-object at a time.         
+    the object (database-object) at a time.         
     Uses self.lock field"""
     @wraps(function)
     def wrapper(self, *args, **kwargs):            

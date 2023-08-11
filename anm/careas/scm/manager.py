@@ -1,14 +1,19 @@
 import sys 
 import datetime
+import threading
 from functools import wraps
 from threading import local
 from contextlib import contextmanager
-from sqlalchemy import create_engine
-from sqlalchemy.orm import object_session
+from sqlalchemy import (
+    create_engine,
+    text,
+    func
+    )
 from sqlalchemy.orm import (
     Session,
     scoped_session,
-    sessionmaker
+    sessionmaker,
+    object_session
     )
 
 from ..config import config
@@ -41,7 +46,8 @@ class ProcessManagerClass(dict):
         super().__init__()      
         self._engine = create_engine(f"sqlite:///{config['scm']['process_storage_file']+'.db'}")                    
         self.__session = scoped_session(sessionmaker(bind=self._engine))
-        self.debug = debug   
+        self.debug = debug           
+        self.lock = threading.RLock()
   
     @property
     def _session(self):
@@ -70,31 +76,78 @@ class ProcessManagerClass(dict):
     def __getitem__(self, key : str) -> Processo:
         """
         Get process from local dictionary first or Database second
-        In case its session or thread was closed add it to the current new session.
-        Delete the previous in case is not closed yet.
-        (That's the case for a web application : each request is a new thread)
+        For detached mode uses a lock to avoid that one thread fetches 
+        while other calls `updateDados` for example. 
         """
-        key = fmtPname(key)    
-        if key in self:
-            processo = super().__getitem__(key)   
-            # in the case the session or thread that create it was closed add it back to a new session
-            # this will cause an exception if the previous session was not closed!
-            # Flask request thread (request_context) sometimes is closed and reopened (during the same request)
-            # (which can happen due to the way threads are managed), the session you created is lost 
-            # so we delete it and add a new one - more bellow about that
-            session_db = object_session(processo.db)
-            if session_db is not self.session:    
-                if session_db is not None: 
-                    session_db.close()            
-                self.session.add(processo.db)
-            return processo
-        else:
-            processodb = self.session.query(Processodb).filter_by(name=key).first()
-            if processodb is not None:
-                processo = Processo(processodb.name, processodb=processodb, manager=self)   
-                self.update({processo.name : processo})
-                return processo    
-            return None
+        with self.lock:
+            key = fmtPname(key)    
+            if key in self:
+                processo = super().__getitem__(key)   
+                return processo
+            else:
+                processodb = self.session.query(Processodb).filter_by(name=key).first()
+                if processodb is not None:
+                    processo = Processo(processodb.name, processodb=processodb, manager=self)   
+                    self.update({processo.name : processo})
+                    return processo    
+                return None
+    
+
+    def updateDados(self, name, key, value):
+        """
+        For work in detached mode - Flask WSGI Request usage (more bellow)
+            1.query 
+            2.dados.update(dados) column 
+            3.commit 
+            4.close session
+        Uses a lock to avoid that one thread fetches (__getitem__)
+        while other calls `updateDados` for example.
+        """    
+        with self.lock:
+            pdb = self[name]
+            session_ = object_session(pdb.db)
+            if session_ is not self.session:    
+                if session_ is not None: 
+                    session_.close()            
+                self.session.add(pdb.db)     
+            pdb.db.dados[key] = value
+            self.session.commit()
+            self.session.close()   
+
+
+    def getDados(self, name):
+        """
+        For work in detached mode - Flask WSGI Request usage (more bellow)
+        return Processo.dados
+        """
+        with self.lock:
+            pdb = self[name]
+            session_ = object_session(pdb.db)
+            if session_ is not self.session:    
+                if session_ is not None: 
+                    session_.close()            
+                self.session.add(pdb.db)  
+            dados = pdb.dados
+            self.session.close()
+            return dados
+
+
+    # Detached mode TODO: clean-up local dictionary for deleted objects 
+    # def update(self, key):
+    #     with self.lock:        
+    #         processo = self[key]
+    #         # check version and get a new one in case it is outdated
+    #         processodb = self.queryProcessodb(key)
+    #         if processodb is None: # deleted externally
+    #             super().__delitem__(key) # delete locally 
+    #             # will not call del object!
+    #             return None
+    #         elif processo.db.version != processodb.version: # updated externally                
+    #             # modify the local one since it might been used by some other thread
+    #             processo.update(processodb)
+    #             self.session.merge(processodb) # we want to keep the old ones
+    #             # since it is possibly been used by another thread
+    #         return processo
 
     def __setitem__(self, key, process : Processo):                           
         self.session.add(process.db)            
