@@ -265,6 +265,9 @@ class Processo(Sei):
         elif 'edital_dad' in template_name:
             template = templateEnv.get_template("req_edital_dad.html")                
             html_text = template.render(infos=infos, **kwargs) 
+        elif 'custom' in template_name: # your own template very specific problem
+            template = templateEnv.get_template("req_custom.html")                
+            html_text = template.render(infos=infos, **kwargs)
                        
         self.insereNotaTecnica(html_text)
         

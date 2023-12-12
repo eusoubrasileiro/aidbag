@@ -339,7 +339,7 @@ def inferWork(process, folder=None):
     return infos 
 
 
-def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, 
+def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=False,
         empty=False, termo_abertura=False, verbose=True):
     """
     Inclui process documents from folder specified on `ProcessPathStorage`
@@ -356,6 +356,10 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None,
 
     * verbose: True
         avisa ausência de pdfs, quando cria documentos sem anexos
+
+    * usefolder: True
+        If False, only add documents on SEI don't use folder
+        Like only writting a 'Nota Técnica'.
         
     * empty : True
         cria documentos sem anexos
@@ -372,22 +376,36 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None,
     if not ProcessPathStorage: # empty process path storage
         currentProcessGet() # get current list of processes
 
-    process_name = fmtPname(process_name) 
-    process_folder = None
-    if process_name in ProcessPathStorage:
-        process_folder = ProcessPathStorage[process_name]
-    process = scm.ProcessManager[process_name]        
-    info = inferWork(process, process_folder)
+    process_name = fmtPname(process_name)         
+    if usefolder:  # needs folder docs and information  
+        process = scm.ProcessManager[process_name]  
+        if process_name not in ProcessPathStorage:     
+            print(f"Process {process_name} not found in ProcessPathStorage")
+        info = inferWork(process, ProcessPathStorage[process_name])       
+        if not activity:        
+            activity = info['work'] # get from infer
+    else: # Only writes on SEI (don't need folder and pdf's)
+        if process_name not in scm.ProcessManager:
+            scm.ProcessManager.GetorCreate(process_name, wpage, task=scm.SCM_SEARCH.BASICOS)
+        process = scm.ProcessManager[process_name]  
+        info = inferWork(process, None) # no folder!
+        psei = Processo.fromSei(sei, process['NUP'])  
+        psei.insereNotaTecnicaRequerimento("custom", info)    
+        psei.insereMarcador(config['sei']['marcador_default'])
+        psei.atribuir(config['sei']['atribuir_default'])
+        # should also close the openned text window - going to previous state
+        psei.closeOtherWindows()        
+        if verbose:
+            print(process['NUP'])     
+        return  
 
     if verbose and __debugging__:
+        process_folder = ProcessPathStorage[process_name]
         if process_folder:
             print("Main path: ", process_folder.parent)     
             print("Process path: ", process_folder.absolute())
             print("Current dir: ", os.getcwd())
-        print(f"activity {activity} \n info dict {info}")      
-   
-    if not activity:
-        activity = info['work'] # get from infer
+        print(f"activity {activity} \n info dict {info}")         
 
     if not activity in WORK_ACTIVITY.REQUERIMENTO_EDITAL_DAD:
         psei = Processo.fromSei(sei, process['NUP'])            
@@ -434,29 +452,7 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None,
                                 str(info['pdf_adicional'].absolute()), info['minuta']['code'])
             # guarantee to insert an empty in any case
             pdf_adicional = str(info['pdf_adicional'].absolute()) if info['pdf_adicional'].exists() else None 
-            psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional)
-    #psei.insereNotaTecnicaRequerimento("interferência_total", tipo=processo_tipo)     
-    #raise NotImplementedError()
-    # else:
-    #     # tipo - requerimento de cessão parcial ou outros
-    #     if 'lavra' in fase.lower(): # minuta portaria de Lavra
-    #         # parecer de retificação de alvará
-    #         #IncluiParecer(sei, nup, 0)
-    #         # Inclui Estudo pdf como Doc Externo no SEI
-    #         #InsereDocumentoExternoSEI(sei, nup, 0, pdf_interferencia)
-    #         #InsereDocumentoExternoSEI(sei, nup, 4, pdf_adicional)
-    #         # Adicionado manualmente depois o PDF gerado
-    #         # com links p/ SEI
-    #         #InsereDocumentoExternoSEI(sei, nup, 6, None)
-    #         #InsereDeclaracao(sei, nup, 14) # 14 Informe: Requerimento de Lavra Formulario 1 realizado
-    #         # 15 - xxxxxxxx
-    #         #IncluiDespacho(sei, nup, 15, 
-    #         #    setor=u"ccccxxxxx") 
-    #         # 16 - xxxxxxx
-    #         #IncluiDespacho(sei, nup, 16)
-    #         # IncluiDespacho(sei, NUP, 9) # - Recomenda c/ retificação de alvará
-    #         raise NotImplementedError() 
-    #     pass    
+            psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional) 
     elif activity in WORK_ACTIVITY.REQUERIMENTO_OPCAO_ALVARA: # opção de área na fase de requerimento                
         # InsereDocumentoExternoSEI(sei, nup, 3, pdf_interferencia) # estudo opção
         # InsereDocumentoExternoSEI(sei, nup, 1, pdf_adicional)  # minuta alvará
@@ -477,6 +473,8 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None,
         psei.insereNotaTecnicaRequerimento("edital_dad", info, edital=editalTipo(son), 
                             processo_filho=son['NUP'])
         process = dad # this is what was done
+
+
     psei.insereMarcador(config['sei']['marcador_default'])
     psei.atribuir(config['sei']['atribuir_default'])
     # should also close the openned text window - going to previous state
