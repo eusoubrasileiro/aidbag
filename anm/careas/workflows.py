@@ -339,7 +339,7 @@ def inferWork(process, folder=None):
     return infos 
 
 
-def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=False,
+def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
         empty=False, termo_abertura=False, verbose=True):
     """
     Inclui process documents from folder specified on `ProcessPathStorage`
@@ -359,7 +359,7 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=False
 
     * usefolder: True
         If False, only add documents on SEI don't use folder
-        Like only writting a 'Nota Técnica'.
+        And uses 'req_custom.html' for 'Nota Técnica'.        
         
     * empty : True
         cria documentos sem anexos
