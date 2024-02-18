@@ -105,6 +105,8 @@ class ProcessManagerClass(dict):
         """    
         with self.lock:
             pdb = self[name]
+            if pdb is None:
+                raise KeyError(name)
             session_ = object_session(pdb.db)
             if session_ is not self.session:    
                 if session_ is not None: 
@@ -120,8 +122,10 @@ class ProcessManagerClass(dict):
         For work in detached mode - Flask WSGI Request usage (more bellow)
         return Processo.dados
         """
-        with self.lock:
+        with self.lock:            
             pdb = self[name]
+            if pdb is None:
+                raise KeyError(name)
             session_ = object_session(pdb.db)
             if session_ is not self.session:    
                 if session_ is not None: 
