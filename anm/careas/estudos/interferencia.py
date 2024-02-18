@@ -14,12 +14,15 @@ from ..scm import (
     util,
     ProcessManager
 )
+
 from ....web import htmlscrap 
 from .scraping import (
     fetch_save_Html,
     cancelaUltimo,
     getEventosSimples
 )
+
+
 
 # fases necessarias e obrigatorias para retirada de interferencia 
 interferencia_fases = ['Requerimento de Pesquisa', 'Direito de Requerer a Lavra', 
@@ -134,7 +137,9 @@ class Interferencia:
         try:               
             if estudo.createTable(): # sometimes there is no interferences 
                 estudo.createTableMaster()
-                estudo.to_excel()  
+                estudo.to_database()
+                # keeping for debugging
+                estudo.to_excel()                  
         finally: # if there was an exception cancela ultimo estudo
             if overwrite and not estudo.cancelLast():
                 raise CancelaUltimoEstudoFailed()
@@ -180,13 +185,11 @@ class Interferencia:
         self.tabela_interf.loc[:,'Processo'] = self.tabela_interf.Processo.apply(lambda x: fmtPname(x))
         # tabela c/ processos associadoas aos processos interferentes
         self.tabela_assoc = pd.DataFrame()
-        self.interferentes = {}
         for name in list(set(self.tabela_interf.Processo)): # Unique Process Only
             if self.verbose:
                 print(f"createTable: fetching data for associado {name} ", file=sys.stderr)                                
             processo  = ProcessManager.GetorCreate(name, 
                             self.wpage, SCM_SEARCH.BASICOS, self.verbose)
-            self.interferentes[name] = processo # store Processo object
             indexes = (self.tabela_interf.Processo == name)
             self.tabela_interf.loc[indexes, 'Ativo'] = processo['ativo']
             if processo['associados']:
@@ -219,88 +222,102 @@ class Interferencia:
 
         self.tabela_interf_master = pd.DataFrame()
         for _,row in self.tabela_interf.iterrows():
-            # cannot remove getEventosSimples and extract everything from dados basicos
-            # dados basico scm data nao inclui hora! cant use only scm
-            processo_events = getEventosSimples(self.wpage, row['Processo'])            
-            processo_scm = self.interferentes[row['Processo']]
-            eventos = processo_scm['eventos']
-            dfbasicos = pd.DataFrame(eventos[1:], columns=eventos[0])
-            processo_events['EvSeq'] = len(processo_events)-processo_events.index.values.astype(int) # set correct order of events
-            processo_events['Evento'] = processo_events['Evento'].astype(int)
+            # table from eventos simples is more complete ['Processo', 'Evento', 'Descrição', 'Data']
+            # and also contains Data with time precison we will use it 
+            events = getEventosSimples(self.wpage, row['Processo']) 
+            # strdate to datetime use bellow for comparison
+            events['Data'] = events.Data.apply(
+                lambda strdate: datetime.strptime(strdate, "%d/%m/%Y %H:%M:%S"))     
+            # we will add ['Observação','Publicação D.O.U'] from SCM Basicos    
+            processo = ProcessManager[row['Processo']]               
+            eventos_scm = processo['eventos']
+            eventos_scm = pd.DataFrame(eventos_scm[1:], columns=eventos_scm[0])
+            events['Obs'] = eventos_scm['Observação']
+            events['DOU'] = eventos_scm['Publicação D.O.U']
+            # index number for each event
+            events['EvSeq'] = len(events)-events.index.values.astype(int) # set correct order of events
+            # cast to int Event number will be used to join eventos que inativam bellow
+            events['Evento'] = events['Evento'].astype(int)
             # put count of associados father and sons
-            processo_events['Dads'] = row['Dads']
-            processo_events['Sons'] = row['Sons']
-            processo_events['Ativo'] = row['Ativo']
-            processo_events['Obs'] = dfbasicos['Observação']
-            processo_events['DOU'] = dfbasicos['Publicação D.O.U']
-            # strdate to datetime comparacao prioridade
-            processo_events['Data'] = processo_events.Data.apply(
-                lambda strdate: datetime.strptime(strdate, "%d/%m/%Y %H:%M:%S"))
-            # to add an additional row caso a primeira data dos eventos diferente
-            # da prioritária correta
-            if 'prioridadec' in processo_scm:
-                processo_prioridade = processo_scm['prioridadec']
-            else: 
-                processo_prioridade = processo_scm['prioridade']
-            if processo_events['Data'].values[-1] > np.datetime64(processo_prioridade):
-                #processo_events = processo_events.append(processo_events.tail(1), ignore_index=True) # repeat the last/or first
-                processo_events = pd.concat([processo_events, processo_events.tail(1)], ignore_index=True, axis=0, join='outer')
-                processo_events.loc[processo_events.index[-1], 'Data'] = np.datetime64(processo_prioridade)
-                processo_events.loc[processo_events.index[-1], 'EvSeq'] = -3 # represents added by here
-            # SICOP parte if fisico main available
-            # might have more or less lines than SCM eventos
+            events['Dads'] = row['Dads']
+            events['Sons'] = row['Sons']
+            events['Ativo'] = row['Ativo']
+            events['Processo'] = events.Processo.apply(lambda x: fmtPname(x)) # standard names
+            ##### Add an additional event row if necessary: #######
+            # caso a primeira data dos eventos diferente da prioritária correta
+            prioridade = processo['prioridadec'] if 'prioridadec' in processo else processo['prioridade']             
+            if events['Data'].values[-1] > np.datetime64(prioridade):                
+                events = pd.concat([events, events.tail(1)], ignore_index=True, axis=0, join='outer')
+                events.loc[events.index[-1], 'Data'] = np.datetime64(prioridade)
+                events.loc[events.index[-1], 'EvSeq'] = -3 # represents added by here
+
+            # TODO SICOP: parte if fisico main available might have more or less lines than SCM eventos
             # use only what we have rest will be empty
-            #processo_events['SICOP FISICO PRINCIPAL MOVIMENTACAO']
+            # events['SICOP FISICO PRINCIPAL MOVIMENTACAO']
             # DATA:HORA	SITUAÇÃO	UF	ÓRGÃO	PRIORIDADE	MOVIMENTADO	RECEBIDO	DATA REC.	REC. POR	GUIA
-            self.tabela_interf_master = pd.concat([self.tabela_interf_master, processo_events], axis=0, join='outer')
-            #self.tabela_interf_eventos = self.tabela_interf_eventos.append(processo_events)
+
+            ##### Append the group of rows of events for this process
+            self.tabela_interf_master = pd.concat([self.tabela_interf_master, events], axis=0, join='outer')
 
         self.tabela_interf_master.reset_index(inplace=True,drop=True)
         # rearrange collumns in more meaningfully viewing
         columns_order = ['Ativo','Processo', 'Evento', 'EvSeq', 'Descrição', 'Data', 'Obs', 'DOU', 'Dads', 'Sons']
         self.tabela_interf_master = self.tabela_interf_master[columns_order]
-        ### Todos os eventos posteriores a data de prioridade são marcados
-        # como 0 na coluna Prioridade otherwise 1
-        if 'prioridadec' in self.processo:
-            processo_prioridade = self.processo['prioridadec']
-        else: 
-            processo_prioridade = self.processo['prioridade']
-        self.tabela_interf_master['DataPrior'] = processo_prioridade
-        self.tabela_interf_master['EvPrior'] = 0 # 1 prioritario 0 otherwise
-        self.tabela_interf_master['EvPrior'] = self.tabela_interf_master.apply(
-            lambda row: 1 if row['Data'] <= processo_prioridade else 0, axis=1)
-        ### fill-in column with inativam or ativam processo for each event
-        ### using excel 'eventos_scm_09102019.xls'
-        eventos = pd.read_excel(config['eventos_scm'], dtype={'code' : int, 'Inativ' : int})
-        eventos.drop(columns=['nome'],inplace=True)
-        eventos.columns = ['Evento', 'Inativ'] # rename columns
+        ### Cria coluna 'EvPrior'
+        # onde eventos anteriores a data de prioridade são marcados 1 or 0 otherwise
+        self.tabela_interf_master['EvPrior'] = 0 # 1 prioritario 0 otherwise        
+        data_prioridade = ( self.processo['prioridadec'] if 'prioridadec' in 
+            self.processo else self.processo['prioridade'] )               
+        # Verifica se a data de evento é anterior a data de prioridade
+        # exceção: licenciamento tem prioridade retroagida pela licença
+        # emitida pela prefeitura em até 90 dias       
+        for _,row in self.tabela_interf_master.iterrows():
+            EventData = row['Data']
+            if ('licen' in ProcessManager[row['Processo']]['tipo'].lower() 
+                and (row['EvSeq'] == -3 or row['EvSeq'] == 1) ): # only on 1st event
+                EventData = np.datetime64(EventData) - np.timedelta64(90,'D')
+            if EventData < data_prioridade:
+                self.tabela_interf_master.loc[row.name,'EvPrior'] = 1
+        ### Join-in column with inativam or ativam processo for each event excel 'eventos_scm_XXXXXXX.xls'
+        eventos_xls = pd.read_excel(config['eventos_scm'], dtype={'Evento' : int, 'Inativ' : int})
+        eventos_xls.drop(columns=['nome'],inplace=True)        
         # join Inativ column -1/1 inativam or ativam processo
-        self.tabela_interf_master = self.tabela_interf_master.join(eventos.set_index('Evento'), on='Evento')
+        self.tabela_interf_master = self.tabela_interf_master.join(eventos_xls.set_index('Evento'), on='Evento')
         self.tabela_interf_master.Inativ = self.tabela_interf_master.Inativ.fillna(0) # not an important event
-        # Add a 'Prior' (Prioridade) Collumn At the Beggining
+        #### Add a 'Prior' (Prioridade) Collumn At the Beggining
         self.tabela_interf_master['Prior'] = 1
-        # Prioridade considerando quando houve evento de inativação
-        # se antes do atual não é prioritário
+        # Prioridade considerando quando houve evento de inativação se antes do atual não é prioritário
         for process, events in self.tabela_interf_master.groupby('Processo', sort=False):
-            # assume prioritário ou não pela data do primeiro evento
-            # ou 0 se não se sabe
-            prior = 1 if events.iloc[-1]['EvPrior'] > 0 else 0
+            # (1) prioritário (-1) não prioritário (0) não se sabe
+            # assume prioritário (1) ou não pela data do primeiro evento         
+            prioritario = 1 if events.iloc[-1]['EvPrior'] > 0 else 0
             alive = np.sum(events.Inativ.values) # alive or dead
             if alive < 0: # DEAD - get by data da última inativação
                 data_inativ = events.loc[events.Inativ == -1]['Data'].values[0]
-                if data_inativ  <= np.datetime64(processo_prioridade):
+                if data_inativ  <= np.datetime64(data_prioridade):
                     # morreu antes do atual, não é prioritário
-                    prior = -1
+                    prioritario = -1
             self.tabela_interf_master.loc[
-                self.tabela_interf_master.Processo == process, 'Prior'] = prior
-            #self.tabela_interf_eventos.loc[self.tabela_interf_eventos.Processo == name, 'Prior'] = (
-            #1*(events.EvPrior.sum() > 0 and events.Inativ.sum() > -1))
+                self.tabela_interf_master.Processo == process, 'Prior'] = prioritario
         # re-rearrange columns
         cols_order = ['Prior', 'Ativo', 'Processo', 'Evento', 'EvSeq', 'Descrição', 'Data', 
-        'DataPrior', 'EvPrior', 'Inativ', 'Obs', 'DOU', 'Dads', 'Sons']
-        self.tabela_interf_master = self.tabela_interf_master[cols_order]    
+        'EvPrior', 'Inativ', 'Obs', 'DOU', 'Dads', 'Sons']
+        self.tabela_interf_master = self.tabela_interf_master[cols_order] 
+
         return True    
-        
+
+
+    def to_database(self):
+        """update database with ['iestudo']['table']"""
+        if not hasattr(self, 'tabela_interf_eventos'):
+            if not self.createTableMaster():
+                return False
+        table = self.tabela_interf_master.copy()
+        table = prettyTabelaInterferenciaMaster(table, view=False)      
+        self.processo.db.dados.update({'iestudo': { 'table' :  table.to_dict() } })
+        self.processo._manager.session.commit()
+  
+
     def to_excel(self):
         """pretty print to excel file tabela interferencia master"""
         if not hasattr(self, 'tabela_interf_eventos'):
@@ -308,6 +325,7 @@ class Interferencia:
                 return False
         table = self.tabela_interf_master.copy()
         table = prettyTabelaInterferenciaMaster(table, view=False)
+
         excelfile = os.path.join(self.processo_path, config['interferencia']['file_prefix'] + '_' +
                 '_'.join([self.processo.number,self.processo.year])+'.xlsx')        
         # Get max string size each collum for setting excel width column
@@ -384,16 +402,7 @@ class Interferencia:
         # close the pandas excel writer and output the Excel file.
         writer.close()
       
-    def to_json(self):
-        """pretty print to json file tabela interferencia master"""
-        if not hasattr(self, 'tabela_interf_eventos'):
-            if not self.createTableMaster():
-                return False
-        table = self.tabela_interf_master.copy()
-        table = prettyTabelaInterferenciaMaster(table, view=False)
-        file = os.path.join(self.processo_path, config['interferencia']['file_prefix'] + '_' +
-        '_'.join([self.processo.number,self.processo.year])+'.json')  
-        table.to_json(file)
+
           
     @staticmethod
     def from_html():
@@ -410,20 +419,7 @@ class Interferencia:
         if not file_path: 
             raise RuntimeError("Legacy Excel prioridade not found, something like eventos_prioridade_*.xlsx")
         estudo.tabela_interf_master = pd.read_excel(file_path[0])          
-        return estudo
-        
-    @staticmethod
-    def from_json(dir='.'):
-        name = util.findfmtPnames(pathlib.Path(dir).absolute().stem)[0]
-        processo = ProcessManager[name]
-        estudo = Interferencia(None, processo.name, verbose=False, getprocesso=False)     
-        estudo.processo = processo 
-        estudo.processo_path = estudo.processPath(processo)     
-        file_path = list(pathlib.Path(dir).glob(config['interferencia']['file_prefix'] +'*.json'))        
-        if not file_path: 
-            raise RuntimeError("Json file not found, something like eventos_prioridade*.json")
-        estudo.tabela_interf_master = pd.read_json(file_path[0])          
-        return estudo 
+        return estudo        
     
     def saveHtml(self, overwrite=False):
         """fetch and save html interferencia raises DownloadInterferenciaFailed on fail"""

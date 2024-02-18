@@ -63,5 +63,4 @@ def getEventosSimples(wpage, processostr):
     eventstable = soup.find("table", {'class': "BordaTabela"})
     rows = htmlscrap.tableDataText(eventstable)
     df = pd.DataFrame(rows[1:], columns=rows[0])
-    df.Processo = df.Processo.apply(lambda x: fmtPname(x)) # standard names
     return df
