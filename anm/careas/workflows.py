@@ -177,7 +177,7 @@ def editalTipo(obj):
         return 'Leilão'
     elif 'oferta' in tipo:                
         return 'Oferta Pública' 
-    return None
+    return '' # to avoid none on nota tecnica
 
 def dispDadSon(name, infer=True, areatol=0.1):
     """
@@ -377,42 +377,40 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
         currentProcessGet() # get current list of processes
 
     process_name = fmtPname(process_name)         
-    if usefolder:  # needs folder docs and information  
-        process = scm.ProcessManager[process_name]  
-        if process_name not in ProcessPathStorage:     
-            print(f"Process {process_name} not found in ProcessPathStorage")
-        info = inferWork(process, ProcessPathStorage[process_name])       
-        if not activity:        
-            activity = info['work'] # get from infer
-    else: # Only writes on SEI (don't need folder and pdf's)
+
+    if (activity is WORK_ACTIVITY.REQUERIMENTO_EDITAL_DAD or 
+        activity is WORK_ACTIVITY.NOTA_TECNICA_GENERICA):
+        usefolder = False
+
+    if not usefolder:
+        # Only writes on SEI (don't need folder and pdf's)
+        # but needs scm data, probably not downloaded yet, e.g. parent edital 
         if process_name not in scm.ProcessManager:
-            scm.ProcessManager.GetorCreate(process_name, wpage, task=scm.SCM_SEARCH.BASICOS)
-        process = scm.ProcessManager[process_name]  
-        info = inferWork(process, None) # no folder!
-        psei = Processo.fromSei(sei, process['NUP'])  
-        psei.insereNotaTecnicaRequerimento("custom", info)    
-        psei.insereMarcador(config['sei']['marcador_default'])
-        psei.atribuir(config['sei']['atribuir_default'])
-        # should also close the openned text window - going to previous state
-        psei.closeOtherWindows()        
-        if verbose:
-            print(process['NUP'])     
-        return  
+            scm.ProcessManager.GetorCreate(process_name, wpage, task=scm.SCM_SEARCH.BASICOS_POLIGONAL)
+    
+    process = scm.ProcessManager[process_name]  
+    process_folder = None     
+    if usefolder: # needs folder docs and information  
+        if process_name not in ProcessPathStorage:     
+            raise FileNotFoundError(f"Process {process_name} folder not found! Just checked in ProcessPathStorage. Did you run it?")
+        process_folder = ProcessPathStorage[process_name]
+    info = inferWork(process, process_folder)       
+    if not activity:        
+        activity = info['work'] # get from inferred information
 
     if verbose and __debugging__:
-        process_folder = ProcessPathStorage[process_name]
         if process_folder:
             print("Main path: ", process_folder.parent)     
             print("Process path: ", process_folder.absolute())
             print("Current dir: ", os.getcwd())
         print(f"activity {activity} \n info dict {info}")         
-
-    if not activity in WORK_ACTIVITY.REQUERIMENTO_EDITAL_DAD:
-        psei = Processo.fromSei(sei, process['NUP'])            
-        # inclui vários documentos, se desnecessário é só apagar
-        # Inclui termo de abertura de processo eletronico se data < 2020 (protocolo digital nov/2019)
-        if termo_abertura and process['data_protocolo'].year < 2020:  
-            psei.InsereTermoAberturaProcessoEletronico()    
+    
+    # finally opens SEI with selenium
+    psei = Processo.fromSei(sei, process['NUP'])            
+    # inclui vários documentos, se desnecessário é só apagar
+    # Inclui termo de abertura de processo eletronico se data < 2020 (protocolo digital nov/2019)
+    if termo_abertura and process['data_protocolo'].year < 2020:  
+        psei.InsereTermoAberturaProcessoEletronico()    
         
     if activity in WORK_ACTIVITY.REQUERIMENTO_GENERICO:
         # Inclui Estudo Interferência pdf como Doc Externo no SEI
@@ -461,8 +459,11 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
     elif activity in WORK_ACTIVITY.REQUERIMENTO_EDITAL_DAD:
         # doesn't matter if son or dad was passed, here it's sorted!
         dad, son = dispDadSon(process_name)
+        for p in [dad, son]:
+            if p not in scm.ProcessManager:
+                scm.ProcessManager.GetorCreate(p, wpage, scm.SCM_SEARCH.BASICOS_POLIGONAL)
         dad, son = scm.ProcessManager[dad], scm.ProcessManager[son]     
-        # this is where we will put documents  
+        # this is where we will put documents - fly to there - since we were in the son above
         psei = Processo.fromSei(sei, dad['NUP']) 
         # calculate again: check in case area was not checked by infer method
         areadiff = dad['poligon']['area']-son['poligon']['area']
@@ -473,7 +474,8 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
         psei.insereNotaTecnicaRequerimento("edital_dad", info, edital=editalTipo(son), 
                             processo_filho=son['NUP'])
         process = dad # this is what was done
-
+    elif activity in WORK_ACTIVITY.NOTA_TECNICA_GENERICA:
+        psei.insereNotaTecnicaRequerimento("custom", info)    
 
     psei.insereMarcador(config['sei']['marcador_default'])
     psei.atribuir(config['sei']['atribuir_default'])

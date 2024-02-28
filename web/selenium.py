@@ -153,6 +153,9 @@ def wait_until(driver, selector, expected_condition,
     return wait(driver, timeout).until(expected_condition((by, selector)))
 
 
+def wait_for_element_presence(driver, selector, by=By.CSS_SELECTOR, timeout=10):
+    return wait(driver, timeout).until(expected_conditions.presence_of_element_located((by, selector)))
+
 def try_accept_alerts(driver, timeout=5):
     """try dismiss as many alerts IF shown up"""  
     try:

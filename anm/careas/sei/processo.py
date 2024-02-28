@@ -109,26 +109,29 @@ class Processo(Sei):
             fechar_pastas = find_element(self.driver, "a[href*='fechar_pastas'")
             if not fechar_pastas.is_displayed(): # não aberto
                 click(self.driver, "a[href*='abrir_pastas'") # open
+                # esperar ate uns 20 segundos para abrir as pastas de muitos volumes                
+                wait_for_element_presence(self.driver, "a[href*='fechar_pastas'", timeout=20)
         except NoSuchElementException: 
             # sem documentos suficientes para pastas serem formadas
             pass         
 
     def listaDocumentos(self):
-        """return a dict of 
-            { doc title : doc protocol number ...}
+        """return a list of documents with a dict each containing
+            { title , doc protocol number, and inner soup element ...}
             for each doc on documents tree
+        ISSUE: Very very slow for multiple volume process
         """        
         self._abrirPastas()
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')
         self.driver.switch_to.default_content() # was focused on frame left!
         edocs = soup.select("a.clipboard + a") # getting all docs on process
         # len(docs)
-        docs = {}
+        docs = []
         for edoc in edocs[1:]: #ignore first that's the process 
             title = edoc.contents[0]['title'] # inside span 1st children
-            np = re.search('(\d{6,})', title).group()  # numero protocolo
+            np = re.findall('\d{6,}', str(edoc.contents[0]))[-1]  # numero protocolo é o último
             name = re.sub("[()]", "", title.replace(np, '')).strip() # anything except ( )            
-            docs.update({ name : { 'np' : np, 'soup_element' : edoc } } )
+            docs.append({ 'title' : name,  'np' : np, 'soup_element' : edoc } )
         return docs 
 
     def insereDocumento(self, code=0):
@@ -234,18 +237,14 @@ class Processo(Sei):
         """analisa documentos e cria nota técnica sobre análise de interferência
         based on jinja2 template
         'area_porcentagem' must be passed as **kwargs"""
-        docs = self.listaDocumentos()
+        def latest_doc_by_title(docs, title):
+            return [ doc for doc in docs if title.lower() in doc['title'].lower() ][-1]
+
+        docs = self.listaDocumentos()              
         # get numero protocolo minuta and interferencia
-        minuta_np = None 
-        interferencia_np = None 
-        for title in list(docs.keys())[::-1][:4]: # only 4 more recent  
-            if minuta_np and interferencia_np: # dont continue if found already
-                break
-            if 'Minuta' in title and not minuta_np:
-                minuta_np = docs[title]['np']
-            if 'Interferência' in title and not interferencia_np:
-                interferencia_np = docs[title]['np']        
-                 
+        minuta_np = latest_doc_by_title(docs, 'Minuta') 
+        interferencia_np = latest_doc_by_title(docs, 'Interferência') 
+                      
         if 'interferência_total' in template_name: 
             template = templateEnv.get_template("req_interferência_total.html",)                
             html_text = template.render(infos=infos, interferencia_sei=interferencia_np)                 
