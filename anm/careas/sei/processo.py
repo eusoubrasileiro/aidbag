@@ -57,9 +57,12 @@ class Processo(Sei):
             find_element(self.driver,'div#divArvoreHtml div#detalhes')
         except NoSuchElementException:
             self.mainMenu()
-            switch_to_frame(self.driver, 'iframe#ifrVisualizacao')
-            # wait for infraBarraComandos botoes available   
-            wait_for_element_visible(self.driver, 'div#divArvoreAcoes.infraBarraComandos')    
+            switch_to_frame(self.driver, 'iframe#ifrVisualizacao')            
+            try: # wait for infraBarraComandos botoes available   
+                wait_for_element_visible(self.driver, 'div#divArvoreAcoes.infraBarraComandos')    
+            except ElementNotVisibleException:
+                self._barraComandos()
+
             
     def barraComandosState(self):
         self._barraComandos()
@@ -203,21 +206,22 @@ class Processo(Sei):
             iframe.contentWindow.document.write(arguments[0]); 
             iframe.contentWindow.document.close();"""
             self.driver.execute_script(jscript, htmltext)        
-            wait_for_ready_state_complete(self.driver) # it stalls the page                        
-            # to garantee save, wait for button assinar to be visible and enabled
+            wait_for_ready_state_complete(self.driver) # it stalls the page                                    
             click(self.driver, "a[title*='Salvar']")            
-            wait_for_element_visible(self.driver, 
-                            "a[class='cke_button cke_button__assinatura cke_button_off']")  
         def check_write_on_iframe():
             self.driver.switch_to.default_content() # go to parent main document
             switch_to_frame(self.driver, "#cke_6_contents iframe")
-            wait_for_element_visible(self.driver, "body#sei_edited") # body id to check it wrote            
+            wait_for_element_presence(self.driver, "body#sei_edited") # body id to check it wrote            
         while True: # to guarantee it really gets written
-            try: 
-                write_html_on_iframe() 
+            write_html_on_iframe() 
+            # to garantee save, wait for button salvar to be disabled
+            wait_for_element_presence(self.driver, 
+                "a#cke_262[class='cke_button cke_button__save cke_button_disabled' ]", 
+                timeout=60) # very high timeout for save to no keep waiting                                          
+            try:
                 check_write_on_iframe()
             except NoSuchElementException:
-                continue
+                continue  
             else:
                 break 
         self.driver.close() # close this page         
@@ -238,16 +242,17 @@ class Processo(Sei):
         based on jinja2 template
         'area_porcentagem' must be passed as **kwargs"""
         def latest_doc_by_title(docs, title):
-            return [ doc for doc in docs if title.lower() in doc['title'].lower() ][-1]
+            selected = [ doc for doc in docs if title.lower() in doc['title'].lower() ]
+            return selected[-1]['np'] if selected else '' # instead of None put empty string on the nota tecnica
 
         docs = self.listaDocumentos()              
         # get numero protocolo minuta and interferencia
         minuta_np = latest_doc_by_title(docs, 'Minuta') 
-        interferencia_np = latest_doc_by_title(docs, 'Interferência') 
+        interferencia_np = latest_doc_by_title(docs, 'Interferência')         
                       
-        if 'interferência_total' in template_name: 
-            template = templateEnv.get_template("req_interferência_total.html",)                
-            html_text = template.render(infos=infos, interferencia_sei=interferencia_np)                 
+        if 'interferência_total' in template_name:             
+            template = templateEnv.get_template("req_interferência_total.html")                
+            html_text = template.render(infos=infos, interferencia_sei=interferencia_np)   
         elif 'opção' in template_name:
             template = templateEnv.get_template("req_opção.html")                
             html_text = template.render(infos=infos, interferencia_sei=interferencia_np)
