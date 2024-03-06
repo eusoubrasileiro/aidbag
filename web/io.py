@@ -23,14 +23,15 @@ def try_read_html(path):
     return html
 
 
-def saveHtmlPage(path, html):
-    html = html if type(html) is bytes else html.encode('utf-8')
+def writeHTML(path, html):
+    """write string `html` at `path`.html with 'utf-8' encoding """
+    whtml = html if type(html) is bytes else html.encode('utf-8')
     with pathlib.Path(path).with_suffix('.html').open('wb') as f:
         f.write(html)
 
 
-def saveFullHtmlPage(url, pagepath='page', session=requests.Session(), html=None, verbose=True):
-    """Save web page html and supported contents      
+def saveSimpleHTML(url, pagepath='page', session=requests.Session(), html=None, verbose=True):
+    """Save web page html and supported contents (works fo basic static pages)     
         * url:  
         * pagepath : path-to-page   
         It will create a file  `'path-to-page'.html` and a folder `'path-to-page'_files`
@@ -69,4 +70,37 @@ def saveFullHtmlPage(url, pagepath='page', session=requests.Session(), html=None
                   'script': 'src'}  # tag&attrs tags to grab
     for tag, inner in tags_attrs.items():  # saves resource files and rename refs
         savenRename(soup, pagefolder, session, url, tag, inner)
-    saveHtmlPage(pagepath, soup.prettify('utf-8'))
+    writeHTML(pagepath, soup.prettify('utf-8'))
+
+
+def fetchSimpleHTMLStr(url, session=requests.Session(), verbose=True):
+    """
+    Returns a web page html as a string (works fo basic static pages).
+    Encode images as base64 strings!        
+    All other resources scrits, links etc will be gone.          
+    """
+    response = session.get(url)
+    if response.status_code != 200:
+        raise ConnectionError("Couldn't download content")
+    soup = BeautifulSoup(response.content, 'html.parser')
+    def img_base64(image_url):
+        """download image and encode the image data to base64"""
+        img_data = session.get(image_url).content
+        return base64.b64encode(img_data).decode('utf-8')    
+    # Iterate over each image tag and replace the src attribute with base64 encoded image data
+    for img in soup.find_all('img'):
+        if 'src' in img.attrs:
+            img_src = img['src']
+            if img_src.startswith('http'):
+                img['src'] = f'data:image;base64,{img_base64(img_src)}'
+    return soup.prettify('utf-8') # return prettified html as text
+    
+
+
+
+        
+
+
+    
+
+

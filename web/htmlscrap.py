@@ -5,7 +5,7 @@ import requests
 from urllib3.util.retry import Retry
 from requests import adapters
 from bs4 import BeautifulSoup
-from .io import saveFullHtmlPage
+from .io import saveSimpleHTML
 
 # to disable warnings when ssl is False
 from urllib3.exceptions import InsecureRequestWarning
@@ -52,7 +52,7 @@ class wPage: # html  webpage scraping with soup and requests
         save its html and supported contents        
         * pagepath : path-to-page   
         """       
-        saveFullHtmlPage(self.response.url, pagepath, 
+        saveSimpleHTML(self.response.url, pagepath, 
                      self.session, self.response.text, verbose)
 
     def post(self, arg, save=True, **kwargs):

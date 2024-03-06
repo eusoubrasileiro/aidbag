@@ -11,8 +11,8 @@ from functools import wraps
 from ....general import progressbar 
 from ....web.htmlscrap import wPageNtlm
 from ....web.io import (
-    saveHtmlPage,
-    saveFullHtmlPage, 
+    writeHTML,
+    saveSimpleHTML, 
     try_read_html
     )
 
@@ -250,11 +250,12 @@ class Processo():
             self._expandAssociados()            
             
         if self['associados']: # not dealing with grupamento many parents yet
-            try:
-                graph, root = ancestry.createGraphAssociados(self)
+            try:                
+                # graph, root = ancestry.createGraphAssociados(self)
                 #TODO: This is WRONG! root is not the real oldest process is only the graph root
                 # should use 'parents' and 'sons' instead and `comparePnames`
-                self.db.dados['prioridadec'] = self._manager[root]['prioridade']
+                # self.db.dados['prioridadec'] = self._manager[root]['prioridade']
+                pass
             except RecursionError:
                 # TODO analyse case of graph with closed loop etc.
                 pass 
@@ -371,9 +372,9 @@ class Processo():
         html = self.db.basic_html if(pagename == 'basic') else self.db.polygon_html
         if self._requests_session: # save html and page contents - full page  
             # MUST re-use session due ASP.NET authentication etc.           
-            saveFullHtmlPage(requests_urls[pagename], str(path), self._requests_session, html)          
+            saveSimpleHTML(requests_urls[pagename], str(path), self._requests_session, html)          
         else: # save simple plain html text page
-            saveHtmlPage(str(path), html)   
+            writeHTML(str(path), html)   
 
 
         
