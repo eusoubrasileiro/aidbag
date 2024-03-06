@@ -3,7 +3,9 @@ from .util import (
     findPnames,
     fmtPname,
     numberyearPname,        
-    comparePnames
+    comparePnames,
+    regex_process,
+    regex_processg
 )
 
 from .processo import (

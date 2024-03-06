@@ -15,6 +15,8 @@ from ..scm import (
     ProcessManager
 )
 
+from ..workflows import processPath
+
 from ....web import htmlscrap 
 from .scraping import (
     fetch_save_Html,
@@ -89,24 +91,15 @@ class Interferencia:
         self.processo_path = None 
         if getprocesso:
             self.processo = ProcessManager.GetorCreate(processostr, wpage, task, verbose)
-            self.processo_path = Interferencia.processPath(self.processo)
+            self.processo_path = processPath(self.processo.name, create=True)
         self.wpage = wpage
         self.verbose = verbose       
         self.tabela_interf_master = None 
         self.tabela_assoc = None 
         self.tabela_interf = None        
 
-    @staticmethod
-    def processPath(processo, create=True):
-        """pasta padrao salvar todos processos 
-        * processo : `Processo` class
-        * create: create the path/folder if true (default)
-        """    
-        processo_path = os.path.join(config['processos_path'],
-                    processo.number+'-'+processo.year)  
-        if create and not os.path.exists(processo_path): # cria a pasta se nao existir
-            os.mkdir(processo_path)                
-        return processo_path    
+
+
     
     @staticmethod
     def make(wpage, processostr, verbose=False, overwrite=False):
@@ -416,7 +409,7 @@ class Interferencia:
         processo = ProcessManager[name]
         estudo = Interferencia(None, processo.name, verbose=False, getprocesso=False)     
         estudo.processo = processo 
-        estudo.processo_path = estudo.processPath(processo)      
+        estudo.processo_path = processPath(processo)      
         file_path = list(pathlib.Path(dir).glob(config['interferencia']['file_prefix']+'*.xlsx'))
         if not file_path: 
             raise RuntimeError("Legacy Excel prioridade not found, something like eventos_prioridade_*.xlsx")

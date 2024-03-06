@@ -1,248 +1,34 @@
-import os
-import pathlib
-import sys
-import traceback
-import shutil
-import json
-import re 
-import tqdm
+from .. import scm     
+from ..config import config
+from ..estudos.util import downloadMinuta
+from ..sei import (
+    docs_externos,
+    Sei,
+    Processo,    
+)
+from .tools import (
+    dispDadSon,
+    dispGetNUP
+)
+from .folders import (
+    ProcessPathStorage,
+    currentProcessGet
+)
+
+from .config import (
+    WORK_ACTIVITY,
+    __workflow_debugging__
+)
+
 from PyPDF2 import PdfReader
 
-from aidbag.web.json import json_to_path, path_to_json
 
-from . import estudos
-from .config import config
-from . import scm
-from .scm.util import (
-    regex_process,
-    fmtPname
-    )
-
-from .scm.parsing import (
-    select_fields
-    )
-
-from .sei import (
-        Sei,
-        Processo,
-        docs_externos,
-        WORK_ACTIVITY
-    )
-        
-
-from .estudos.util import downloadMinuta
-
-
-# Current Processes being worked on - features
-# that means that workflows.py probably should be a package 
-# with this being another .py 
-
-ProcessPathStorage = {} 
-"""
-Stores paths for current process being worked on style { 'xxx.xxx/xxxx' : pathlib.Path() }.  
-Uses `config['processos_path']` to search for process work folders.
-"""
-
-def currentProcessGet(path=None, sort='name', clear=True):
-    """
-    Return dict of processes paths currently on work folder.
-    Update `ProcessPathStorage` dict with process names and paths.
-        
-    * sort:
-        to sort glob result by 
-        'time' modification time recent modifications first
-        'name' sort by name 
-        
-    * return: list [ pathlib.Path's ...]
-        current process folders working on from default careas working env.
-        
-    * clear : default True
-        clear `ProcessPathStorage` before updating (ignore json file)
-        
-    Hint: 
-        * use .keys() for list of process
-        * use .values() for list of paths `pathlib.Path` object
-    """
-    global ProcessPathStorage
-    if clear: # ignore json file 
-        ProcessPathStorage.clear()
-    else: # Read paths for current process being worked on from file 
-        with open(config['wf_processpath_json'], "r") as f:
-            ProcessPathStorage = json.load(f, object_hook=json_to_path)   
-        return ProcessPathStorage
-    if not path: # default work folder of processes
-        path = config['processos_path']        
-    path = pathlib.Path(path)    
-    process_folders = []
-    paths = path.glob('*') 
-    if 'time' in sort:
-        paths = sorted(paths, key=os.path.getmtime)[::-1]        
-    elif 'name' in sort:
-        paths = sorted(paths)   
-    for cur_path in paths: # remove what is NOT a process folder
-        if regex_process.search(str(cur_path)) and cur_path.is_dir():
-            process_folders.append(cur_path.absolute())   
-            ProcessPathStorage.update({ scm.fmtPname(str(cur_path)) : cur_path.absolute()})            
-    with open(config['wf_processpath_json'], "w") as f: # Serialize data into file
-        json.dump(ProcessPathStorage, f, default=path_to_json)
-    return ProcessPathStorage
-    
-    
-def ProcessManagerFromHtml(path=None):    
-    """fill in `scm.ProcessManager` using html from folders of processes"""    
-    if not path:
-        path = pathlib.Path(config['processos_path']).joinpath("Concluidos")    
-    currentProcessGet(path)
-    scm.ProcessManager.fromHtmls(ProcessPathStorage.values())
-    
-
-def folder_process(process_str):
-    """get folder name used to store a process from NUP or whatever other form like 
-    '48054.831282/2021-23' is '831282-2021'
-    """
-    return '-'.join(scm.numberyearPname(process_str))
-
-### can be used to move process folders to Concluidos
-def currentProcessMove(process_str, dest_folder='Concluidos', 
-    rootpath=os.path.join(config['secor_path'], "Processos"), delpath=False):
-    """
-    move process folder path to `dest_folder` (this can create a new folder)
-    * process_str : process name to move folder
-    * dest_folder : path relative to root_path  default `__secor_path__\Processos`
-    also stores the new path on `ProcessPathStorage` 
-    * delpath : False (default) 
-        delete the path from `ProcessPathStorage` (stop tracking)
-    """    
-    process_str = scm.fmtPname(process_str) # just to make sure it is unique
-    dest_path =  pathlib.Path(rootpath).joinpath(dest_folder).joinpath(folder_process(process_str)).resolve() # resolve, solves "..\" to an absolute path 
-    shutil.move(ProcessPathStorage[process_str].absolute(), dest_path)    
-    if delpath: 
-        del ProcessPathStorage[process_str]
-    else:
-        ProcessPathStorage[process_str] = dest_path
-    with open(config['wf_processpath_json'], "w") as f: # Serialize 
-        json.dump(ProcessPathStorage, f, default=path_to_json)
-
-    
 def readPdfText(filename):
     reader = PdfReader(filename)   
     text = ''
     for page in reader.pages:
         text += page.extract_text()
     return text  
-    
-    
-__debugging__ = False
-
-
-def EstudoBatchRun(wpage, processos, tipo='interferencia', verbose=False, overwrite=False):
-    """
-    * tipo : str
-        'interferencia' - Analise de Requerimento de Pesquisa  
-        'opção'- Analise de Opcao de Area 
-      
-    TODO?
-    - Analise de Formulario 1
-    """
-    succeed_NUPs = [] # suceed 
-    failed_NUPS = [] # failed
-    estudo = None
-    for processo in tqdm.tqdm(processos):        
-        try:            
-            if tipo == 'interferencia':
-                estudo = estudos.Interferencia.make(wpage, processo, verbose=verbose, overwrite=overwrite)   
-                proc = estudo.processo              
-            elif tipo == 'opção':
-                proc = scm.ProcessManager.GetorCreate(processo, wpage, dados=scm.SCM_SEARCH.BASICOS_POLIGONAL, verbose=verbose)
-                proc.salvaPageScmHtml(config['processos_path'], 'basic', overwrite)
-        except scm.ErrorProcessSCM as e:
-            print(f"Process {processo} Exception: {traceback.format_exc()}", file=sys.stderr)   
-        except Exception as e:              
-            print(f"Process {processo} Exception: {traceback.format_exc()}", file=sys.stderr)                       
-            failed_NUPS.append((scm.ProcessManager[scm.fmtPname(processo)]['NUP'],''))            
-        else:
-            succeed_NUPs.append(proc['NUP'])  
-    # print all NUPS
-    print('SEI NUPs sucess:')
-    for nup in succeed_NUPs:
-        print(nup)
-    print('SEI NUPs failed:')
-    for nup in failed_NUPS:
-        print(nup)
-    return succeed_NUPs, failed_NUPS
-
-def editalTipo(obj):
-    tipo = obj['tipo'].lower()  
-    if 'leilão' in tipo:
-        return 'Leilão'
-    elif 'oferta' in tipo:                
-        return 'Oferta Pública' 
-    return '' # to avoid none on nota tecnica
-
-def dispDadSon(name, infer=True, areatol=0.1):
-    """
-    return 'dad' and 'son' from name
-    * infer: bool (defaul True)
-        infer from area-fase
-    * areatol: float (default 0.1)
-        tolerance area in heactare to found process 
-        if infer=True
-    """
-    def dispSearch(name):
-        """
-        Try to infer based on search on 
-            * Same área 
-            * Fase name: disponibilidade/leilão/oferta
-        Search for son-dad (or vice-versa) relation leilão or oferta pública.
-            Get first son with tipo leilão or oferta publica, when multiple                        
-            get 1'st 'son' by poligon matching area on the list and edital/oferta tipo
-        return standard name or None
-        """   
-        root = scm.ProcessManager[name]
-        found = False
-        for ass_name, attrs in scm.ProcessManager[name]['associados'].items():            
-            # print('associdado: ', ass_name, attrs, file=sys.stdout)
-            Obj = attrs['obj']
-            if not 'poligon' in Obj: #ignore 
-                continue 
-            areadiff = abs(root['poligon']['area']-Obj['poligon']['area'])                        
-            edital_tipo = editalTipo(Obj)
-            if areadiff <= areatol and edital_tipo is not None:
-                found = ass_name
-                break # found    
-        if not found:
-            print('associdados: ', scm.ProcessManager[name]['associados'], file=sys.stdout)
-            raise Exception(f'`dispSearch` did not found son-dad from {name}')                
-        return found
-    p = scm.ProcessManager[scm.fmtPname(name)]
-    nparents = len(p['parents'])
-    nsons = len(p['sons'])
-    if nparents > 1 or nsons > 1:        
-        if infer:
-            print(f"`dispDadSon` Infering from area-fase {name}", file=sys.stderr)
-        # Mais de um associado! Àrea Menor no Leilão? Advindo de Disponibilidade?
-        if nsons == 1:
-            son = p['sons'][0]
-            # search for parent 
-            dad = dispSearch(son)
-        elif nparents == 1:
-            # search for son
-            dad = p['dad'][0]
-            son = dispSearch(dad)
-        else: 
-            raise Exception(f'Mais de 1 pai e 1 filho at once {name}')                
-    if nparents:
-        son, dad = name, p['parents'][0]           
-    elif nsons:
-        son, dad = p['sons'][0], name 
-    return dad, son 
-
-def dispGetNUP(processo, dad=False):
-    """get disponibilidade 'dad' or 'son' if dad=False (default)"""    
-    dad, son = dispDadSon(processo.name)
-    if dad:
-        return scm.ProcessManager[dad]['NUP'] 
-    return scm.ProcessManager[son]['NUP']  
 
 
 def inferWork(process, folder=None):
@@ -334,7 +120,7 @@ def inferWork(process, folder=None):
             if 'pública' in process['tipo'].lower():   
                   infos['work'] = WORK_ACTIVITY.REQUERIMENTO_EDITAL    
                   infos['edital'] = {'tipo' : 'Oferta Pública', 'pai' : dispGetNUP(process)}    
-    if __debugging__:
+    if __workflow_debugging__:
         print(infos)              
     return infos 
 
@@ -376,7 +162,7 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
     if not ProcessPathStorage: # empty process path storage
         currentProcessGet() # get current list of processes
 
-    process_name = fmtPname(process_name)         
+    process_name = scm.fmtPname(process_name)         
 
     if (activity is WORK_ACTIVITY.REQUERIMENTO_EDITAL_DAD or 
         activity is WORK_ACTIVITY.NOTA_TECNICA_GENERICA):
@@ -398,7 +184,7 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
     if not activity:        
         activity = info['work'] # get from inferred information
 
-    if verbose and __debugging__:
+    if verbose and __workflow_debugging__:
         if process_folder:
             print("Main path: ", process_folder.parent)     
             print("Process path: ", process_folder.absolute())
@@ -451,11 +237,15 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
             # guarantee to insert an empty in any case
             pdf_adicional = str(info['pdf_adicional'].absolute()) if info['pdf_adicional'].exists() else None 
             psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional) 
-    elif activity in WORK_ACTIVITY.REQUERIMENTO_OPCAO_ALVARA: # opção de área na fase de requerimento                
-        # InsereDocumentoExternoSEI(sei, nup, 3, pdf_interferencia) # estudo opção
-        # InsereDocumentoExternoSEI(sei, nup, 1, pdf_adicional)  # minuta alvará
-        # IncluiDespacho(sei, nup, 13)  # despacho  análise de plano alvará
-        raise NotImplementedError() 
+    elif activity in WORK_ACTIVITY.REQUERIMENTO_OPCAO_ALVARA: # opção de área na fase de requerimento
+        psei.insereDocumentoExterno(3, str(info['pdf_interferencia'].absolute()))  # estudo opção
+        if not info['pdf_adicional'].exists():
+            downloadMinuta(wpage, process.name, 
+                        str(info['pdf_adicional'].absolute()), info['minuta']['code'])     
+                        # guarantee to insert an empty in any case
+        pdf_adicional = str(info['pdf_adicional'].absolute()) if info['pdf_adicional'].exists() else None 
+        psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional) # minuta alvará           
+        psei.insereNotaTecnicaRequerimento("opção", info) 
     elif activity in WORK_ACTIVITY.REQUERIMENTO_EDITAL_DAD:
         # doesn't matter if son or dad was passed, here it's sorted!
         dad, son = dispDadSon(process_name)
@@ -466,11 +256,11 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
         # this is where we will put documents - fly to there - since we were in the son above
         psei = Processo.fromSei(sei, dad['NUP']) 
         # calculate again: check in case area was not checked by infer method
-        areadiff = dad['poligon']['area']-son['poligon']['area']
+        areadiff = dad['poligon'][0]['area']-son['poligon'][0]['area']
         # SOMETIMES it'll fail before comming here, when son not found
         # TODO deal with more participants on edital                
         if areadiff > 0.1: # compare areas if difference > 0.1 ha stop! - not same area
-            raise NotImplementedError(f"Not same Area! dad {dad['poligon']['area']:.2f} ha son {son['poligon']['area']:.2f} ha")
+            raise NotImplementedError(f"Not same Area! dad {dad['poligon'][0]['area']:.2f} ha son {son['poligon'][0]['area']:.2f} ha")
         psei.insereNotaTecnicaRequerimento("edital_dad", info, edital=editalTipo(son), 
                             processo_filho=son['NUP'])
         process = dad # this is what was done
