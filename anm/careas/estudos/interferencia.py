@@ -314,7 +314,9 @@ class Interferencia:
                 return False
         table = self.tabela_interf_master.copy()
         table = prettyTabelaInterferenciaMaster(table, view=False)      
-        self.processo.db.dados.update({'iestudo': { 'table' :  table.to_dict() } })
+        self.processo.db.dados.update({'iestudo': { 'table' :  table.to_dict() , 
+            'done' : False, 'time' : datetime.now() } })
+        
         self.processo._manager.session.commit()
   
 
