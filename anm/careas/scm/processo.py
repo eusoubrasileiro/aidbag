@@ -13,7 +13,8 @@ from ....web.htmlscrap import wPageNtlm
 from ....web.io import (
     writeHTML,
     saveSimpleHTML, 
-    try_read_html
+    try_read_html,
+    fetchSimpleHTMLStr
     )
 
 from . import requests 
@@ -279,12 +280,12 @@ class Processo():
         if not isinstance(self._wpage, wPageNtlm):
             raise Exception('Invalid `wPage` instance!')
         # str unicode page
-        html, _, session = requests.pageRequest(name, self.name, self._wpage, False)
+        html, url, session = requests.pageRequest(name, self.name, self._wpage, False)        
         self._requests_session = session
         if name == 'basic':
-            self.db.basic_html = html
-        else:
-            self.db.polygon_html = html
+            self.db.basic_html = html # I don't need images here
+        else: # polygon images will be embedded as base64 strings hence perfectly displayable
+            self.db.polygon_html = fetchSimpleHTMLStr(url, html=html, verbose=self._verbose)
 
     @thread_safe
     @update_database_on_finish

@@ -5,6 +5,7 @@ import requests
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 import pathlib
+import base64
 
 
 def try_read_html(path):
@@ -73,16 +74,16 @@ def saveSimpleHTML(url, pagepath='page', session=requests.Session(), html=None, 
     writeHTML(pagepath, soup.prettify('utf-8'))
 
 
-def fetchSimpleHTMLStr(url, session=requests.Session(), verbose=True):
+def fetchSimpleHTMLStr(url, session=requests.Session(), html=None, verbose=True):
     """
     Returns a web page html as a string (works fo basic static pages).
     Encode images as base64 strings!        
     All other resources scrits, links etc will be gone.          
+    if `html` is not None - it will be used instead of web request.
     """
-    response = session.get(url)
-    if response.status_code != 200:
-        raise ConnectionError("Couldn't download content")
-    soup = BeautifulSoup(response.content, 'html.parser')
+    if not html:
+        html = session.get(url).content    
+    soup = BeautifulSoup(html, 'html.parser')
     def img_base64(image_url):
         """download image and encode the image data to base64"""
         img_data = session.get(image_url).content
@@ -91,9 +92,11 @@ def fetchSimpleHTMLStr(url, session=requests.Session(), verbose=True):
     for img in soup.find_all('img'):
         if 'src' in img.attrs:
             img_src = img['src']
-            if img_src.startswith('http'):
-                img['src'] = f'data:image;base64,{img_base64(img_src)}'
-    return soup.prettify('utf-8') # return prettified html as text
+            if not img_src.startswith('http'):
+                img_src = urljoin(url, img_src)                
+            img['src'] = f'data:image;base64,{img_base64(img_src)}'
+    # return html as text - and remove unecessary '\n' I don't care for saving or displaying it
+    return  soup.decode('utf-8').replace('\n', '') 
     
 
 
