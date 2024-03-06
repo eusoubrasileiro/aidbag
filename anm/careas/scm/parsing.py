@@ -105,32 +105,35 @@ def parseDadosBasicos(basicos_page, name, verbose, data_tags=scm_data_tags):
     # parsed copy  
     return dados 
 
-
-
 def parseDadosPoligonal(poligonal_page, verbose):
     polydata = {}
     soup = BeautifulSoup(poligonal_page, "html.parser")
-    htmltables = soup.findAll('table', { 'class' : 'BordaTabela' }) #table[class="BordaTabela"]
+    htmltables = soup.select("td td table.BordaTabela") #td td table.BordaTabela
+    # table[id*="TextualPoligonalView"] finds the coordinates
     try: # need to cover multiple poligons etc..
-        if htmltables: 
-            memorial = htmlscrap.tableDataText(htmltables[-1])
-            data = htmlscrap.tableDataText(htmltables[1])
-            data = data[0:5] # informações memo descritivo
-            polydata = {'area'     : float(data[0][1].replace(',', '.')), 
-                        'datum'     : data[0][3],
-                        'cmin'      : float(data[1][1]), 
-                        'cmax'      : float(data[1][3]),
-                        'amarr_lat' : data[2][1],
-                        'amarr_lon' : data[2][3],
-                        'amarr_cum' : data[3][3],
-                        'amarr_ang' : data[4][1],
-                        'amarr_rum' : data[4][3],
-                        'memo'      : memorial
-                        }
+        if htmltables: # at least 1 polygon = 2 tables (1. memo coordenadas and 2. memo pa info)
+            polydata = []
+            htmltables = [htmltables[i:i+2] for i in range(0,len(htmltables),2)]            
+            for painfo, memorial in htmltables:
+                painfo = htmlscrap.tableDataText(painfo) # memo - pa info
+                painfo = painfo[0:5] # 5 first rows: informações pa
+                memorial = htmlscrap.tableDataText(memorial) # coordenadas                                
+                polydata.append(
+                        {'area'     : float(painfo[0][1].replace(',', '.')), 
+                            'datum'     : painfo[0][3],
+                            'cmin'      : float(painfo[1][1]), 
+                            'cmax'      : float(painfo[1][3]),
+                            'amarr_lat' : painfo[2][1],
+                            'amarr_lon' : painfo[2][3],
+                            'amarr_cum' : painfo[3][3],
+                            'amarr_ang' : painfo[4][1],
+                            'amarr_rum' : painfo[4][3],
+                            'memo'      : memorial
+                        })
     except:
         if verbose:
             print("parseDadosPoligonal failed!", file=sys.stderr)
-        return {}
+        return []
     return polydata
 
 
