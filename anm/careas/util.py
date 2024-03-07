@@ -1,3 +1,33 @@
+from . import scm 
+import os 
+from .config import config
+
+def processPath(process_str, create=False, fullpath=True):
+    """
+    Standard folder path for process when working on it. 
+    * process_str : str
+        name of process NUP or whatever other form like '48054.831282/2021-23' or '831282-2021'
+        folder name is 'number-year'
+    * create: bool (default False)
+        create the path/folder if true (default)
+    """
+    folder_name = '-'.join(scm.numberyearPname(process_str))
+    processo_path = os.path.join(config['processos_path'], folder_name)  
+    if create and not os.path.exists(processo_path): # cria a pasta se nao existir
+        os.mkdir(processo_path)      
+    if fullpath:
+        return processo_path
+    else:
+        return folder_name
+
+
+
+
+
+
+
+
+
 import datetime
 import sys
 from dateutil.relativedelta import relativedelta

@@ -12,9 +12,9 @@ from .scm import (
 from .config import *
 
 from .util import (
-    ContaPrazo
+    ContaPrazo,
+    processPath
 )
-
 
 # needed for connection so better be here
 # widely visible from careas
@@ -27,6 +27,5 @@ from .workflows import (
     IncluiDocumentosSEI, 
     ESTUDO_TYPE,
     EstudoBatchRun,    
-    IncluiDocumentosSEIFirstN,
-    processPath
+    IncluiDocumentosSEIFirstN
 )

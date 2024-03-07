@@ -15,7 +15,7 @@ from ..scm import (
     ProcessManager
 )
 
-from ..workflows import processPath
+from ..util import processPath
 
 from ....web import htmlscrap 
 from .scraping import (

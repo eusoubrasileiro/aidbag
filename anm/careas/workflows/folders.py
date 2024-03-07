@@ -1,6 +1,7 @@
 from aidbag.web.json import json_to_path, path_to_json
 
 from ..config import config
+from ..util import processPath
 from .. import scm 
 from ..scm import regex_process
 
@@ -14,6 +15,8 @@ ProcessPathStorage = {}
 Stores paths for current process being worked on style { 'xxx.xxx/xxxx' : pathlib.Path() }.  
 Uses `config['processos_path']` to search for process work folders.
 """
+
+
 
 
 def currentProcessGet(path=None, sort='name', clear=True):
@@ -94,18 +97,3 @@ def ProcessManagerFromHtml(path=None):
     scm.ProcessManager.fromHtmls(ProcessPathStorage.values())        
 
 
-def processPath(process_str, create=False, fullpath=True):
-    """
-    Standard folder path for process when working on it. 
-    * process_str : str
-        name of process NUP or whatever other form like '48054.831282/2021-23' is '831282-2021'
-    * create: create the path/folder if true (default)
-    """
-    folder_name = '-'.join(scm.numberyearPname(process_str))
-    processo_path = os.path.join(config['processos_path'], folder_name)  
-    if create and not os.path.exists(processo_path): # cria a pasta se nao existir
-        os.mkdir(processo_path)      
-    if fullpath:
-        return processo_path
-    else:
-        return folder_name
