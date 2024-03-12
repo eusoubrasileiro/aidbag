@@ -1,9 +1,15 @@
 from datetime import datetime
 from enum import auto, Enum
+import requests
+import pathlib
+from bs4 import BeautifulSoup
+import urllib3
 
+from .. import util
 from ....web.selenium import *
 from .cls import Sei
 from .config import *
+
 
 class BARRACOMANDOS_STATE(Enum):
     MAIN_OPEN = 1 # it's the main barra comandos and the process is open
@@ -60,7 +66,7 @@ class Processo(Sei):
             switch_to_frame(self.driver, 'iframe#ifrVisualizacao')            
             try: # wait for infraBarraComandos botoes available   
                 wait_for_element_visible(self.driver, 'div#divArvoreAcoes.infraBarraComandos')    
-            except ElementNotVisibleException:
+            except (ElementNotVisibleException, NoSuchElementException):
                 self._barraComandos()
 
             
@@ -134,8 +140,45 @@ class Processo(Sei):
             title = edoc.contents[0]['title'] # inside span 1st children
             np = re.findall('\d{6,}', str(edoc.contents[0]))[-1]  # numero protocolo é o último
             name = re.sub("[()]", "", title.replace(np, '')).strip() # anything except ( )            
-            docs.append({ 'title' : name,  'np' : np, 'soup_element' : edoc } )
+            docs.append({ 'title' : name,  'np' : np, 'soup_element' : edoc , 'selector' : f"a#{edoc['id']}"} )
         return docs 
+
+    def download_latest_documents(self, lastn=5):
+        """download lastn documents from listaDocuments to default `processPath` folder"""
+        lista = self.listaDocumentos()
+        lastn = len(lista) if lastn > len(lista) else lastn 
+        for i in range(1,lastn+1):
+            self.driver.switch_to.default_content() 
+            switch_to_frame(self.driver, "iframe#ifrArvore") # left bar       
+            click(self.driver, lista[-i]['selector'])
+            self.driver.switch_to.default_content() 
+            switch_to_frame(self.driver, "iframe#ifrVisualizacao") # right bar
+            try:
+                element = find_element(self.driver, "div a.ancoraArvoreDownload")     
+            except NoSuchElementException:
+                # it's not a downloadable external element it's html doc nota/despacho etc.
+                suffix = '.html'        
+                wait_for_element_presence(self.driver, 'iframe#ifrArvoreHtml')
+                switch_to_frame(self.driver, 'iframe#ifrArvoreHtml') # html iframe         
+                soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+                html_doc = soup.select('html')[0]   
+                file_content = html_doc.prettify().encode('utf-8')    
+            else:        
+                suffix = '.pdf'
+                uri = element.get_attribute('href')    
+                cookies = self.driver.get_cookies() # get selenium cookies
+                s = requests.Session() # create requests session
+                for cookie in cookies: # fill in session with selenium cookies
+                    s.cookies.set(cookie['name'], cookie['value'])
+                urllib3.disable_warnings() # ignore SSL warnings
+                response = s.get(uri, verify=False) # ignore SSL certificate
+                file_content = response.content
+            # number prefix to sort/order documents according to their original position
+            prefix = f"{len(lista)-i:03d}_" 
+            filepath = pathlib.Path(util.processPath(self.nup, create=True)) / ( 
+                prefix + lista[-i]['title'] + suffix)
+            with open(filepath.absolute(), 'wb') as f:
+                f.write(file_content)
 
     def insereDocumento(self, code=0):
         """
