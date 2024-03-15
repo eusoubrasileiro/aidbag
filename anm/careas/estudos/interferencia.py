@@ -207,7 +207,7 @@ class Interferencia:
         TODO: remove useless columns and rename others already renamed on workapp
         """
         if not hasattr(self, 'tabela_interf'):
-            if self.createTable(): # there is no interference !
+            if not self.createTable(): # there is no interference !
                 return False
         if hasattr(self, 'tabela_interf_eventos'):
             return self.tabela_interf_master
@@ -305,7 +305,7 @@ class Interferencia:
                 { 'done' : False, 'time' : datetime.now() } 
             }
         if not hasattr(self, 'tabela_interf_eventos'):
-            if not self.createTableMaster():
+            if self.createTableMaster():
                 table = self.tabela_interf_master.copy()
                 table = prettyTabelaInterferenciaMaster(table, view=False)      
                 iestudo['iestudo']['table'] = table.to_dict()                    
