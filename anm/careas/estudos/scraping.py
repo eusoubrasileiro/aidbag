@@ -21,8 +21,8 @@ def fetch_save_Html(wpage, number, year, html_file):
     if not ( wpage.response.url == r'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'):
         soup = BeautifulSoup(wpage.response.text, 'html.parser')                        
         # falhou salvar Retirada de Interferencia return error message                        
-        return  soup.find('span', { 'class' : 'MensagemErro' }).text.strip() 
-    wpage.save(html_file)
+        return  soup.find('span', { 'class' : 'MensagemErro' }).text.strip()     
+    wpage.saveSimpleHTML(html_file)    
     return ''    
 
 def cancelaUltimo(wpage, number, year):

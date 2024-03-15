@@ -28,10 +28,10 @@ def writeHTML(path, html):
     """write string `html` at `path`.html with 'utf-8' encoding """
     whtml = html if type(html) is bytes else html.encode('utf-8')
     with pathlib.Path(path).with_suffix('.html').open('wb') as f:
-        f.write(html)
+        f.write(whtml)
 
 
-def saveSimpleHTML(url, pagepath='page', session=requests.Session(), html=None, verbose=True):
+def saveSimpleHTMLFolder(url, pagepath='page', session=requests.Session(), html=None, verbose=True):
     """Save web page html and supported contents (works fo basic static pages)     
         * url:  
         * pagepath : path-to-page   
@@ -96,11 +96,20 @@ def fetchSimpleHTMLStr(url, session=requests.Session(), html=None, verbose=True)
                 img_src = urljoin(url, img_src)                
             img['src'] = f'data:image;base64,{img_base64(img_src)}'
     # return html as text - and remove unecessary '\n' I don't care for saving or displaying it
-    return  soup.decode('utf-8').replace('\n', '') 
+    return soup.decode('utf-8').replace('\n', '') 
     
 
+def saveSimpleHTML(url, pagepath='page', session=requests.Session(), html=None, verbose=True):
+    """
+    Saves a web page html complete as a SINGLE *.html file.
+    Encode images as base64 strings!        
+    All other resources scrits, links etc will be gone.          
+    if `html` is not None - it will be used instead of web request.
+    """
+    html = fetchSimpleHTMLStr(url, session, html, verbose)
+    writeHTML(pagepath, html)
 
-
+    
         
 
 

@@ -12,7 +12,7 @@ from ....general import progressbar
 from ....web.htmlscrap import wPageNtlm
 from ....web.io import (
     writeHTML,
-    saveSimpleHTML, 
+    saveSimpleHTML,
     try_read_html,
     fetchSimpleHTMLStr
     )
