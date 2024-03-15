@@ -7,7 +7,6 @@ config = {}
 config['secor_timeout'] = 4*60 # sometimes sigareas server/r. interferncia takes a long long time to answer 
 
 #configs are per module
-
 config['scm'] = {} 
 # when to replace the process stored on the ProcessManager after this amount of time 
 config['scm']['process_expire'] = datetime.timedelta(weeks=1)
@@ -22,6 +21,9 @@ config['sei']['doc_templates'] = ''
 config['interferencia'] = {}
 config['interferencia']['html_prefix'] = {'this' : 'interferencia', 'legacy': 'sigareas_rinterferencia'}
 config['interferencia']['file_prefix'] = 'eventos_prioridade'
+
+# module independent configurations
+config['sigares'] = {'doc_prefix' : 'R@&' }
 
 def SetHome(home=str(Path.home())): # default get userhome folder
     """

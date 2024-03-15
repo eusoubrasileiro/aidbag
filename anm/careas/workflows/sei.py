@@ -45,8 +45,9 @@ def inferWork(process, folder=None):
 
     if folder is not None:
         # search/parse local folder
-        # Estudo de Interferência deve chamar 'R.pdf' glob.glob("R*.pdf")[0] seja o primeiro
-        pdf_interferencia = [ file for file in folder.glob("R*.pdf") ]
+        # Estudo de Interferência deve chamar 'R@&.pdf' glob.glob("R*.pdf")[0] seja o primeiro - 
+        # multiple downloads at suffix (1), (2) etc..
+        pdf_interferencia = [ file for file in folder.glob(config['sigares']['doc_prefix'] + '*.pdf') ]
         # turn empty list to None
         infos['pdf_interferencia'] = pdf_interferencia[0] if pdf_interferencia else None
         # search/parse process object

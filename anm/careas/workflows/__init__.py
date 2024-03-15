@@ -7,6 +7,10 @@ from .config import (
     ESTUDO_TYPE,
     __workflow_debugging__
 )
-from .folders import processPath
+from .folders import (
+    processPath, 
+    currentProcessGet,
+    ProcessPathStorage
+)
 from .batch import EstudoBatchRun
 
