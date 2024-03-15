@@ -129,10 +129,9 @@ class Interferencia:
         # only if retirada interferencia html is saved we can create spreadsheets
         try:               
             if estudo.createTable(): # sometimes there is no interferences 
-                estudo.createTableMaster()
-                estudo.to_database()
-                # keeping for debugging
-                estudo.to_excel()                  
+                estudo.createTableMaster()                                
+                estudo.to_excel() # keeping for debugging                  
+            estudo.to_database() # save to database marking no table
         finally: # if there was an exception cancela ultimo estudo
             if overwrite and not estudo.cancelLast():
                 raise CancelaUltimoEstudoFailed()
@@ -302,14 +301,15 @@ class Interferencia:
 
     def to_database(self):
         """update database with ['iestudo']['table']"""
+        iestudo = {'iestudo': 
+                { 'done' : False, 'time' : datetime.now() } 
+            }
         if not hasattr(self, 'tabela_interf_eventos'):
             if not self.createTableMaster():
-                return False
-        table = self.tabela_interf_master.copy()
-        table = prettyTabelaInterferenciaMaster(table, view=False)      
-        self.processo.db.dados.update({'iestudo': { 'table' :  table.to_dict() , 
-            'done' : False, 'time' : datetime.now() } })
-        
+                table = self.tabela_interf_master.copy()
+                table = prettyTabelaInterferenciaMaster(table, view=False)      
+                iestudo['iestudo']['table'] = table.to_dict()                    
+        self.processo.db.dados.update(iestudo)        
         self.processo._manager.session.commit()
   
 
