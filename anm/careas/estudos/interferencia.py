@@ -94,11 +94,12 @@ class Interferencia:
             self.processo_path = processPath(self.processo.name, create=True)
         self.wpage = wpage
         self.verbose = verbose       
+        """tabele de interferencia extraida do sigareas html"""
+        self.tabela_interf = None        
+        """tabele de inteferencia master criada a partir da acima self.tabela_interf""""
         self.tabela_interf_master = None 
         self.tabela_assoc = None 
-        self.tabela_interf = None        
-
-
+        
 
     
     @staticmethod
@@ -206,10 +207,9 @@ class Interferencia:
 
         TODO: remove useless columns and rename others already renamed on workapp
         """
-        if not hasattr(self, 'tabela_interf'):
-            if not self.createTable(): # there is no interference !
-                return False
-        if hasattr(self, 'tabela_interf_eventos'):
+        if self.tabela_interf is None:            
+            return False
+        if self.tabela_interf_master is not None:
             return self.tabela_interf_master
 
         self.tabela_interf_master = pd.DataFrame()
@@ -304,20 +304,18 @@ class Interferencia:
         iestudo = {'iestudo': 
                 { 'done' : False, 'time' : datetime.now() } 
             }
-        if not hasattr(self, 'tabela_interf_eventos'):
-            if self.createTableMaster():
-                table = self.tabela_interf_master.copy()
-                table = prettyTabelaInterferenciaMaster(table, view=False)      
-                iestudo['iestudo']['table'] = table.to_dict()                    
+        if self.tabela_interf_master is not None:            
+            table = self.tabela_interf_master.copy()
+            table = prettyTabelaInterferenciaMaster(table, view=False)      
+            iestudo['iestudo']['table'] = table.to_dict()                    
         self.processo.db.dados.update(iestudo)        
         self.processo._manager.session.commit()
   
 
     def to_excel(self):
         """pretty print to excel file tabela interferencia master"""
-        if not hasattr(self, 'tabela_interf_eventos'):
-            if not self.createTableMaster():
-                return False
+        if selt.tabela_interf_master is None:
+            return False
         table = self.tabela_interf_master.copy()
         table = prettyTabelaInterferenciaMaster(table, view=False)
 
