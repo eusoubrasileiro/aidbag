@@ -1,6 +1,8 @@
+from ..sei import Sei
+
 from .sei import (
     IncluiDocumentosSEI,     
-    IncluiDocumentosSEIFirstN
+    IncluiDocumentosSEIFirstN,
 )
 from .config import (
     WORK_ACTIVITY,

@@ -296,6 +296,9 @@ class Processo(Sei):
         if 'interferência_total' in template_name:             
             template = templateEnv.get_template("req_interferência_total.html")                
             html_text = template.render(infos=infos, interferencia_sei=interferencia_np)   
+        elif 'opção_feita' in template_name:
+            template = templateEnv.get_template("req_opção_feita.html")                
+            html_text = template.render(infos=infos, interferencia_sei=interferencia_np, minuta_sei=minuta_np)
         elif 'opção' in template_name:
             template = templateEnv.get_template("req_opção.html")                
             html_text = template.render(infos=infos, interferencia_sei=interferencia_np)

@@ -96,7 +96,7 @@ class Interferencia:
         self.verbose = verbose       
         """tabele de interferencia extraida do sigareas html"""
         self.tabela_interf = None        
-        """tabele de inteferencia master criada a partir da acima self.tabela_interf""""
+        """tabele de inteferencia master criada a partir da acima self.tabela_interf"""
         self.tabela_interf_master = None 
         self.tabela_assoc = None 
         

@@ -1,9 +1,13 @@
+import sys 
+import traceback
+import os
+import re 
+
 from .. import scm     
 from ..config import config
 from ..estudos.util import downloadMinuta
 from ..sei import (
     docs_externos,
-    Sei,
     Processo,    
 )
 from .tools import (
@@ -38,47 +42,6 @@ def inferWork(process, folder=None):
     returns dict with lots of infos key,value pairs    
     """
     infos = {}   
-
-    infos['pdf_interferencia'] = None
-    infos['pdf_adicional'] = None 
-    infos['nome_assinatura'] = config['sei']['nome_assinatura']
-
-    if folder is not None:
-        # search/parse local folder
-        # Estudo de Interferência deve chamar 'R@&.pdf' glob.glob("R*.pdf")[0] seja o primeiro - 
-        # multiple downloads at suffix (1), (2) etc..
-        pdf_interferencia = [ file for file in folder.glob(config['sigares']['doc_prefix'] + '*.pdf') ]
-        # turn empty list to None
-        infos['pdf_interferencia'] = pdf_interferencia[0] if pdf_interferencia else None
-        # search/parse process object
-        if infos['pdf_interferencia']:
-            pdf_interferencia_text = readPdfText(infos['pdf_interferencia'].absolute())
-            if '(Áreas de Bloqueio)' in  pdf_interferencia_text:
-                print(f" { process['NUP'] } com bloqueio ",file=sys.stderr)
-                # this is not enough - bloqueio provisório é o que importa              
-            if 'ENGLOBAMENTO' in pdf_interferencia_text:
-                infos['interferencia'] = 'ok' 
-            else:
-                area_text="PORCENTAGEM ENTRE ESTA ÁREA E A ÁREA ORIGINAL DO PROCESSO:" # para cada area poligonal 
-                count = pdf_interferencia_text.count(area_text)            
-                infos['areas'] = {'count' : count}
-                infos['areas'] = {'perc' : []}
-                if count == 0:
-                    infos['interferencia'] = 'total'
-                elif count > 0: # só uma área
-                    if count == 1:
-                        infos['interferencia'] = 'ok'
-                    if count > 1:
-                        infos['interferencia'] = 'opção'
-                    percs = re.findall(f"(?<={area_text}) +([\d,]+)", pdf_interferencia_text)
-                    percs = [ float(x.replace(',', '.')) for x in percs ]  
-                    infos['areas']['perc'] = percs                 
-        else:
-            RuntimeError('Nao encontrou pdf R*.pdf')
-
-        if 'ok' in infos['interferencia']:                
-            infos['pdf_adicional'] = folder / "minuta.pdf"
-        
 
     # 'doc_ext' from config.docs_externos
     infos['minuta']  =  {'de' : '', 'code': 0, 'doc_ext': -1}
@@ -121,6 +84,51 @@ def inferWork(process, folder=None):
             if 'pública' in process['tipo'].lower():   
                   infos['work'] = WORK_ACTIVITY.REQUERIMENTO_EDITAL    
                   infos['edital'] = {'tipo' : 'Oferta Pública', 'pai' : dispGetNUP(process)}    
+
+    infos['pdf_sigareas'] = None
+    infos['pdf_adicional'] = None 
+    infos['nome_assinatura'] = config['sei']['nome_assinatura']
+
+    if folder is not None:
+        # search/parse local folder
+        # Estudo de Interferência deve chamar 'R@&.pdf' glob.glob("R*.pdf")[0] seja o primeiro - 
+        # multiple downloads at suffix (1), (2) etc..
+        pdf_sigareas = [ file for file in folder.glob(config['sigares']['doc_prefix'] + '*.pdf') ]
+        # turn empty list to None
+        infos['pdf_sigareas'] = pdf_sigareas[0] if pdf_sigareas else None
+        # search/parse process object
+        if infos['pdf_sigareas']:
+            pdf_sigareas_text = readPdfText(infos['pdf_sigareas'].absolute())
+            if 'OPÇÃO DE ÁREA' in pdf_sigareas_text:
+                infos['work'] = WORK_ACTIVITY.REQUERIMENTO_OPCAO_ALVARA
+                infos['estudo'] = 'ok' # minuta de alvará
+            else:
+                if '(Áreas de Bloqueio)' in  pdf_sigareas_text:
+                    print(f" { process['NUP'] } com bloqueio ",file=sys.stderr)
+                    # this is not enough - bloqueio provisório é o que importa              
+                if 'ENGLOBAMENTO' in pdf_sigareas_text:
+                    infos['estudo'] = 'ok' 
+                else:
+                    area_text="PORCENTAGEM ENTRE ESTA ÁREA E A ÁREA ORIGINAL DO PROCESSO:" # para cada area poligonal 
+                    count = pdf_sigareas_text.count(area_text)            
+                    infos['areas'] = {'count' : count}
+                    infos['areas'] = {'perc' : []}
+                    if count == 0:
+                        infos['estudo'] = 'interf_total'
+                    elif count > 0: # só uma área
+                        if count == 1:
+                            infos['estudo'] = 'ok'
+                        if count > 1:
+                            infos['estudo'] = 'opção'
+                        percs = re.findall(f"(?<={area_text}) +([\d,]+)", pdf_sigareas_text)
+                        percs = [ float(x.replace(',', '.')) for x in percs ]  
+                        infos['areas']['perc'] = percs                 
+        else:
+            RuntimeError('Nao encontrou pdf R*.pdf')
+
+        if 'estudo' in infos and 'ok' in infos['estudo']:                
+            infos['pdf_adicional'] = folder / "minuta.pdf"
+
     if __workflow_debugging__:
         print(infos)              
     return infos 
@@ -201,7 +209,7 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
         
     if activity in WORK_ACTIVITY.REQUERIMENTO_GENERICO:
         # Inclui Estudo Interferência pdf como Doc Externo no SEI
-        psei.insereDocumentoExterno(0, str(info['pdf_interferencia'].absolute()))                    
+        psei.insereDocumentoExterno(0, str(info['pdf_sigareas'].absolute()))                    
         if activity in WORK_ACTIVITY.REQUERIMENTO_EDITAL:
             if not info['pdf_adicional'].exists():
                 downloadMinuta(wpage, process.name, 
@@ -211,11 +219,11 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
             psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional)                        
             psei.insereNotaTecnicaRequerimento("edital_son", info)            
         elif activity in WORK_ACTIVITY.REQUERIMENTO_GENERICO_NOT_EDITAL:  
-            if 'total' in info['interferencia']:
+            if 'interf_total' in info['estudo']:
                 psei.insereNotaTecnicaRequerimento("interferência_total", info)           
-            elif 'opção' in info['interferencia']:
+            elif 'opção' in info['estudo']:
                 psei.insereNotaTecnicaRequerimento("opção", info)                            
-            elif 'ok' in info['interferencia']:                
+            elif 'ok' in info['estudo']:                
                 if not info['pdf_adicional'].exists():
                     downloadMinuta(wpage, process.name, 
                                 str(info['pdf_adicional'].absolute()), info['minuta']['code'])
@@ -230,8 +238,8 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
                     # Recomenda Só análise de plano s/ notificação titular (mais comum)
 
     elif activity in WORK_ACTIVITY.DIREITO_RLAVRA_FORMULARIO_1:
-        psei.insereDocumentoExterno(0, str(info['pdf_interferencia'].absolute())) 
-        if 'ok' in info['interferencia']:                
+        psei.insereDocumentoExterno(0, str(info['pdf_sigareas'].absolute())) 
+        if 'ok' in info['estudo']:                
             if not info['pdf_adicional'].exists():
                 downloadMinuta(wpage, process.name, 
                                 str(info['pdf_adicional'].absolute()), info['minuta']['code'])
@@ -239,14 +247,14 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
             pdf_adicional = str(info['pdf_adicional'].absolute()) if info['pdf_adicional'].exists() else None 
             psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional) 
     elif activity in WORK_ACTIVITY.REQUERIMENTO_OPCAO_ALVARA: # opção de área na fase de requerimento
-        psei.insereDocumentoExterno(3, str(info['pdf_interferencia'].absolute()))  # estudo opção
+        psei.insereDocumentoExterno(3, str(info['pdf_sigareas'].absolute()))  # estudo opção
         if not info['pdf_adicional'].exists():
             downloadMinuta(wpage, process.name, 
                         str(info['pdf_adicional'].absolute()), info['minuta']['code'])     
                         # guarantee to insert an empty in any case
         pdf_adicional = str(info['pdf_adicional'].absolute()) if info['pdf_adicional'].exists() else None 
         psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional) # minuta alvará           
-        psei.insereNotaTecnicaRequerimento("opção", info) 
+        psei.insereNotaTecnicaRequerimento("opção_feita", info) 
     elif activity in WORK_ACTIVITY.REQUERIMENTO_EDITAL_DAD:
         # doesn't matter if son or dad was passed, here it's sorted!
         dad, son = dispDadSon(process_name)
