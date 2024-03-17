@@ -102,6 +102,9 @@ def inferWork(process, folder=None):
             if 'OPÇÃO DE ÁREA' in pdf_sigareas_text:
                 infos['work'] = WORK_ACTIVITY.REQUERIMENTO_OPCAO_ALVARA
                 infos['estudo'] = 'ok' # minuta de alvará
+            if 'MUDANÇA DE REGIME COM REDUÇÃO' in pdf_sigareas_text:
+                infos['work'] = WORK_ACTIVITY.REQUERIMENTO_MUDANCA_REGIME
+                infos['estudo'] = 'ok'
             else:
                 if '(Áreas de Bloqueio)' in  pdf_sigareas_text:
                     print(f" { process['NUP'] } com bloqueio ",file=sys.stderr)
@@ -255,6 +258,15 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
         pdf_adicional = str(info['pdf_adicional'].absolute()) if info['pdf_adicional'].exists() else None 
         psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional) # minuta alvará           
         psei.insereNotaTecnicaRequerimento("opção_feita", info) 
+    elif activity in WORK_ACTIVITY.REQUERIMENTO_MUDANCA_REGIME: # mudança de regimen com redução
+        psei.insereDocumentoExterno(8, str(info['pdf_sigareas'].absolute()))  # estudo opção
+        if not info['pdf_adicional'].exists():
+            downloadMinuta(wpage, process.name, 
+                        str(info['pdf_adicional'].absolute()), info['minuta']['code'])     
+                        # guarantee to insert an empty in any case
+        pdf_adicional = str(info['pdf_adicional'].absolute()) if info['pdf_adicional'].exists() else None 
+        psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional) # minuta alvará           
+        psei.insereNotaTecnicaRequerimento("sem_redução", info)  # need a new one for mudança regime
     elif activity in WORK_ACTIVITY.REQUERIMENTO_EDITAL_DAD:
         # doesn't matter if son or dad was passed, here it's sorted!
         dad, son = dispDadSon(process_name)

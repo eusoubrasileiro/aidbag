@@ -94,8 +94,7 @@ class Processo():
         if wpagentlm: 
             self._wpage = wPageNtlm(wpagentlm.user, wpagentlm.passwd)
         # might be None in case loading from JSON, html etc...        
-        self._verbose = verbose                            
-        self._requests_session = None   
+        self._verbose = verbose                             
         self.lock = RLock()
 
     @property
@@ -280,12 +279,12 @@ class Processo():
         if not isinstance(self._wpage, wPageNtlm):
             raise Exception('Invalid `wPage` instance!')
         # str unicode page
-        html, url, session = requests.pageRequest(name, self.name, self._wpage, False)        
-        self._requests_session = session
+        html, url = requests.pageRequest(name, self.name, self._wpage, False)        
         if name == 'basic':
             self.db.basic_html = html # I don't need images here
         else: # polygon images will be embedded as base64 strings hence perfectly displayable
-            self.db.polygon_html = fetchSimpleHTMLStr(url, html=html, verbose=self._verbose)
+            self.db.polygon_html = fetchSimpleHTMLStr(url, html=html, 
+                session=self._wpage.session, verbose=self._verbose)
 
     @thread_safe
     @update_database_on_finish
@@ -361,7 +360,7 @@ class Processo():
         Args:
             html_path (str): pathlib.Path where to save
             pagename (str): 'basic' or 'poligon'
-            overwrite (bool): weather to overwrite already saved html
+            overwrite (bool): wether to overwrite already saved html
         """                
         path = pathlib.Path(html_path).joinpath(config['scm']['html_prefix'][pagename]+
                                                 self.number+'_'+self.year)
@@ -369,13 +368,10 @@ class Processo():
             return 
         if( (pagename == 'basic'and not self.db.basic_html) or
             (pagename == 'poligon'and not self.db.polygon_html) ):
-                self._pageRequest(pagename) # get/fill-in self._requests_session          
-        html = self.db.basic_html if(pagename == 'basic') else self.db.polygon_html
-        if self._requests_session: # save html and page contents - full page  
-            # MUST re-use session due ASP.NET authentication etc.           
-            saveSimpleHTML(requests_urls[pagename], str(path), self._requests_session, html)          
-        else: # save simple plain html text page
-            writeHTML(str(path), html)   
+            self._pageRequest(pagename) 
+        html = self.db.basic_html if(pagename == 'basic') else self.db.polygon_html        
+        # save the already fetched html as single file
+        writeHTML(str(path), html)   
 
 
         

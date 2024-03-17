@@ -14,12 +14,14 @@ docs_externos = {
     3: {'tipo': 'Estudo', 'desc': 'de Opção'},
     4: {'tipo': 'Minuta', 'desc': 'de Portaria de Lavra'},
     5: {'tipo': 'Minuta', 'desc': 'de Permissão de Lavra Garimpeira'},
-    6: {'tipo': 'Formulário', 'desc': '1 Análise de Requerimento de Lavra SECOR-MG'},
-    7: {'tipo': 'Minuta', 'desc': 'de Registro de Extração'}
+    6: {'tipo': 'Formulário', 'desc': '1 Análise de Requerimento de Lavra'},
+    7: {'tipo': 'Minuta', 'desc': 'de Registro de Extração'},
+    8: {'tipo': 'Estudo', 'desc': 'de Mudança de Regime'}
 }
 
     
     
     
     
+
 

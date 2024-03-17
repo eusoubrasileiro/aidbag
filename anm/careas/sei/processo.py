@@ -203,6 +203,8 @@ class Processo(Sei):
             4.  - Minuta      - 'de Portaria de Lavra' 
             5.  - Minuta      - 'de Permissão de Lavra Garimpeira' 
             6.  - Formulario  - '1 Análise de Requerimento de Lavra' 
+            7.  - Minuta      - 'de Registro de Extração'
+            8.  - Estudo      - 'de Mudança de Regime'
         * pdf_path :
             if None cria sem anexo
         """

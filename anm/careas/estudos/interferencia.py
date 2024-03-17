@@ -314,7 +314,7 @@ class Interferencia:
 
     def to_excel(self):
         """pretty print to excel file tabela interferencia master"""
-        if selt.tabela_interf_master is None:
+        if self.tabela_interf_master is None:
             return False
         table = self.tabela_interf_master.copy()
         table = prettyTabelaInterferenciaMaster(table, view=False)
@@ -423,8 +423,15 @@ class Interferencia:
             if os.path.exists(html_file+'.html'):
                 return        
         error_status = fetch_save_Html(self.wpage, self.processo.number, self.processo.year, html_file)
-        if error_status:
-            raise DownloadInterferenciaFailed(error_status)
+        if error_status: # retry on error 
+            if 'O sistema se comportou de forma inesperada.' in error_status:
+                if not hasattr(self, 'retry_download'): 
+                    self.retry_download = 1
+                elif self.retry_download < 3: # 2 retries
+                    self.retry_download += 1
+                    self.saveHtml(overwrite)
+                else:
+                    raise DownloadInterferenciaFailed(error_status)            
             
 
 # something else not sure will be usefull someday

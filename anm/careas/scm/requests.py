@@ -62,8 +62,7 @@ def pageRequest(pagename, processostr, wpage, fmtName=True):
         if "Processo não encontrado" in wpage.response.text:            
             raise ErrorProcessSCM(f"Processo {processostr} not found! Couldn't download.") 
     elif pagename == 'poligon': # first connection to 'dadosbasicos' above MUST have been made before
-        html, _, session = pageRequest('basic', processostr, wpage) # ask basicos first
-        wpage.session = session # MUST re-use session
+        html, _ = pageRequest('basic', processostr, wpage) # ask basicos first        
         formcontrols = {
             'ctl00$conteudo$btnPoligonal': 'Poligonal',
             'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnPoligonal'}
@@ -72,4 +71,4 @@ def pageRequest(pagename, processostr, wpage, fmtName=True):
                    data=formdata, timeout=scm_timeout)
         if 'Erro ao mudar a versão para a data selecionada.' in wpage.response.text:
             raise ErrorProcessSCM(f"Processo {processostr} failed download poligonal from SCM database.")
-    return wpage.response.text, urls['basic'], wpage.session
+    return wpage.response.text, urls['basic']
