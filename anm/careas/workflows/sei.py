@@ -108,6 +108,7 @@ def inferWork(process, folder=None):
             else:
                 if '(Áreas de Bloqueio)' in  pdf_sigareas_text:
                     print(f" { process['NUP'] } com bloqueio ",file=sys.stderr)
+                    infos['estudo'] = 'bloqueio'
                     # this is not enough - bloqueio provisório é o que importa              
                 if 'ENGLOBAMENTO' in pdf_sigareas_text:
                     infos['estudo'] = 'ok' 
@@ -225,7 +226,9 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
             if 'interf_total' in info['estudo']:
                 psei.insereNotaTecnicaRequerimento("interferência_total", info)           
             elif 'opção' in info['estudo']:
-                psei.insereNotaTecnicaRequerimento("opção", info)                            
+                psei.insereNotaTecnicaRequerimento("opção", info)    
+            elif 'bloqueio' in info['estudo']:
+                psei.insereNotaTecnicaRequerimento("interferência_bloqueio", info)                      
             elif 'ok' in info['estudo']:                
                 if not info['pdf_adicional'].exists():
                     downloadMinuta(wpage, process.name, 

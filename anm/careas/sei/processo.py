@@ -289,38 +289,18 @@ class Processo(Sei):
         def latest_doc_by_title(docs, title):
             selected = [ doc for doc in docs if title.lower() in doc['title'].lower() ]
             return selected[-1]['np'] if selected else '' # instead of None put empty string on the nota tecnica
-
         docs = self.listaDocumentos()              
         # get numero protocolo minuta and interferencia
         minuta_np = latest_doc_by_title(docs, 'Minuta') 
         interferencia_np = latest_doc_by_title(docs, 'Interferência')         
-                      
-        if 'interferência_total' in template_name:             
-            template = templateEnv.get_template("req_interferência_total.html")                
-            html_text = template.render(infos=infos, interferencia_sei=interferencia_np)   
-        elif 'opção_feita' in template_name:
-            template = templateEnv.get_template("req_opção_feita.html")                
-            html_text = template.render(infos=infos, interferencia_sei=interferencia_np, minuta_sei=minuta_np)
-        elif 'opção' in template_name:
-            template = templateEnv.get_template("req_opção.html")                
-            html_text = template.render(infos=infos, interferencia_sei=interferencia_np)
-        elif 'com_redução' in template_name:
-            template = templateEnv.get_template("req_com_redução.html")                
-            html_text = template.render(infos=infos, interferencia_sei=interferencia_np, minuta_sei=minuta_np, 
-                                        **kwargs)  # 'area_porcentagem' was passed as kwargs
-        elif 'sem_redução' in template_name:
-            template = templateEnv.get_template("req_sem_redução.html")                
-            html_text = template.render(infos=infos, interferencia_sei=interferencia_np, minuta_sei=minuta_np)
-        elif 'edital_son' in template_name:
-            template = templateEnv.get_template("req_edital_son.html")                
-            html_text = template.render(infos=infos, interferencia_sei=interferencia_np, minuta_sei=minuta_np)             
-        elif 'edital_dad' in template_name:
-            template = templateEnv.get_template("req_edital_dad.html")                
-            html_text = template.render(infos=infos, **kwargs) 
-        elif 'custom' in template_name: # your own template very specific problem
-            template = templateEnv.get_template("req_custom.html")                
-            html_text = template.render(infos=infos, **kwargs)
-                       
+        # find the template by name 
+        doc_templates = pathlib.Path(config['sei']['doc_templates'])            
+        template_path = next(doc_templates.glob(f"*{template_name}*.html"))
+        template = templateEnv.get_template(template_path.name) 
+        # additional and uncessary variables will just be ignored by jinja         
+        # for example, interferencia_sei, minuta_sei if not on the template will be ignored
+        html_text = template.render(infos=infos, interferencia_sei=interferencia_np, minuta_sei=minuta_np, 
+                                        **kwargs)  # 'area_porcentagem' was passed as kwargs                       
         self.insereNotaTecnica(html_text)
         
     def insereMarcador(self, marcador):
