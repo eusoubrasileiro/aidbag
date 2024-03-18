@@ -36,4 +36,10 @@ def SetHome(home=str(Path.home())): # default get userhome folder
     config['processos_path'] = os.path.join(config['secor_path'], 'Processos')  # os independent   
     config['wf_processpath_json'] = os.path.join(config['processos_path'], 'wf_processpath_json.jsons')
     config['scm']['process_storage_file'] = os.path.join(config['processos_path'], 'ProcessesStored')
+
 SetHome() # set config path defaults
+
+# if user and password are set on environ use it 
+if 'anm_user' in os.environ and 'anm_passwd' in os.environ:
+    config['anm_user'] = os.environ['anm_user']
+    config['anm_passwd'] = os.environ['anm_passwd']
