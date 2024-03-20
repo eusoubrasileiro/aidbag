@@ -24,7 +24,7 @@ class ErrorProcessSCM(Exception):
     Or others like not found errors
     """
 
-def pageRequest(pagename, processostr, wpage, fmtName=True):
+def pageRequest(pagename, processostr, wpage, fmtName=True, retry_on_error=3):
     """   Get & Post na página dados do Processo do Cadastro  Mineiro (SCM)
         * pagename : str
             page name to requets from `urls`
@@ -37,8 +37,7 @@ def pageRequest(pagename, processostr, wpage, fmtName=True):
         
         returns: 
             wpage.response.text, url, wpage.session
-    """
-    
+    """    
     if fmtName:
         processostr = fmtPname(processostr)        
     wpage = wpage.copy() # to make session unique across each proces/request
@@ -62,7 +61,7 @@ def pageRequest(pagename, processostr, wpage, fmtName=True):
         if "Processo não encontrado" in wpage.response.text:            
             raise ErrorProcessSCM(f"Processo {processostr} not found! Couldn't download.") 
     elif pagename == 'poligon': # first connection to 'dadosbasicos' above MUST have been made before
-        html, _ = pageRequest('basic', processostr, wpage) # ask basicos first        
+        html, _ = pageRequest('basic', processostr, wpage, retry_on_error=retry_on_error-1) # ask basicos first        
         formcontrols = {
             'ctl00$conteudo$btnPoligonal': 'Poligonal',
             'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnPoligonal'}
@@ -70,5 +69,7 @@ def pageRequest(pagename, processostr, wpage, fmtName=True):
         wpage.post(scm_dados_processo_main_url, 
                    data=formdata, timeout=scm_timeout)
         if 'Erro ao mudar a versão para a data selecionada.' in wpage.response.text:
+            if retry_on_error:
+                return pageRequest(pagename, processostr, wpage, retry_on_error=retry_on_error-1)
             raise ErrorProcessSCM(f"Processo {processostr} failed download poligonal from SCM database.")
     return wpage.response.text, urls['basic']
