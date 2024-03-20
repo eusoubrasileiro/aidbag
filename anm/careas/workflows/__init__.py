@@ -3,6 +3,7 @@ from ..sei import Sei
 from .sei import (
     IncluiDocumentosSEI,     
     IncluiDocumentosSEIFirstN,
+    IncluiDocumentosSEI_list
 )
 from .config import (
     WORK_ACTIVITY,

@@ -71,13 +71,7 @@ def prettyTabelaInterferenciaMaster(tabela_interf_eventos, view=True):
             table.loc[group.index[1:], 'Sons'] = ''      
     return table 
 
-class CancelaUltimoEstudoFailed(Exception):
-    """could not cancel ultimo estudo sigareas"""
-    pass
 
-class DownloadInterferenciaFailed(Exception):
-    """could not download retirada de interferencia"""
-    pass 
 
 
 class Interferencia:
@@ -99,6 +93,7 @@ class Interferencia:
         """tabele de inteferencia master criada a partir da acima self.tabela_interf"""
         self.tabela_interf_master = None 
         self.tabela_assoc = None 
+        self.cancel_ultimo = False
         
 
     
@@ -126,16 +121,15 @@ class Interferencia:
         estudo = Interferencia(wpage, processostr, task=SCM_SEARCH.ALL, verbose=verbose)
         estudo.processo.salvaPageScmHtml(estudo.processo_path, 'basic', overwrite)
         estudo.processo.salvaPageScmHtml(estudo.processo_path, 'poligon', overwrite)                    
-        estudo.saveHtml(overwrite)
-        # only if retirada interferencia html is saved we can create spreadsheets
-        try:               
-            if estudo.createTable(): # sometimes there is no interferences 
-                estudo.createTableMaster()                                
-                estudo.to_excel() # keeping for debugging                  
-            estudo.to_database() # save to database marking no table
-        finally: # if there was an exception cancela ultimo estudo
-            if overwrite and not estudo.cancelLast():
-                raise CancelaUltimoEstudoFailed()
+        estudo.fetchnsaveHTML(overwrite)
+        # only if retirada interferencia html is saved we can create spreadsheets        
+        if estudo.createTable(): # sometimes there is no interferences 
+            estudo.createTableMaster()                                
+            estudo.to_excel() # keeping for debugging                  
+        estudo.to_database() # save to database marking no table
+        # if there was an exception cancela ultimo estudo
+        if not estudo.cancel_ultimo:
+            estudo.cancelLast()                
         return estudo
     
     def cancelLast(self):
@@ -161,9 +155,6 @@ class Interferencia:
         with open(interf_html, "r", encoding="utf-8") as f:
             htmltxt = f.read()
         soup = BeautifulSoup(htmltxt, features="lxml")
-        # check connection failure (this table must allways be here)
-        if htmltxt.find("ctl00_cphConteudo_gvLowerLeft") == -1:
-            raise ConnectionError('Did not connect to sigareas r-interferencia')
         interf_table = soup.find("table", {"id" : "ctl00_cphConteudo_gvLowerRight"})
         if interf_table is None: # possible! no interferencia at all
             ## empty data frame, not yet possible 
@@ -414,24 +405,16 @@ class Interferencia:
         estudo.tabela_interf_master = pd.read_excel(file_path[0])          
         return estudo        
     
-    def saveHtml(self, overwrite=False):
+    def fetchnsaveHTML(self, overwrite=False):
         """fetch and save html interferencia raises DownloadInterferenciaFailed on fail"""
         html_file = (config['interferencia']['html_prefix']['this']+'_'+
             '_'.join([self.processo.number, self.processo.year]))  
-        html_file = os.path.join(self.processo_path, html_file)        
-        if not overwrite:
-            if os.path.exists(html_file+'.html'):
-                return        
-        error_status = fetch_save_Html(self.wpage, self.processo.number, self.processo.year, html_file)
-        if error_status: # retry on error 
-            if 'O sistema se comportou de forma inesperada.' in error_status:
-                if not hasattr(self, 'retry_download'): 
-                    self.retry_download = 1
-                elif self.retry_download < 3: # 2 retries
-                    self.retry_download += 1
-                    self.saveHtml(overwrite)
-                else:
-                    raise DownloadInterferenciaFailed(error_status)            
+        html_file = pathlib.Path(self.processo_path) / html_file        
+        if not overwrite and html_file.with_suffix('.html').exists():
+            return        
+        fetch_save_Html(self.wpage, self.processo.number, self.processo.year, html_file.absolute())
+        self.cancel_ultimo = cancelaUltimo(self.wpage, self.processo.number, self.processo.year) # clean up for next usage
+      
             
 
 # something else not sure will be usefull someday
