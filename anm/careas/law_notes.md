@@ -18,10 +18,5 @@
 
 ### TODO
 
-  1. Não marcar como vermelho se estiver 'Ativo'
-    - Marcar como cinza?
-  2. Se a soma for negativa. Não marcar como vermelho se tiver eventos depois.
-    - Marcar como cinza
-  3. Marcar como -2 se for indeferimento de plano, não onera a área nunca
-  4. 'Inicio de Pesquisa' + 2/3 'pagamentos de TAH's' antes de xxx área livre
+  !. 'Inicio de Pesquisa' + 2 ou 3 'pagamentos de TAH's' antes de final do prazo área livre
   por não entrega de RFP.

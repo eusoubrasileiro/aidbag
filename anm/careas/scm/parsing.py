@@ -106,13 +106,12 @@ def parseDadosBasicos(basicos_page, name, verbose, data_tags=scm_data_tags):
     return dados 
 
 def parseDadosPoligonal(poligonal_page, verbose):
-    polydata = {}
+    polydata = []
     soup = BeautifulSoup(poligonal_page, "html.parser")
     htmltables = soup.select("td td table.BordaTabela") #td td table.BordaTabela
     # table[id*="TextualPoligonalView"] finds the coordinates
     try: # need to cover multiple poligons etc..
-        if htmltables: # at least 1 polygon = 2 tables (1. memo coordenadas and 2. memo pa info)
-            polydata = []
+        if htmltables: # at least 1 polygon = 2 tables (1. memo coordenadas and 2. memo pa info)            
             htmltables = [htmltables[i:i+2] for i in range(0,len(htmltables),2)]            
             for painfo, memorial in htmltables:
                 painfo = htmlscrap.tableDataText(painfo) # memo - pa info

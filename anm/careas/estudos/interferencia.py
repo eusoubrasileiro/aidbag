@@ -76,7 +76,7 @@ def prettyTabelaInterferenciaMaster(tabela_interf_eventos, view=True):
 
 class Interferencia:
     """Estudo de Retirada de Interferência SIGAREAS"""
-    def __init__(self, wpage, processostr, task=SCM_SEARCH.PRIORIDADE, verbose=True, getprocesso=True):
+    def __init__(self, wpage, processostr, verbose=True, getprocesso=True):
         """        
         wpage : wPage html webpage scraping class com login e passwd preenchidos
         processostr : numero processo format xxx.xxx/ano
@@ -84,7 +84,7 @@ class Interferencia:
         self.processo = None 
         self.processo_path = None 
         if getprocesso:
-            self.processo = ProcessManager.GetorCreate(processostr, wpage, task, verbose)
+            self.processo = ProcessManager.GetorCreate(processostr, wpage, SCM_SEARCH.ALL, verbose)
             self.processo_path = processPath(self.processo.name, create=True)
         self.wpage = wpage
         self.verbose = verbose       
@@ -118,7 +118,7 @@ class Interferencia:
         """
         if overwrite and processostr in ProcessManager: # delete from database in case of overwrite            
             del ProcessManager[processostr]
-        estudo = Interferencia(wpage, processostr, task=SCM_SEARCH.ALL, verbose=verbose)
+        estudo = Interferencia(wpage, processostr, verbose=verbose)
         estudo.processo.salvaPageScmHtml(estudo.processo_path, 'basic', overwrite)
         estudo.processo.salvaPageScmHtml(estudo.processo_path, 'poligon', overwrite)                    
         estudo.fetchnsaveHTML(overwrite)
@@ -165,7 +165,7 @@ class Interferencia:
         # columns to fill in 
         self.tabela_interf['Dads'] = 0
         self.tabela_interf['Sons'] = 0
-        self.tabela_interf['Ativo'] = 'Sim'
+        self.tabela_interf['Ativo'] = True
         self.tabela_interf.loc[:,'Processo'] = self.tabela_interf.Processo.apply(lambda x: fmtPname(x))
         # tabela c/ processos associadoas aos processos interferentes
         self.tabela_assoc = pd.DataFrame()
@@ -173,9 +173,9 @@ class Interferencia:
             if self.verbose:
                 print(f"createTable: fetching data for associado {name} ", file=sys.stderr)                                
             processo  = ProcessManager.GetorCreate(name, 
-                            self.wpage, SCM_SEARCH.BASICOS, self.verbose)
+                            self.wpage, SCM_SEARCH.ALL, self.verbose) # needs polygon, associados = ALL
             indexes = (self.tabela_interf.Processo == name)
-            self.tabela_interf.loc[indexes, 'Ativo'] = processo['ativo']
+            self.tabela_interf.loc[indexes, 'Ativo'] = True if 'S' in processo['ativo'] else False
             if processo['associados']:
                 self.tabela_interf.loc[indexes, 'Sons'] = len(processo['sons'])
                 self.tabela_interf.loc[indexes, 'Dads'] = len(processo['parents'])
@@ -195,8 +195,6 @@ class Interferencia:
         Uses 'tabela de eventos' of processes 'interferentes'. 
         
         return False if no 'interferencia'          
-
-        TODO: remove useless columns and rename others already renamed on workapp
         """
         if self.tabela_interf is None:            
             return False
@@ -204,7 +202,7 @@ class Interferencia:
             return self.tabela_interf_master
 
         self.tabela_interf_master = pd.DataFrame()
-        for _,row in self.tabela_interf.iterrows():
+        for _,row in self.tabela_interf.iterrows(): # for each possible prioritário
             # table from eventos simples is more complete ['Processo', 'Evento', 'Descrição', 'Data']
             # and also contains Data with time precison we will use it 
             events = getEventosSimples(self.wpage, row['Processo']) 
@@ -212,7 +210,7 @@ class Interferencia:
             events['Data'] = events.Data.apply(
                 lambda strdate: datetime.strptime(strdate, "%d/%m/%Y %H:%M:%S"))     
             # we will add ['Observação','Publicação D.O.U'] from SCM Basicos    
-            processo = ProcessManager[row['Processo']]               
+            processo = ProcessManager[row['Processo']]           
             eventos_scm = processo['eventos']
             eventos_scm = pd.DataFrame(eventos_scm[1:], columns=eventos_scm[0])
             events['Obs'] = eventos_scm['Observação']
@@ -232,7 +230,14 @@ class Interferencia:
             if events['Data'].values[-1] > np.datetime64(prioridade):                
                 events = pd.concat([events, events.tail(1)], ignore_index=True, axis=0, join='outer')
                 events.loc[events.index[-1], 'Data'] = np.datetime64(prioridade)
-                events.loc[events.index[-1], 'EvSeq'] = -3 # represents added by here
+                events.loc[events.index[-1], 'EvSeq'] = -3 # represents added by here            
+            # check if it's possível opção pending
+            events['Popc'] = False
+            if(events['Ativo'].any() and # ativo
+                len(processo['poligon']) > 1 and   # mais de 1 área
+                'requerimento' in processo['fase'].lower() and # fase de requerimento                
+                events['Descrição'].apply(lambda ev: 'EXIGÊNCIA' in ev).any()):  # exigência
+                events['Popc'] = True # Possível opção pendente - mark todas as rows de eventos
 
             # TODO SICOP: parte if fisico main available might have more or less lines than SCM eventos
             # use only what we have rest will be empty
@@ -244,7 +249,8 @@ class Interferencia:
 
         self.tabela_interf_master.reset_index(inplace=True,drop=True)
         # rearrange collumns in more meaningfully viewing
-        columns_order = ['Ativo','Processo', 'Evento', 'EvSeq', 'Descrição', 'Data', 'Obs', 'DOU', 'Dads', 'Sons']
+        columns_order = ['Ativo','Processo', 'Evento', 'EvSeq', 'Descrição', 'Data', 
+        'Obs', 'DOU', 'Dads', 'Sons', 'Popc']
         self.tabela_interf_master = self.tabela_interf_master[columns_order]
         ### Cria coluna 'EvPrior'
         # onde eventos anteriores a data de prioridade são marcados 1 or 0 otherwise
@@ -282,9 +288,10 @@ class Interferencia:
                     prioritario = -1
             self.tabela_interf_master.loc[
                 self.tabela_interf_master.Processo == process, 'Prior'] = prioritario
+
         # re-rearrange columns
         cols_order = ['Prior', 'Ativo', 'Processo', 'Evento', 'EvSeq', 'Descrição', 'Data', 
-        'EvPrior', 'Inativ', 'Obs', 'DOU', 'Dads', 'Sons']
+        'EvPrior', 'Inativ', 'Obs', 'DOU', 'Dads', 'Sons', 'Popc']
         self.tabela_interf_master = self.tabela_interf_master[cols_order] 
 
         return True    
