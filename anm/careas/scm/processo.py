@@ -328,12 +328,12 @@ class Processo():
         """
         if not self['run']['polygonal']: 
             if download: # download get with python.requests page html response  
-                self._pageRequest('poligon')
+                self._pageRequest('polygon')
             if self.db.polygon_html:
                 if self._verbose:
                     print("dadosPoligonalGet - parsing: ", self.name, file=sys.stderr)   
                 dados = parseDadosPoligonal(self.db.polygon_html, self._verbose)
-                self.db.dados.update({'poligon' : dados })                       
+                self.db.dados.update({'polygon' : dados })                       
                 self.db.dados['run']['polygonal'] = True                     
 
     @thread_safe
@@ -359,7 +359,7 @@ class Processo():
 
         Args:
             html_path (str): pathlib.Path where to save
-            pagename (str): 'basic' or 'poligon'
+            pagename (str): 'basic' or 'polygon'
             overwrite (bool): wether to overwrite already saved html
         """                
         path = pathlib.Path(html_path).joinpath(config['scm']['html_prefix'][pagename]+
@@ -367,7 +367,7 @@ class Processo():
         if not overwrite and path.with_suffix('.html').exists():
             return 
         if( (pagename == 'basic'and not self.db.basic_html) or
-            (pagename == 'poligon'and not self.db.polygon_html) ):
+            (pagename == 'polygon'and not self.db.polygon_html) ):
             self._pageRequest(pagename) 
         html = self.db.basic_html if(pagename == 'basic') else self.db.polygon_html        
         # save the already fetched html as single file

@@ -120,7 +120,7 @@ class Interferencia:
             del ProcessManager[processostr]
         estudo = Interferencia(wpage, processostr, verbose=verbose)
         estudo.processo.salvaPageScmHtml(estudo.processo_path, 'basic', overwrite)
-        estudo.processo.salvaPageScmHtml(estudo.processo_path, 'poligon', overwrite)                    
+        estudo.processo.salvaPageScmHtml(estudo.processo_path, 'polygon', overwrite)                    
         estudo.fetchnsaveHTML(overwrite)
         # only if retirada interferencia html is saved we can create spreadsheets        
         if estudo.createTable(): # sometimes there is no interferences 
@@ -234,7 +234,7 @@ class Interferencia:
             # check if it's possível opção pending
             events['Popc'] = False
             if(events['Ativo'].any() and # ativo
-                len(processo['poligon']) > 1 and   # mais de 1 área
+                len(processo['polygon']) > 1 and   # mais de 1 área
                 'requerimento' in processo['fase'].lower() and # fase de requerimento                
                 events['Descrição'].apply(lambda ev: 'EXIGÊNCIA' in ev).any()):  # exigência
                 events['Popc'] = True # Possível opção pendente - mark todas as rows de eventos

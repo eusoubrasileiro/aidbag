@@ -28,8 +28,6 @@ def EstudoBatchRun(wpage, processos, estudo=ESTUDO_TYPE.INTERFERENCIA, verbose=F
                 with Sei(kwargs['user'], kwargs['passwd'], headless=True) as seid:
                     psei = Processo.fromSei(seid, proc['NUP'])
                     psei.download_latest_documents(10)                
-        except scm.ErrorProcessSCM as e:
-            print(f"Process {processo} Exception: {traceback.format_exc()}", file=sys.stderr)   
         except Exception as e:              
             print(f"Process {processo} Exception: {traceback.format_exc()}", file=sys.stderr)                       
             failed_NUPS.append((scm.ProcessManager[scm.fmtPname(processo)]['NUP'],''))            

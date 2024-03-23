@@ -33,11 +33,11 @@ def dispDadSon(name, infer=True, areatol=0.1):
         for ass_name, attrs in scm.ProcessManager[name]['associados'].items():            
             # print('associdado: ', ass_name, attrs, file=sys.stdout)
             Obj = attrs['obj']
-            if not 'poligon' in Obj: #ignore 
-                if len(Obj['poligon']) > 1: # also in case of multiple poligons
+            if not 'polygon' in Obj: #ignore 
+                if len(Obj['polygon']) > 1: # also in case of multiple poligons
                     print(f"Ignored {ass_name} multiple poligons", file=sys.stderr)
                 continue 
-            areadiff = abs(root['poligon'][0]['area']-Obj['poligon'][0]['area'])                        
+            areadiff = abs(root['polygon'][0]['area']-Obj['polygon'][0]['area'])                        
             edital_tipo = editalTipo(Obj)
             if areadiff <= areatol and edital_tipo is not None:
                 found = ass_name

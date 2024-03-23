@@ -2,6 +2,7 @@ import sys
 import traceback
 import os
 import re 
+import tqdm 
 
 from .. import scm     
 from ..config import config
@@ -105,28 +106,28 @@ def inferWork(process, folder=None):
             if 'MUDANÇA DE REGIME COM REDUÇÃO' in pdf_sigareas_text:
                 infos['work'] = WORK_ACTIVITY.REQUERIMENTO_MUDANCA_REGIME
                 infos['estudo'] = 'ok'
+            elif 'Bloqueio' in  pdf_sigareas_text:
+                print(f" { process['NUP'] } com bloqueio ",file=sys.stderr)
+                infos['estudo'] = 'bloqueio'
+                # this is not enough - bloqueio provisório é o que importa!
+                # isto é  hidroelétrica, gasoduto, linha de transmissão PROVISÓRIO           
+            elif 'ENGLOBAMENTO' in pdf_sigareas_text:
+                infos['estudo'] = 'ok' 
             else:
-                if '(Áreas de Bloqueio)' in  pdf_sigareas_text:
-                    print(f" { process['NUP'] } com bloqueio ",file=sys.stderr)
-                    infos['estudo'] = 'bloqueio'
-                    # this is not enough - bloqueio provisório é o que importa              
-                if 'ENGLOBAMENTO' in pdf_sigareas_text:
-                    infos['estudo'] = 'ok' 
-                else:
-                    area_text="PORCENTAGEM ENTRE ESTA ÁREA E A ÁREA ORIGINAL DO PROCESSO:" # para cada area poligonal 
-                    count = pdf_sigareas_text.count(area_text)            
-                    infos['areas'] = {'count' : count}
-                    infos['areas'] = {'perc' : []}
-                    if count == 0:
-                        infos['estudo'] = 'interf_total'
-                    elif count > 0: # só uma área
-                        if count == 1:
-                            infos['estudo'] = 'ok'
-                        if count > 1:
-                            infos['estudo'] = 'opção'
-                        percs = re.findall(f"(?<={area_text}) +([\d,]+)", pdf_sigareas_text)
-                        percs = [ float(x.replace(',', '.')) for x in percs ]  
-                        infos['areas']['perc'] = percs                 
+                area_text="PORCENTAGEM ENTRE ESTA ÁREA E A ÁREA ORIGINAL DO PROCESSO:" # para cada area poligonal 
+                count = pdf_sigareas_text.count(area_text)            
+                infos['areas'] = {'count' : count}
+                infos['areas'] = {'perc' : []}
+                if count == 0:
+                    infos['estudo'] = 'interf_total'
+                elif count > 0: # só uma área
+                    if count == 1:
+                        infos['estudo'] = 'ok'
+                    if count > 1:
+                        infos['estudo'] = 'opção'
+                    percs = re.findall(f"(?<={area_text}) +([\d,]+)", pdf_sigareas_text)
+                    percs = [ float(x.replace(',', '.')) for x in percs ]  
+                    infos['areas']['perc'] = percs                 
         else:
             RuntimeError('Nao encontrou pdf R*.pdf')
 
@@ -280,11 +281,11 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
         # this is where we will put documents - fly to there - since we were in the son above
         psei = Processo.fromSei(sei, dad['NUP']) 
         # calculate again: check in case area was not checked by infer method
-        areadiff = dad['poligon'][0]['area']-son['poligon'][0]['area']
+        areadiff = dad['polygon'][0]['area']-son['polygon'][0]['area']
         # SOMETIMES it'll fail before comming here, when son not found
         # TODO deal with more participants on edital                
         if areadiff > 0.1: # compare areas if difference > 0.1 ha stop! - not same area
-            raise NotImplementedError(f"Not same Area! dad {dad['poligon'][0]['area']:.2f} ha son {son['poligon'][0]['area']:.2f} ha")
+            raise NotImplementedError(f"Not same Area! dad {dad['polygon'][0]['area']:.2f} ha son {son['polygon'][0]['area']:.2f} ha")
         psei.insereNotaTecnicaRequerimento("edital_dad", info, edital=editalTipo(son), 
                             processo_filho=son['NUP'])
         process = dad # this is what was done
@@ -295,8 +296,6 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
     psei.atribuir(config['sei']['atribuir_default'])
     # should also close the openned text window - going to previous state
     psei.closeOtherWindows()        
-    if verbose:
-        print(process['NUP'])    
     # TODO: I need another database to save these - like an Archive
     # process._dados['iestudo'].update( {'sei-sent': True, 'time' : datetime.datetime.now()} )
     # process.changed() # update database 
@@ -311,12 +310,15 @@ def IncluiDocumentosSEI_list(sei, wpage, process_names, **kwargs):
 
     Use list of names of process to incluir documents on SEI, folder don't need to exist.
     """
-    for process_name in process_names:
+    done = '' 
+    for process_name in tqdm.tqdm(process_names):
         try:
             IncluiDocumentosSEI(sei, process_name, wpage, **kwargs)
         except Exception:
             print("Process {:} Exception: ".format(process_name), traceback.format_exc(), file=sys.stderr)           
-            continue        
+            continue       
+        done += scm.ProcessManager[process_name]['NUP'] + '\n'
+    print(f"Done\n: {done}")     
 
 
 def IncluiDocumentosSEIFirstN(sei, wpage, nfirst=1, path=None, **kwargs):

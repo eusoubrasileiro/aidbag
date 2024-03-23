@@ -12,7 +12,7 @@ scm_dados_processo_main_url='https://sistemas.anm.gov.br/SCM/Intra/site/admin/da
 scm_timeout=(2*60)
 
 urls = { 'basic' : scm_dados_processo_main_url,
-         'poligon' : scm_dados_processo_main_url } 
+         'polygon' : scm_dados_processo_main_url } 
 
 class ErrorProcessSCM(Exception):
     """ Scm Page Request errors.
@@ -60,9 +60,10 @@ def pageRequest(pagename, processostr, wpage, fmtName=True, retry_on_error=3):
         # alert('Processo não encontrado') present
         if "Processo não encontrado" in wpage.response.text:            
             raise ErrorProcessSCM(f"Processo {processostr} not found! Couldn't download.") 
-    elif pagename == 'poligon': # first connection to 'dadosbasicos' above MUST have been made before
-        html, _ = pageRequest('basic', processostr, wpage, retry_on_error=retry_on_error-1) # ask basicos first        
-        formcontrols = {
+    elif pagename == 'polygon': # first connection to 'dadosbasicos' above MUST have been made before
+        if wpage.response.url != urls['basic']:
+            html, _ = pageRequest('basic', processostr, wpage, retry_on_error=retry_on_error-1) # ask basicos first        
+        formcontrols = {    
             'ctl00$conteudo$btnPoligonal': 'Poligonal',
             'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnPoligonal'}
         formdata = htmlscrap.formdataPostAspNet(html, formcontrols)
