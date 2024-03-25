@@ -10,7 +10,9 @@ config['secor_timeout'] = 4*60 # sometimes sigareas server/r. interferncia takes
 config['scm'] = {} 
 # when to replace the process stored on the ProcessManager after this amount of time 
 config['scm']['process_expire'] = datetime.timedelta(weeks=1)
+config['scm']['scm_timeout'] = 2*60
 config['scm'].update({'html_prefix' : {'basic': 'scm_basicos_', 'polygon': 'scm_poligonal_'} })
+
 
 # sei module configurations
 config['sei'] = {}

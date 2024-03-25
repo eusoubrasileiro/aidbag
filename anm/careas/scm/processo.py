@@ -35,7 +35,6 @@ from .parsing import (
     getMissingTagsBasicos
 )
 
-from .requests import urls as requests_urls
 from .sqlalchemy import Processodb
 
 default_run_state = lambda: copy.deepcopy({ 'run' : 
