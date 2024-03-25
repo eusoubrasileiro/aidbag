@@ -38,40 +38,34 @@ def inFaseRInterferencia(fase_str):
             return True
     return False
 
-def prettyTabelaInterferenciaMaster(tabela_interf_eventos, view=True):
+def prettyTableStr(table):
     """
-    Prettify tabela interferencia master for display or view.
-    
-        * tabela_interf_eventos: pandas dataframe
-        * view : bool
-            - True - For display only! Many rows get values removed. Hence it's for display only!   
-              (READ from saved EXCEL)
-            - False - For exporting as json, excel etc.
-            
-    Dataframe columns are converted to text. Nans to ''. Datetime to '%d/%m/%Y %H:%M:%S'    
+    Prettify tabela interferencia to simplify interferencia analisis.
+    After the first event rows values get removed.              
     """
-    table = tabela_interf_eventos.copy() 
-    dataformat = (lambda x: x.strftime("%d/%m/%Y %H:%M:%S"))
-    if is_datetime(table.Data):        
-        table.Data = table.Data.apply(dataformat)
-    if hasattr(table, 'DataPrior') and is_datetime(table.DataPrior):        
-        table.DataPrior = table.DataPrior.apply(dataformat)    
-    if hasattr(table, 'Protocolo') and is_datetime(table.Protocolo):        
-        table.Protocolo = table.Protocolo.apply(dataformat) 
-    table.Inativ = table.Inativ.map(float).astype(int)
-    table.fillna('', inplace=True) # fill nan to ''
-    table = table.astype(str)    
-    if view:
-        for name, group in table.groupby(table.Processo):
-            # unecessary information - making visual analysis polluted
-            table.loc[group.index[1:], 'Ativo'] = '' 
-            table.loc[group.index[1:], 'Prior'] = ''  # 1'st will be replaced by a checkbox
-            table.loc[group.index[1:], 'Processo'] = ''
-            table.loc[group.index[1:], 'Dads'] = ''
-            table.loc[group.index[1:], 'Sons'] = ''      
+    table = table.copy() 
+    for name, group in table.groupby(table.Processo):
+        # unecessary information - making visual analysis polluted
+        table.loc[group.index[1:], 'Ativo'] = '' 
+        table.loc[group.index[1:], 'Prior'] = ''  # 1'st will be replaced by a checkbox
+        table.loc[group.index[1:], 'Processo'] = ''
+        table.loc[group.index[1:], 'Dads'] = ''
+        table.loc[group.index[1:], 'Sons'] = ''      
     return table 
 
-
+def TableStr(tabela_interf_eventos):
+    """
+    Dataframe columns are converted to text. To save as JSON.
+    Nans to ''. Datetime to '%d/%m/%Y %H:%M:%S'    
+    """
+    table = table.copy() 
+    # convert all datetimes to string '%d/%m/%Y %H:%M:%S'
+    datetime_columns = table.select_dtypes(include='datetime64').columns    
+    dataformat = lambda x: x.strftime("%d/%m/%Y %H:%M:%S")     
+    table[datetime_columns] = table[datetime_columns].applymap(dataformat)
+    table.fillna('', inplace=True) # fill nan to ''
+    table = table.astype(str)    
+    return table 
 
 
 class Interferencia:
@@ -175,7 +169,7 @@ class Interferencia:
             processo  = ProcessManager.GetorCreate(name, 
                             self.wpage, SCM_SEARCH.ALL, self.verbose) # needs polygon, associados = ALL
             indexes = (self.tabela_interf.Processo == name)
-            self.tabela_interf.loc[indexes, 'Ativo'] = True if 'S' in processo['ativo'] else False
+            self.tabela_interf.loc[indexes, 'Ativo'] = True if 'S' in processo['ativo'] else False # Sim/Nao to True/False
             if processo['associados']:
                 self.tabela_interf.loc[indexes, 'Sons'] = len(processo['sons'])
                 self.tabela_interf.loc[indexes, 'Dads'] = len(processo['parents'])
@@ -304,7 +298,7 @@ class Interferencia:
             }
         if self.tabela_interf_master is not None:            
             table = self.tabela_interf_master.copy()
-            table = prettyTabelaInterferenciaMaster(table, view=False)      
+            table = TableStr(table)      
             iestudo['iestudo']['table'] = table.to_dict()                    
         self.processo.db.dados.update(iestudo)        
         self.processo._manager.session.commit()
@@ -315,7 +309,7 @@ class Interferencia:
         if self.tabela_interf_master is None:
             return False
         table = self.tabela_interf_master.copy()
-        table = prettyTabelaInterferenciaMaster(table, view=False)
+        table = prettyTableStr(TableStr(table))        
 
         excelfile = os.path.join(self.processo_path, config['interferencia']['file_prefix'] + '_' +
                 '_'.join([self.processo.number,self.processo.year])+'.xlsx')        
