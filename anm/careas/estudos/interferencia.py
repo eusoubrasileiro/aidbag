@@ -53,7 +53,7 @@ def prettyTableStr(table):
         table.loc[group.index[1:], 'Sons'] = ''      
     return table 
 
-def TableStr(tabela_interf_eventos):
+def TableStr(table):
     """
     Dataframe columns are converted to text. To save as JSON.
     Nans to ''. Datetime to '%d/%m/%Y %H:%M:%S'    
@@ -309,7 +309,6 @@ class Interferencia:
         if self.tabela_interf_master is None:
             return False
         table = self.tabela_interf_master.copy()
-        table = prettyTableStr(TableStr(table))        
 
         excelfile = os.path.join(self.processo_path, config['interferencia']['file_prefix'] + '_' +
                 '_'.join([self.processo.number,self.processo.year])+'.xlsx')        
@@ -320,8 +319,8 @@ class Interferencia:
         headers = np.array([ len(string) for string in table.columns ]) # maximum string size each header
         colwidths = np.maximum(minsize, headers) + 5 # 5 characters of space more
         # Observação / DOU set size to header size - due a lot of text
-        colwidths[-4] = headers[-4] + 10 # Observação
-        colwidths[-3] = headers[-3] + 10 # DOU
+        colwidths[-5] = headers[-5] + 10 # Observação
+        colwidths[-6] = headers[-6] + 10 # DOU
         # number of rows
         nrows = len(table)
         # Create a Pandas Excel writer using XlsxWriter as the engine.
@@ -367,7 +366,7 @@ class Interferencia:
         for process, events in table.groupby('Processo', sort=False):
             # prioritário ou não pela coluna 'Prior' primeiro value
             prior = float(events['Prior'].values[0]) >= 0 # prioritário ou unknown
-            dead = 'Não' in events['Ativo'].values[0]
+            dead = events['Ativo'].values[0]
             dead_nprior = dead and (not prior) # only fade/dim/paint dead and not prior
             for idx, row in events.iterrows(): # processo row by row set format
                 #excel row index is not zero based, that's why idx+1 bellow
