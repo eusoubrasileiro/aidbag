@@ -54,7 +54,7 @@ def fetch_save_Html(wpage, number, year, html_file, retry_on_error=3):
     }
     formdata = htmlscrap.formdataPostAspNet(wpage.response.text, formcontrols)
     wpage.post('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=1',
-            data=formdata, timeout=config['secor_timeout'])
+            data=formdata, timeout=config['sigareas']['timeout'])
     if not ( wpage.response.url == r'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'):
         soup = BeautifulSoup(wpage.response.text, 'html.parser')                        
         # falhou salvar Retirada de Interferencia return error message                        

@@ -211,7 +211,7 @@ class Processo():
                     except Exception as e:                            
                         print(f"Exception raised while running expandAssociados thread for process {process_name}",
                             file=sys.stderr)     
-                        if type(e) is requests.ErrorProcessSCM:
+                        if type(e) is requests.BasicosErrorSCM:
                             # MUST delete process if did not get scm page
                             # since basic data wont be on it, will break ancestry search etc... 
                             del self._manager[process_name]

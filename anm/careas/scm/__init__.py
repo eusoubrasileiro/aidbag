@@ -17,6 +17,7 @@ from .processo import (
 from .manager import ProcessManager    
 
 from .requests import (
-    ErrorProcessSCM   
+    BasicosErrorSCM,
+    PoligonalErrorSCM
 )
 

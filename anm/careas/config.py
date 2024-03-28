@@ -4,13 +4,14 @@ import os
 import datetime 
 
 config = {}
-config['secor_timeout'] = 4*60 # sometimes sigareas server/r. interferncia takes a long long time to answer 
+config['sigareas'] = {}
+config['sigareas']['timeout'] = 3*60 # sometimes sigareas server/r. interferncia takes a long long time to answer 
 
 #configs are per module
 config['scm'] = {} 
 # when to replace the process stored on the ProcessManager after this amount of time 
 config['scm']['process_expire'] = datetime.timedelta(weeks=1)
-config['scm']['scm_timeout'] = 2*60
+config['scm']['timeout']= 40
 config['scm'].update({'html_prefix' : {'basic': 'scm_basicos_', 'polygon': 'scm_poligonal_'} })
 
 

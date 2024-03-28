@@ -4,6 +4,7 @@ from ....web import (
     )
 from ..config import config
 import sys 
+from requests.exceptions import ReadTimeout
 
 from .util import (
     fmtPname
@@ -15,7 +16,7 @@ from .util import (
 scm_processo_main_url='https://sistemas.anm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx'
 
 
-class ErrorProcessSCM(Exception):
+class BasicosErrorSCM(Exception):
     """ Scm Page Request errors.
     
     Like: 
@@ -25,8 +26,12 @@ class ErrorProcessSCM(Exception):
     Or others like not found errors
     """
 
+class PoligonalErrorSCM(BasicosErrorSCM):
+    """ Poligonal Error not accessible on page or not found etc.
+    """
+
 def pageRequest(pagename : str, processostr : str, wpage : wPageNtlm, 
-    fmtName: bool = True , retry_on_error : int = 3):
+    fmtName: bool = True , retry_on_error : int = 2):
     """   Get & Post na página dados do Processo do Cadastro  Mineiro (SCM)
         * pagename : str
             page name to requets from `urls`
@@ -45,7 +50,7 @@ def pageRequest(pagename : str, processostr : str, wpage : wPageNtlm,
         processostr = fmtPname(processostr)
     try:
         if pagename == 'basic':            
-            wpage.get(scm_processo_main_url, timeout=config['scm']['scm_timeout'])     
+            wpage.get(scm_processo_main_url, timeout=config['scm']['timeout'])     
             formcontrols = {
                 'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnConsultarProcesso',
                 'ctl00$conteudo$txtNumeroProcesso': processostr,
@@ -53,9 +58,9 @@ def pageRequest(pagename : str, processostr : str, wpage : wPageNtlm,
                 '__VIEWSTATEENCRYPTED': ''}
             formdata = htmlscrap.formdataPostAspNet(wpage.response.text, formcontrols)        
             wpage.post(scm_processo_main_url,
-                    data=formdata, timeout=config['scm']['scm_timeout'])
+                    data=formdata, timeout=config['scm']['timeout'])
             if "Processo não encontrado" in wpage.response.text:            
-                raise ErrorProcessSCM(f"Processo {processostr} not found! Couldn't download.") 
+                raise BasicosErrorSCM(f"Processo {processostr} not found! Couldn't download.") 
         elif pagename == 'polygon': # first connection to 'dadosbasicos' above MUST have been made before
             if (not hasattr(wpage, 'response') or 
                 'ctl00$conteudo$btnPoligonal' not in wpage.response.text or 
@@ -66,18 +71,23 @@ def pageRequest(pagename : str, processostr : str, wpage : wPageNtlm,
                 'ctl00$scriptManagerAdmin': 'ctl00$scriptManagerAdmin|ctl00$conteudo$btnPoligonal'}
             formdata = htmlscrap.formdataPostAspNet(wpage.response.text, formcontrols)
             wpage.post(scm_processo_main_url, 
-                    data=formdata, timeout=config['scm']['scm_timeout'])
+                    data=formdata, timeout=config['scm']['timeout'])
             if 'Erro ao mudar a versão para a data selecionada.' in wpage.response.text:
                 if retry_on_error:
                     return pageRequest(pagename, processostr, wpage, retry_on_error=retry_on_error-1)
-                raise ErrorProcessSCM(f"Processo {processostr} failed download poligonal from SCM database.")
+                raise BasicosErrorSCM(f"Processo {processostr} failed download poligonal from SCM database.")
     except htmlscrap.requests.exceptions.HTTPError as http_error:
         if "Object reference not set to an instance of an object" in wpage.response.text:                
-            raise ErrorProcessSCM(f"Processo {processostr} corrupted on SCM database. Couldn't download.")
+            raise BasicosErrorSCM(f"Processo {processostr} corrupted on SCM database. Couldn't download.")
         elif 'xxxxxxxxxxx' in str(http_error): #  another case not yet implemented
             if retry_on_error: 
                 return pageRequest(pagename, processostr, wpage, retry_on_error=retry_on_error-1)
             raise
-        else: # connection, authentication errors or others... must re-raise???             
-            raise                
+    except ReadTimeout:
+        if retry_on_error: 
+            return pageRequest(pagename, processostr, wpage, retry_on_error=retry_on_error-1)
+        elif pagename == 'basic':
+            raise BasicosErrorSCM(f"Processo {processostr} Couldn't download. Timeout error x2.") 
+        elif pagename == 'polygon':
+            raise PoligonalErrorSCM(f"Processo {processostr} Couldn't download. Timeout error x2.")        
     return wpage.response.text, wpage.response.url

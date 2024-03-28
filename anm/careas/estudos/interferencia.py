@@ -12,7 +12,9 @@ from ..scm import (
     fmtPname,
     SCM_SEARCH,
     util,
-    ProcessManager
+    ProcessManager,
+    PoligonalErrorSCM,
+    BasicosErrorSCM
 )
 
 from ..util import processPath
@@ -165,9 +167,12 @@ class Interferencia:
         self.tabela_assoc = pd.DataFrame()
         for name in list(set(self.tabela_interf.Processo)): # Unique Process Only
             if self.verbose:
-                print(f"createTable: fetching data for associado {name} ", file=sys.stderr)                                
-            processo  = ProcessManager.GetorCreate(name, 
-                            self.wpage, SCM_SEARCH.ALL, self.verbose) # needs polygon, associados = ALL
+                print(f"createTable: fetching data for associado {name} ", file=sys.stderr)   
+            try:                              
+                processo  = ProcessManager.GetorCreate(name, 
+                                self.wpage, SCM_SEARCH.ALL, self.verbose) # needs polygon, associados = ALL
+            except PoligonalErrorSCM: # might not have poligonal due some other reason
+                continue
             indexes = (self.tabela_interf.Processo == name)
             self.tabela_interf.loc[indexes, 'Ativo'] = True if 'S' in processo['ativo'] else False # Sim/Nao to True/False
             if processo['associados']:
@@ -228,6 +233,7 @@ class Interferencia:
             # check if it's possível opção pending
             events['Popc'] = False
             if(events['Ativo'].any() and # ativo
+                'polygon' in processo and
                 len(processo['polygon']) > 1 and   # mais de 1 área
                 'requerimento' in processo['fase'].lower() and # fase de requerimento                
                 events['Descrição'].apply(lambda ev: 'EXIGÊNCIA' in ev).any()):  # exigência
