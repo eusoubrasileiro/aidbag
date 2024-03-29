@@ -114,10 +114,10 @@ def inferWork(process, folder=None):
             elif 'ENGLOBAMENTO' in pdf_sigareas_text:
                 infos['estudo'] = 'ok' 
             else:
-                area_text="PORCENTAGEM ENTRE ESTA ÁREA E A ÁREA ORIGINAL DO PROCESSO:" # para cada area poligonal 
-                count = pdf_sigareas_text.count(area_text)            
-                infos['areas'] = {'count' : count}
-                infos['areas'] = {'perc' : []}
+                area_text='ÁREA EM HECTARES:' # para cada area poligonal
+                perc_text='PORCENTAGEM ENTRE ESTA ÁREA E A ÁREA ORIGINAL DO PROCESSO:'  
+                count = pdf_sigareas_text.count(perc_text)            
+                infos['areas'] = {'count' : count, 'percs' : [], 'values' : []}
                 if count == 0:
                     infos['estudo'] = 'interf_total'
                 elif count > 0: # só uma área
@@ -125,9 +125,12 @@ def inferWork(process, folder=None):
                         infos['estudo'] = 'ok'
                     if count > 1:
                         infos['estudo'] = 'opção'
-                    percs = re.findall(f"(?<={area_text}) +([\d,]+)", pdf_sigareas_text)
+                    percs = re.findall(f"(?<={perc_text}) +([\d,]+)", pdf_sigareas_text)
+                    areas = re.findall(f"(?<={area_text}) +([\d,]+)", pdf_sigareas_text)
                     percs = [ float(x.replace(',', '.')) for x in percs ]  
-                    infos['areas']['perc'] = percs                 
+                    areas = [ float(x.replace(',', '.')) for x in areas ]  
+                    infos['areas']['percs'] = percs                 
+                    infos['areas']['values'] = areas 
         else:
             RuntimeError('Nao encontrou pdf R*.pdf')
 
