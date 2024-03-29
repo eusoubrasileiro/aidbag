@@ -62,9 +62,8 @@ def TableStr(table):
     """
     table = table.copy() 
     # convert all datetimes to string '%d/%m/%Y %H:%M:%S'
-    datetime_columns = table.select_dtypes(include='datetime64').columns    
-    dataformat = lambda x: x.strftime("%d/%m/%Y %H:%M:%S")     
-    table[datetime_columns] = table[datetime_columns].applymap(dataformat)
+    datetime_columns = table.select_dtypes(include='datetime64').columns.tolist()    
+    table[datetime_columns] = table[datetime_columns].map(lambda x: x.strftime("%d/%m/%Y %H:%M:%S"))
     table.fillna('', inplace=True) # fill nan to ''
     table = table.astype(str)    
     return table 
@@ -78,10 +77,9 @@ class Interferencia:
         processostr : numero processo format xxx.xxx/ano
         """
         self.processo = None 
-        self.processo_path = None 
+        self.processo_path = processPath(processostr, create=True)
         if getprocesso:
-            self.processo = ProcessManager.GetorCreate(processostr, wpage, SCM_SEARCH.ALL, verbose)
-            self.processo_path = processPath(self.processo.name, create=True)
+            self.processo = ProcessManager.GetorCreate(processostr, wpage, SCM_SEARCH.ALL, verbose)            
         self.wpage = wpage
         self.verbose = verbose       
         """tabele de interferencia extraida do sigareas html"""
@@ -392,19 +390,34 @@ class Interferencia:
         # close the pandas excel writer and output the Excel file.
         writer.close()
       
-
           
     @staticmethod
-    def from_html():
-        pass 
+    def from_html(wpage, dir='.', overwrite=False):
+        name = util.findfmtPnames(pathlib.Path(dir).absolute().stem)[0]
+        if overwrite and processostr in ProcessManager: # delete from database in case of overwrite            
+            del ProcessManager[processostr]
+            estudo = Interferencia(wpage, name, verbose=False, getprocesso=True)        
+        else:
+            processo = ProcessManager[name]
+            estudo = Interferencia(wpage, name, verbose=False, getprocesso=False)   
+            estudo.processo = processo    
+        estudo.processo.salvaPageScmHtml(estudo.processo_path, 'basic', overwrite)
+        estudo.processo.salvaPageScmHtml(estudo.processo_path, 'polygon', overwrite)                    
+        estudo.fetchnsaveHTML(overwrite)
+        # only if retirada interferencia html is saved we can create spreadsheets        
+        if estudo.createTable(): # sometimes there is no interferences 
+            estudo.createTableMaster()                                
+            estudo.to_excel() # keeping for debugging                  
+        estudo.to_database() # save to database marking no table
+        return estudo   
+
 
     @staticmethod
     def from_excel(dir='.'):            
         name = util.findfmtPnames(pathlib.Path(dir).absolute().stem)[0]
         processo = ProcessManager[name]
         estudo = Interferencia(None, processo.name, verbose=False, getprocesso=False)     
-        estudo.processo = processo 
-        estudo.processo_path = processPath(processo)      
+        estudo.processo = processo         
         file_path = list(pathlib.Path(dir).glob(config['interferencia']['file_prefix']+'*.xlsx'))
         if not file_path: 
             raise RuntimeError("Legacy Excel prioridade not found, something like eventos_prioridade_*.xlsx")

@@ -64,9 +64,11 @@ def fetch_save_Html(wpage, number, year, html_file, retry_on_error=3):
                 fetch_save_Html(wpage, number, year, html_file, retry_on_error-1)                          
             else:
                 raise DownloadInterferenciaFailed(error_status)     
-        if ('Cancele o estudo existente para realizar novo estudo.' in error_status):
+        elif ('Cancele o estudo existente para realizar novo estudo.' in error_status):
             cancelaUltimo(wpage, number, year)
             fetch_save_Html(wpage, number, year, html_file, retry_on_error)
+        else:
+            raise DownloadInterferenciaFailed(error_status)
     else:
         wpage.saveSimpleHTML(html_file)    
  
