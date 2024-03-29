@@ -135,6 +135,23 @@ class ProcessManagerClass(dict):
             self.session.close()
             return dados
 
+    def getAttr(self, name, attr):
+        """
+        For work in detached mode - Flask WSGI Request usage (more bellow)
+        return Processo.attr
+        """
+        with self.lock:            
+            pdb = self[name]
+            if pdb is None:
+                raise KeyError(name)
+            session_ = object_session(pdb.db)
+            if session_ is not self.session:    
+                if session_ is not None: 
+                    session_.close()            
+                self.session.add(pdb.db)  
+            data = getattr(pdb, attr, None)
+            self.session.close()
+            return data
 
     # Detached mode TODO: clean-up local dictionary for deleted objects 
     # def update(self, key):
