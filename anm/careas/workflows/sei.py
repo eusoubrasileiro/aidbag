@@ -240,9 +240,9 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
                 # guarantee to insert an empty in any case
                 pdf_adicional = str(info['pdf_adicional'].absolute()) if info['pdf_adicional'].exists() else None 
                 psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional)
-                if info['areas']['perc'][0] < 96.0: # > 4% change notificar 
+                if info['areas']['percs'][0] < 96.0: # > 4% change notificar 
                     psei.insereNotaTecnicaRequerimento("com_redução", info, # com notificação titular
-                            area_porcentagem=str(info['areas']['perc'][0]).replace('.',','))                            
+                            area_porcentagem=str(info['areas']['percs'][0]).replace('.',','))                            
                 else:
                     psei.insereNotaTecnicaRequerimento("sem_redução", info) 
                     # Recomenda Só análise de plano s/ notificação titular (mais comum)
