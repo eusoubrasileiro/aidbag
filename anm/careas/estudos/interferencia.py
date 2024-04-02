@@ -171,6 +171,8 @@ class Interferencia:
                                 self.wpage, SCM_SEARCH.ALL, self.verbose) # needs polygon, associados = ALL
             except PoligonalErrorSCM: # might not have poligonal due some other reason
                 continue
+            except Exception as e:
+                raise Exception(f"{traceback.format_exc()}\n\nInterferencia.createTable error at {name}: {e}")
             indexes = (self.tabela_interf.Processo == name)
             self.tabela_interf.loc[indexes, 'Ativo'] = True if 'S' in processo['ativo'] else False # Sim/Nao to True/False
             if processo['associados']:
