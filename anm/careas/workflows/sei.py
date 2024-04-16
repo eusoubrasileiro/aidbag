@@ -30,10 +30,8 @@ from PyPDF2 import PdfReader
 
 def readPdfText(filename):
     reader = PdfReader(filename)   
-    text = ''
-    for page in reader.pages:
-        text += page.extract_text()
-    return text  
+    text = [ page.extract_text() for page in reader.pages ]
+    return '\n\n'.join(text)
 
 
 def inferWork(process, folder=None):
@@ -43,6 +41,7 @@ def inferWork(process, folder=None):
     returns dict with lots of infos key,value pairs    
     """
     infos = {}   
+    infos['dados'] = process.dados # needed by reg. extração and ?
 
     # 'doc_ext' from config.docs_externos
     infos['minuta']  =  {'de' : '', 'code': 0, 'doc_ext': -1}
@@ -82,7 +81,7 @@ def inferWork(process, folder=None):
             if 'leilão' in process['tipo'].lower():   
                   infos['work'] = WORK_ACTIVITY.REQUERIMENTO_EDITAL    
                   infos['edital'] = {'tipo' : 'Leilão', 'pai' : dispGetNUP(process)}                  
-            if 'pública' in process['tipo'].lower():   
+            elif 'pública' in process['tipo'].lower():   
                   infos['work'] = WORK_ACTIVITY.REQUERIMENTO_EDITAL    
                   infos['edital'] = {'tipo' : 'Oferta Pública', 'pai' : dispGetNUP(process)}    
 
@@ -99,18 +98,19 @@ def inferWork(process, folder=None):
         infos['pdf_sigareas'] = pdf_sigareas[0] if pdf_sigareas else None
         # search/parse process object
         if infos['pdf_sigareas']:
-            pdf_sigareas_text = readPdfText(infos['pdf_sigareas'].absolute())
-            if 'OPÇÃO DE ÁREA' in pdf_sigareas_text:
-                infos['work'] = WORK_ACTIVITY.REQUERIMENTO_OPCAO_ALVARA
-                infos['estudo'] = 'ok' # minuta de alvará
-            if 'MUDANÇA DE REGIME COM REDUÇÃO' in pdf_sigareas_text:
-                infos['work'] = WORK_ACTIVITY.REQUERIMENTO_MUDANCA_REGIME
-                infos['estudo'] = 'ok'
-            elif 'Bloqueio' in  pdf_sigareas_text:
+            pdf_sigareas_text = readPdfText(infos['pdf_sigareas'].absolute())            
+            if 'Bloqueio' in  pdf_sigareas_text:
                 print(f" { process['NUP'] } com bloqueio ",file=sys.stderr)
                 infos['estudo'] = 'bloqueio'
                 # this is not enough - bloqueio provisório é o que importa!
-                # isto é  hidroelétrica, gasoduto, linha de transmissão PROVISÓRIO           
+                # BLOQUEIO PROVISÓRIO SÓ SERVE PARA EMPREENDIMENTOS ELÉTRICOS PROG 500
+                # isto é  hidroelétrica, linha de transmissão
+            if 'OPÇÃO DE ÁREA' in pdf_sigareas_text:
+                infos['work'] = WORK_ACTIVITY.REQUERIMENTO_OPCAO_ALVARA
+                infos['estudo'] = 'ok' # minuta de alvará
+            elif 'MUDANÇA DE REGIME COM REDUÇÃO' in pdf_sigareas_text:
+                infos['work'] = WORK_ACTIVITY.REQUERIMENTO_MUDANCA_REGIME
+                infos['estudo'] = 'ok'
             elif 'ENGLOBAMENTO' in pdf_sigareas_text:
                 infos['estudo'] = 'ok' 
             else:
@@ -143,7 +143,7 @@ def inferWork(process, folder=None):
 
 
 def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
-        empty=False, termo_abertura=False, verbose=True):
+        empty=False, termo_abertura=False, verbose=True, **kwargs):
     """
     Inclui process documents from folder specified on `ProcessPathStorage`
 
@@ -246,7 +246,16 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
                 else:
                     psei.insereNotaTecnicaRequerimento("sem_redução", info) 
                     # Recomenda Só análise de plano s/ notificação titular (mais comum)
-
+    elif activity in WORK_ACTIVITY.REQUERIMENTO_REGISTRO_EXTRAÇÃO:
+        psei.insereDocumentoExterno(0, str(info['pdf_sigareas'].absolute())) 
+        if 'ok' in info['estudo']:                
+            if not info['pdf_adicional'].exists():
+                downloadMinuta(wpage, process.name, 
+                                str(info['pdf_adicional'].absolute()), info['minuta']['code'])
+        # guarantee to insert an empty in any case
+        pdf_adicional = str(info['pdf_adicional'].absolute()) if info['pdf_adicional'].exists() else None 
+        psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional)
+        psei.insereNotaTecnicaRequerimento("extração", info) 
     elif activity in WORK_ACTIVITY.DIREITO_RLAVRA_FORMULARIO_1:
         psei.insereDocumentoExterno(0, str(info['pdf_sigareas'].absolute())) 
         if 'ok' in info['estudo']:                
@@ -293,7 +302,7 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
                             processo_filho=son['NUP'])
         process = dad # this is what was done
     elif activity in WORK_ACTIVITY.NOTA_TECNICA_GENERICA:
-        psei.insereNotaTecnicaRequerimento("custom", info)    
+        psei.insereNotaTecnicaRequerimento(kwargs['doc_template_name'], info)    
 
     psei.insereMarcador(config['sei']['marcador_default'])
     psei.atribuir(config['sei']['atribuir_default'])
@@ -321,7 +330,7 @@ def IncluiDocumentosSEI_list(sei, wpage, process_names, **kwargs):
             print("Process {:} Exception: ".format(process_name), traceback.format_exc(), file=sys.stderr)           
             continue       
         done += scm.ProcessManager[process_name]['NUP'] + '\n'
-    print(f"Done\n: {done}")     
+    print(f"Done:\n{done}")     
 
 
 def IncluiDocumentosSEIFirstN(sei, wpage, nfirst=1, path=None, **kwargs):

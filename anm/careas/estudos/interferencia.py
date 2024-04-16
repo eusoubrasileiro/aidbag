@@ -1,11 +1,13 @@
 import os
 import sys 
+import traceback
 import pathlib 
 import numpy as np
 from datetime import datetime
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
 from bs4 import BeautifulSoup
+
 
 from ..config import config
 from ..scm import (
@@ -88,6 +90,10 @@ class Interferencia:
         self.tabela_interf_master = None 
         self.tabela_assoc = None 
         self.cancel_ultimo = False
+        interf_html = (config['interferencia']['html_prefix']['this']+'_'+
+                       '_'.join([self.processo.number,self.processo.year])+'.html')
+        self.sigareas_html = os.path.join(self.processo_path, interf_html)
+        self.clayers = []
         
 
     
@@ -116,6 +122,7 @@ class Interferencia:
         estudo.processo.salvaPageScmHtml(estudo.processo_path, 'basic', overwrite)
         estudo.processo.salvaPageScmHtml(estudo.processo_path, 'polygon', overwrite)                    
         estudo.fetchnsaveHTML(overwrite)
+        estudo.getcLayers()
         # only if retirada interferencia html is saved we can create spreadsheets        
         if estudo.createTable(): # sometimes there is no interferences 
             estudo.createTableMaster()                                
@@ -143,10 +150,8 @@ class Interferencia:
         Returns:
             bool: True if there are interferentes
         """        
-        interf_html = (config['interferencia']['html_prefix']['this']+'_'+
-                       '_'.join([self.processo.number,self.processo.year])+'.html')
-        interf_html = os.path.join(self.processo_path, interf_html)
-        with open(interf_html, "r", encoding="utf-8") as f:
+
+        with open(self.sigareas_html, "r", encoding="utf-8") as f:
             htmltxt = f.read()
         soup = BeautifulSoup(htmltxt, features="lxml")
         interf_table = soup.find("table", {"id" : "ctl00_cphConteudo_gvLowerRight"})
@@ -297,10 +302,21 @@ class Interferencia:
         return True    
 
 
+    def getcLayers(self):
+        """from page get checked layers (camadas) by checkboxes"""  
+        with open(self.sigareas_html) as f:
+            soup = BeautifulSoup(f, features="html.parser")              
+        trs = soup.select("div[id*='tvn'] tr") 
+        trs = list(filter(lambda x: True if x.select("input[checked]") else False, trs))
+        trs = [ list(tr.children)[7].text.strip() for tr in trs ]
+        trs = list(filter(lambda tr: True if 'Divisão' not in tr else False, trs)) # Remove: Divisão Municipal e Estadual 
+        self.clayers = trs
+
+
     def to_database(self):
         """update database with ['iestudo']['table']"""
         iestudo = {'iestudo': 
-                { 'done' : False, 'time' : datetime.now() } 
+                { 'done' : False, 'time' : datetime.now() , 'clayers' : self.clayers } 
             }
         if self.tabela_interf_master is not None:            
             table = self.tabela_interf_master.copy()
@@ -432,6 +448,7 @@ class Interferencia:
             '_'.join([self.processo.number, self.processo.year]))  
         html_file = pathlib.Path(self.processo_path) / html_file        
         if not overwrite and html_file.with_suffix('.html').exists():
+            self.cancel_ultimo = True # did not download - did not need to cancel
             return        
         fetch_save_Html(self.wpage, self.processo.number, self.processo.year, html_file.absolute())
         self.cancel_ultimo = cancelaUltimo(self.wpage, self.processo.number, self.processo.year) # clean up for next usage
