@@ -1,7 +1,4 @@
-from lib2to3.pytree import Base
-from ....web.selenium import *
-#from seleniumbase import BaseCase
-
+from .....web.selenium import *
 
 class Sei:
     # https://book.pythontips.com/en/latest/context_managers.html

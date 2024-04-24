@@ -69,10 +69,3 @@ def dispDadSon(name, infer=True, areatol=0.1):
         son, dad = p['sons'][0], name 
     return dad, son 
 
-def dispGetNUP(processo, dad=False):
-    """get disponibilidade 'dad' or 'son' if dad=False (default)"""    
-    dad, son = dispDadSon(processo.name)
-    if dad:
-        return scm.ProcessManager[dad]['NUP'] 
-    return scm.ProcessManager[son]['NUP']  
-

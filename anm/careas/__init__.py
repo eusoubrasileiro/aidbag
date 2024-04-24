@@ -26,6 +26,6 @@ from ...web import (
 from .workflows import (
     IncluiDocumentosSEI, 
     ESTUDO_TYPE,
-    EstudoBatchRun,    
+    BatchPreAnalyses,    
     IncluiDocumentosSEIFirstN
 )

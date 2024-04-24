@@ -1,29 +1,33 @@
 from ..scm.util import numberyearPname
+from enum import Enum
+from ....general import closest_enum
 
+class MINUTA(Enum): 
+    """Enums for Minutas for download"""
+    MINUTA_ALVARA = 1
+    MINUTA_PORTARIA_LAVRA = 2
+    MINUTA_PORTARIA_LAVRA_AGUA_MINERAL = 3
+    MINUTA_PERMISSAO_LAVRA_GARIMPEIRA = 4
+    MINUTA_LICENCIAMENTO = 5
+    MINUTA_REGISTRO_EXTRACAO = 6
+    @classmethod
+    def fromName(cls, title):        
+        """get the closest enum from a string"""
+        return closest_enum(title, cls)
 
-def downloadMinuta(wpage, processtr, pdfpath="minuta.pdf", tipo=1):
+def downloadMinuta(wpage, processtr, pdfpath="minuta.pdf", tipo=MINUTA.MINUTA_ALVARA):
     """Download Minuta Alvará/Licenciamento etc. se possível e salva
         
         * wpage : wPage html 
-            webpage scraping class com login e passwd preenchidos
-        
+            webpage scraping class com login e passwd preenchidos        
         * processostr : str
-            numero processo format xxx.xxx/ano
-            
+            numero processo format xxx.xxx/ano            
         * pdfpath: str 
-            path and name to save the pdf 
-            
-        * tipo: int 
-           1. minuta pré de alvará  
-           2. minuta de portaria de lavra    
-           3. minuta de portaria de lavra agua mineral  
-           4. minuta de permissão de lavra garimpeira  
-           5. minuta pré de licenciamento - precisa numero de licença, data e município
-           6. minuta de registro de extração    
-        
+            path and name to save the pdf             
+        * tipo: MINUTA
     """
     number, year = numberyearPname(processtr) # `fmtPname` unique 
-    minuta_get = f"""http://sigareas.dnpm.gov.br/Paginas/Usuario/Imprimir.aspx?tipo={tipo}&numero={number}&ano={year}"""
+    minuta_get = f"""http://sigareas.dnpm.gov.br/Paginas/Usuario/Imprimir.aspx?tipo={tipo.value}&numero={number}&ano={year}"""
     wpage.get(minuta_get)
     if wpage.response.status_code != 200:
         raise RuntimeError("Nao é possivel fazer download da Minuta")

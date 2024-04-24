@@ -1,19 +1,19 @@
-from ..sei import Sei
+from .sei import *
 
-from .sei import (
+from .pubwork import (
     IncluiDocumentosSEI,     
     IncluiDocumentosSEIFirstN,
     IncluiDocumentosSEI_list
 )
-from .config import (
-    WORK_ACTIVITY,
-    ESTUDO_TYPE,
-    __workflow_debugging__
-)
+from .inference import WORK_ACTIVITY
+from .prework import ESTUDO_TYPE
+from .config import __workflow_debugging__
+
 from .folders import (
     processPath, 
     currentProcessGet,
     ProcessPathStorage
 )
-from .batch import EstudoBatchRun
+from .prework import BatchPreAnalyses
+
 

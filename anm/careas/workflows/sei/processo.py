@@ -4,18 +4,26 @@ import requests
 import pathlib
 from bs4 import BeautifulSoup
 import urllib3
+from unidecode import unidecode 
 
-from .. import util
-from ....web.selenium import *
+from .....general import closest_string
+from ... import util
+from .....web.selenium import *
 from .cls import Sei
 from .config import *
-
+from .forms import fillFormPrioridade
+from .docs import insertHTMLDoc
 
 class BARRACOMANDOS_STATE(Enum):
     MAIN_OPEN = 1 # it's the main barra comandos and the process is open
     MAIN_CLOSED_CAN_OPEN = 2
     MAIN_CLOSED_CANT_OPEN = 3 # it's the main barra comandos and the process is closed
-    DOC = 4 # it's and documents bar 
+
+class BARRACOMANDOS_BUTTONS(Enum): #barra comandos list of by index        
+        INCLUIR_DOCUMENTO = 1
+        ATRIBUIR = 8
+        GERENCIAR_MARCADOR = 20
+
 
 class Processo(Sei):
     def __init__(self, processnup, user, passwd, headless=True, login=False, webdriver=None):
@@ -82,12 +90,9 @@ class Processo(Sei):
                 return BARRACOMANDOS_STATE.MAIN_CLOSED_CANT_OPEN   
             return  BARRACOMANDOS_STATE.MAIN_CLOSED_CAN_OPEN       
 
-    def barraComandos(self, index):           
+    def barraComandos(self, button):           
         """
-        barra comandos list of by index
-            1 - incluir documento
-            8 - atribuir
-            20 - gerenciar marcador
+        button in BARRACOMANDOS_BUTTONS
         """
         state = self.barraComandosState()
         if state == BARRACOMANDOS_STATE.MAIN_CLOSED_CAN_OPEN :            
@@ -95,14 +100,14 @@ class Processo(Sei):
         elif state == BARRACOMANDOS_STATE.MAIN_CLOSED_CANT_OPEN:
             raise Exception(f"Processo {self.nup} nunca aberto nesta unidade")  
         # safer and more efficient to use click
-        click(self.driver, f'div.infraBarraComandos a:nth-of-type({index})')   
+        click(self.driver, f'div.infraBarraComandos a:nth-of-type({button.value})')   
                  
     def isOpen(self):
         """processo aberto nesta unidade"""
         return self.barraComandosState() == BARRACOMANDOS_STATE.MAIN_OPEN
 
     def atribuir(self, pessoa):
-        self.barraComandos(8)         
+        self.barraComandos(BARRACOMANDOS_BUTTONS.ATRIBUIR)         
         dropdown = wait_for_element_visible(self.driver,'select#selAtribuicao')
         select = Select(dropdown)
         select.select_by_visible_text(pessoa)
@@ -180,38 +185,34 @@ class Processo(Sei):
             with open(filepath.absolute(), 'wb') as f:
                 f.write(file_content)
 
-    def insereDocumento(self, code=0):
+    def insereDocumento(self, partial_text):
         """
-        code:
-            0  - ' Externo' - default
-            1  - 'Termo de Abertura de Processo Eletrônico'
-            2  - 'Nota Tecnica' - only one to be used!
+        * partial_text : can be any string that partially matchs the following doc names
+            'Externo', 'Termo de Abertura de Processo Eletrônico', 'Nota Técnica', '            
         """
-        texts = [ 'Externo', 'Termo de Abertura de Processo Eletronico', 'Nota Tecnica']
-        self.barraComandos(1)  # botao incluir doc
-        # *= contains text in lowercase
-        click(self.driver, f"tr[data-desc*='{texts[code].lower()}'] td a:last-child", delay=DELAY_SMALL)                          
+        docnames = [ 'Externo', 
+            'Termo de Abertura de Processo Eletrônico', 
+            'Nota Técnica' # here can use accents and ç anything Unicode but bellow you need ASCII
+            'Formulário de Análise do Direito de Prioridade']
+        docname = closest_string(partial_text, docnames)
+        self.barraComandos(BARRACOMANDOS_BUTTONS.INSERIR_DOCUMENTO)  
+        # *= contains text in lowercase - before convert to ASCII
+        click(self.driver, f"tr[data-desc*='{unidecode(docname.lower())}'] td a:last-child", delay=DELAY_SMALL)                          
     
-    def insereDocumentoExterno(self, doc=0, pdf_path=None):
+    def insereDocumentoExterno(self, partial_title, pdf_path=None):
         """
-        Inclui pdf como documento externo no SEI
-        * doc :
-            0.  - Estudo      - 'de Retirada de Interferência' 
-            1.  - Minuta      - 'Pré de Alvará' 
-            2.  - Minuta      - 'de Licenciamento' 
-            3.  - Estudo      - 'de Opção' 
-            4.  - Minuta      - 'de Portaria de Lavra' 
-            5.  - Minuta      - 'de Permissão de Lavra Garimpeira' 
-            6.  - Formulario  - '1 Análise de Requerimento de Lavra' 
-            7.  - Minuta      - 'de Registro de Extração'
-            8.  - Estudo      - 'de Mudança de Regime'
-        * pdf_path :
+        Inclui pdf como documento externo no SEI name it properly. 
+        * partial_title: any partial text that matchs one title on {config.docs_externos}
+        * pdf_path : path to pdf to upload
             if None cria sem anexo
         """
-        self.insereDocumento(0) # Inclui Externo
-        send_keys(self.driver, '#selSerie.infraSelect', docs_externos[doc]['tipo']) # Tipo de Documento 
+        self.insereDocumento("Externo") 
+        docname = closest_string(partial_title, docs_externos)
+        pieces = docname.split(' ')
+        tipo, desc = pieces[0], ' '.join(pieces[1:]) # Tipo de Documento (e.g Estudo) e Nome na Arvore (e.g. Retirada de Interferência)
+        send_keys(self.driver, '#selSerie.infraSelect', tipo) # Tipo de Documento 
         send_keys(self.driver, '#txtDataElaboracao.infraText', datetime.today().strftime('%d/%m/%Y')) # Data do Documento put today
-        send_keys(self.driver, '#txtNumero.infraText', docs_externos[doc]['desc']) # Nome na Arvore
+        send_keys(self.driver, '#txtNumero.infraText', desc) # Nome na Arvore
         click(self.driver, '#optNato.infraRadio') #  Nato-digital
         click(self.driver, '#lblPublico.infraLabelRadio') # Publico
         if pdf_path is not None: # existe documento para anexar
@@ -220,61 +221,17 @@ class Processo(Sei):
         # alert may sometimes show for 'duplicated' documents             
         try_accept_alerts(self.driver)   
         wait_for_ready_state_complete(self.driver) # wait for upload complete
-        self.driver.switch_to.default_content() # go back to main document
-        
+        self.driver.switch_to.default_content() # go back to main document        
         
         
     def insereNotaTecnica(self, htmltext):
-        self.insereDocumento(2) # Inclui Nota Tecnica
-        click(self.driver, '#lblPublico.infraLabelRadio') # Publico
-        click(self.driver, 'button#btnSalvar')        
-        self.driver.switch_to.default_content() # go back to main document    
-        # insert htmltext code 
-        # select text-editor
-        wait(self.driver, 10).until(expected_conditions.number_of_windows_to_be(2))
-        # text window now open, but list of handles is not ordered
-        textwindow = [hnd for hnd in self.driver.window_handles if hnd != self.mainwindow ][0]
-        self.driver.switch_to.window(textwindow) # go to text pop up window
-        htmltext = htmltext.replace('\n', '') # just to make sure dont mess with jscript                                
-        def write_html_on_iframe():
-            self.driver.switch_to.default_content() # go to parent main document
-            switch_to_frame(self.driver, "#cke_6_contents iframe")
-            editor = find_element(self.driver, "body") # just to enable save button        
-            editor.clear()
-            editor.send_keys(Keys.BACK_SPACE*42)        
-            self.driver.switch_to.default_content() # go to parent main document                   
-            # insert html code of template doc using javascript iframe.write 
-            # using arguments 
-            # https://stackoverflow.com/questions/52273298/what-is-arguments0-while-invoking-execute-script-method-through-webdriver-in
-            jscript = f"""iframe = document.querySelector('#cke_6_contents iframe');
-            iframe.contentWindow.document.open();
-            iframe.contentWindow.document.write(arguments[0]); 
-            iframe.contentWindow.document.close();"""
-            self.driver.execute_script(jscript, htmltext)        
-            wait_for_ready_state_complete(self.driver) # it stalls the page                                    
-            click(self.driver, "a[title*='Salvar']")            
-        def check_write_on_iframe():
-            self.driver.switch_to.default_content() # go to parent main document
-            switch_to_frame(self.driver, "#cke_6_contents iframe")
-            wait_for_element_presence(self.driver, "body#sei_edited") # body id to check it wrote            
-        while True: # to guarantee it really gets written
-            write_html_on_iframe() 
-            # to garantee save, wait for button salvar to be disabled
-            wait_for_element_presence(self.driver, 
-                "a#cke_262[class='cke_button cke_button__save cke_button_disabled' ]", 
-                timeout=60) # very high timeout for save to no keep waiting                                          
-            try:
-                check_write_on_iframe()
-            except NoSuchElementException:
-                continue  
-            else:
-                break 
-        self.driver.close() # close this page         
-        self.driver.switch_to.window(self.mainwindow) # go to main window
+        self.insereDocumento("Nota Técnica") # Inclui Nota Tecnica
+        editableHTMLDoc(self.driver, htmltext)
+        driver.switch_to.window(self.mainwindow) # go to main window
 
     def InsereTermoAberturaProcessoEletronico(self):
         """Inclui Termo de Abertura de Processo Eletronico"""
-        self.insereDocumento(1) # Termo de Abertura
+        self.insereDocumento("Termo de Abertura")
         click(self.driver, '#lblPublico.infraLabelRadio') # Publico
         click(self.driver, 'button#btnSalvar')   
         # alert may sometimes show for 'duplicated' documents     
@@ -302,9 +259,25 @@ class Processo(Sei):
         html_text = template.render(infos=infos, interferencia_sei=interferencia_np, minuta_sei=minuta_np, 
                                         **kwargs)  # 'area_porcentagem' was passed as kwargs                       
         self.insereNotaTecnica(html_text)
+
+    def insereFormPrioridade(self, infos, **kwargs):
+        """
+        Formulário de analise de prioridade para 
+        Requerimento de Autorização de Pesquisa, Registro de Licença, 
+        Permissão de Lavra Garimpeira e Registro de Extração
+        Analisa documentos e cria nota técnica sobre análise de interferência
+        based on jinja2 template on `req_form_analise`
+        """
+        htmltext = fillFormPrioridade(infos)
+        self.insereDocumento("Formulário Prioridade") # Inclui Nota Tecnica   
+        insertHTMLDoc(self.driver, htmltext)
+        driver.switch_to.window(self.mainwindow) # go to main window
         
     def insereMarcador(self, marcador):
-        self.barraComandos(20)                  
+        self.barraComandos(BARRACOMANDOS_BUTTONS.GERENCIAR_MARCADOR)                  
         click(self.driver, 'div.dd-select')
         click(self.driver, f"//li//label[text()='{marcador}']", by=By.XPATH)        
         click(self.driver, "button[type=submit]")
+
+
+        
