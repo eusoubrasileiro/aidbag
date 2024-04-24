@@ -1,3 +1,2 @@
-from .cls import Sei 
-from .processo import Processo
+from .processo import Processo, Sei
 from .config import docs_externos

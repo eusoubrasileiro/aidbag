@@ -1,4 +1,4 @@
-from .sei import *
+import sei 
 
 from .pubwork import (
     IncluiDocumentosSEI,     

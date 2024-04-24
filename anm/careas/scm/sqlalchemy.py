@@ -1,8 +1,10 @@
 import json
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.types import TypeDecorator, TEXT
 from sqlalchemy_json import mutable_json_type
-from sqlalchemy.orm import mapped_column
+from sqlalchemy.orm import (
+    mapped_column, 
+    declarative_base
+    )
 
 from sqlalchemy import (
     Column, Integer, String, Text, Date, DateTime, 
@@ -12,7 +14,7 @@ from sqlalchemy import (
 from ....web.json import (
     datetime_to_json,
     json_to_datetime
-)    
+    )    
 
 class JSONdt(TypeDecorator):
     impl = TEXT
