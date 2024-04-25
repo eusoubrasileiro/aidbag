@@ -48,25 +48,29 @@ class ProcessManagerClass(dict):
         self.__session = scoped_session(sessionmaker(bind=self._engine))
         self.debug = debug           
         self.lock = threading.RLock()
-  
-    @property
-    def _session(self):
-        """
-        Thread-unique session to use as a context manager using the scoped_session
-        Always return the same session for the same thread. 
-        with ProcessManager._session() as session:
-            # do something ...
-        automatically closes the session making objects not bound to a session
-        """
-        return self.__session
     
     @property
     def session(self):
         """
-        Thread-unique session uses scoped_session but don't close it.
-        Always return the same session for the same thread. 
+        Thread-unique session uses session from scoped_session but don't close 
+        it. `scoped_session` returns the same session for the same thread and 
+        closes it in case the thread ends somehow. 
+
+        Note:
+        The default and recommend approach is to use the context manager, like:
+        with ProcessManager.__session() as session:
+            # do something ...
+        That automatically closes the session making objects not bound to a 
+        session. The problem is that `Processo` object gets updated or read once 
+        the thread gets hands on it. That's why @update_database_on_finish 
+        doesn't close the session and let scoped_session close it at the end 
+        of the thread execution. If the session was closed and we read/set any 
+        property of the object that would raise *DetachedInstanceError*. 
+        Basically, `Processo` code would get uncessary complex and error prone 
+        if I had to open/close the session every time, instead of letting 
+        `scoped_session` close it at the end of the thread.
         """
-        return self._session()
+        return self.__session()
 
     def __delitem__(self, key : str):        
         self.session.delete(self[key].db)
@@ -153,6 +157,20 @@ class ProcessManagerClass(dict):
             self.session.close()
             return data
 
+    def _getwithFilter(self, filter_condition):
+        """
+        Get `.all()` processos querying with sqlalchemy filter 
+        example:
+        getting processes with 'clayers' key in 'dados->iestudo'
+        ProcessManager.getwithFilter( text("dados->'iestudo' ? 'clayers'"))
+        hence can't close session otherwise processes will be detached 
+        raising DetachedInstanceError
+        """
+        with self.lock:                
+            processes = session.query(Processodb).filter(filter_condition).all()            
+            return processes    
+
+
     # Detached mode TODO: clean-up local dictionary for deleted objects 
     # def update(self, key):
     #     with self.lock:        
@@ -194,7 +212,8 @@ class ProcessManagerClass(dict):
    
     def GetorCreate(self, processostr, wpagentlm, task=SCM_SEARCH.ALL, verbose=False, run=True):
         """
-        Create a new or get a Processo if it has not expired. (config['scm']['process_expire'])
+        Create a new or get a Processo if it has not expired. 
+        (config['scm']['process_expire'])
 
         processostr : numero processo format xxx.xxx/ano
         wpage : wPage html webpage scraping class com login e passwd preenchidos
