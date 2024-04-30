@@ -87,7 +87,15 @@ class ProcessManagerClass(dict):
             key = fmtPname(key)    
             if key in self:
                 processo = super().__getitem__(key)   
-                return processo
+                # if a process was previouly added to the manager but 
+                # its thread was closed or anything happened it got
+                # detached. We need to add it to this/new/current session
+                session_ = object_session(processo.db) # original session
+                if session_ is not self.session: # is not 'this' session   
+                    if session_ is not None: # close it if wasn't already
+                        session_.close()            
+                    self.session.add(processo.db)  # add to current/new one
+                    return processo
             else:
                 processodb = self.session.query(Processodb).filter_by(name=key).first()
                 if processodb is not None:
@@ -111,12 +119,7 @@ class ProcessManagerClass(dict):
             pdb = self[name]
             if pdb is None:
                 raise KeyError(name)
-            session_ = object_session(pdb.db)
-            if session_ is not self.session:    
-                if session_ is not None: 
-                    session_.close()            
-                self.session.add(pdb.db)     
-            pdb.db.dados[key] = value
+            pdb.db.dados.update({key : value}) 
             self.session.commit()
             self.session.close()   
 
@@ -130,11 +133,6 @@ class ProcessManagerClass(dict):
             pdb = self[name]
             if pdb is None:
                 raise KeyError(name)
-            session_ = object_session(pdb.db)
-            if session_ is not self.session:    
-                if session_ is not None: 
-                    session_.close()            
-                self.session.add(pdb.db)  
             dados = pdb.dados
             self.session.close()
             return dados
@@ -148,11 +146,6 @@ class ProcessManagerClass(dict):
             pdb = self[name]
             if pdb is None:
                 raise KeyError(name)
-            session_ = object_session(pdb.db)
-            if session_ is not self.session:    
-                if session_ is not None: 
-                    session_.close()            
-                self.session.add(pdb.db)  
             data = getattr(pdb, attr, None)
             self.session.close()
             return data
@@ -162,12 +155,12 @@ class ProcessManagerClass(dict):
         Get `.all()` processos querying with sqlalchemy filter 
         example:
         getting processes with 'clayers' key in 'dados->iestudo'
-        ProcessManager.getwithFilter( text("dados->'iestudo' ? 'clayers'"))
+        ProcessManager.getwithFilter( text("dados->'estudo ? 'clayers'"))
         hence can't close session otherwise processes will be detached 
         raising DetachedInstanceError
         """
-        with self.lock:                
-            processes = session.query(Processodb).filter(filter_condition).all()            
+        with self.lock:             
+            processes = self.session.query(Processodb).filter(filter_condition).all()            
             return processes    
 
 
