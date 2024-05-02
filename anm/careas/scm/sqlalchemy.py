@@ -1,4 +1,5 @@
 import json
+import copy 
 from sqlalchemy.types import TypeDecorator, TEXT
 from sqlalchemy_json import mutable_json_type
 from sqlalchemy.orm import (
@@ -59,5 +60,19 @@ class Processodb(Base):
         self.dados = {}        
         self.basic_html = ''
         self.polygon_html = ''        
+
+    def __repr__(self):
+        dados = copy.deepcopy(self.dados)
+        if 'estudo' in dados and 'table' in dados['estudo']:
+            dados['estudo']['table'] = f"...omitted..."
+            if 'states' in dados['estudo']:
+                dados['estudo']['states'] = ['...omitted...']
+        if 'polygon' in dados:
+            for p in dados['polygon']:
+                if 'memo' in p:
+                    p['memo'] = f"...omitted..."
+        if 'eventos' in dados:
+            dados['eventos'] = [ dados['eventos'][0], dados['eventos'][1], '...omitted...']            
+        return f"{self.name} - modified {self.modified} \n{ json.dumps(dados, indent=4, default=datetime_to_json) }"
 
     
