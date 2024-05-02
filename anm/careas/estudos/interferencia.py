@@ -4,6 +4,7 @@ import traceback
 import pathlib 
 import numpy as np
 from datetime import datetime
+from unidecode import unidecode
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
 from bs4 import BeautifulSoup
@@ -312,8 +313,7 @@ class Interferencia:
             soup = BeautifulSoup(f, features="html.parser")              
         trs = soup.select("div[id*='tvn'] tr") 
         trs = list(filter(lambda x: True if x.select("input[checked]") else False, trs))
-        trs = [ list(tr.children)[7].text.strip() for tr in trs ]
-        trs = list(filter(lambda tr: True if 'Divisão' not in tr else False, trs)) # Remove: Divisão Municipal e Estadual 
+        trs = [ list(unidecode(tr.children)[7].text.strip()) for tr in trs ]        
         self.clayers = trs
 
 
