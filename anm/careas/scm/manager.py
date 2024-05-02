@@ -84,8 +84,7 @@ class ProcessManagerClass(dict):
                 return processo
             else:
                 with self.session() as session:
-                    processodb = session.query(Processodb).filter_by(name=key).first()                    
-                    session.expunge(processodb)
+                    processodb = session.query(Processodb).filter_by(name=key).first()                                        
                 if processodb is not None:
                     processo = Processo(key, processodb=processodb, manager=self)                           
                     self.update({key : processo})
