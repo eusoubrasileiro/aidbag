@@ -60,6 +60,7 @@ def updatedb(method):
     Session is opened and closed at the end of method call.
     Used for methods that update the database.
     """    
+    @wraps(method) # preserves method name, docstring, etc
     def wrapper(self, *args, **kwargs):
         with self._manager.session() as session:
             if object_session(self.db) is None:
@@ -77,6 +78,7 @@ def readdb(method):
     Session is opened and closed at the end of method call.
     Used for methods that only read the database.
     """    
+    @wraps(method)
     def wrapper(self, *args, **kwargs):
         with self._manager.session() as session:
             if object_session(self.db) is None:
@@ -91,7 +93,8 @@ def threadsafe(function):
     The same 'Processo' may exist on different threads but method execution 
     must be controled by `threading.RLock` so that only one thread can write on 
     the object (database-object) at a time.         
-    Uses self.lock field"""    
+    Uses self.lock field"""  
+    @wraps(function)  
     def wrapper(self, *args, **kwargs):            
         if not self.lock.acquire(timeout=60.*2):
             raise TimeoutError(f"Wait time-out in function {function.__name__} for process { self.name }")
