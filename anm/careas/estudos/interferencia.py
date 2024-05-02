@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 
 from ..config import config
 from ..scm import (
+    numberyearPname,
     fmtPname,
     SCM_SEARCH,
     util,
@@ -78,10 +79,12 @@ class Interferencia:
         wpage : wPage html webpage scraping class com login e passwd preenchidos
         processostr : numero processo format xxx.xxx/ano
         """
-        self.processo = None 
+        self._processo = None 
         self.processo_path = processPath(processostr, create=True)
+        self.name = fmtPname(processostr)
         if getprocesso:
-            self.processo = ProcessManager.GetorCreate(processostr, wpage, SCM_SEARCH.ALL, verbose)            
+            self._processo = ProcessManager.GetorCreate(self.name, wpage, SCM_SEARCH.ALL, verbose)  
+        self.number, self.year = numberyearPname(self.name)
         self.wpage = wpage
         self.verbose = verbose       
         """tabele de interferencia extraida do sigareas html"""
@@ -91,11 +94,14 @@ class Interferencia:
         self.tabela_assoc = None 
         self.cancel_ultimo = False
         interf_html = (config['interferencia']['html_prefix']['this']+'_'+
-                       '_'.join([self.processo.number,self.processo.year])+'.html')
+                       '_'.join([self.number,self.year])+'.html')
         self.sigareas_html = os.path.join(self.processo_path, interf_html)
         self.clayers = []
         
-
+    def getPrioridade(self):
+        """get best prioridade data available"""
+        dados = ProcessManager[self.name].dados
+        return dados['prioridadec'] if 'prioridadec' in dados else dados['prioridade']
     
     @staticmethod
     def make(wpage, processostr, verbose=False, overwrite=False):
@@ -119,8 +125,8 @@ class Interferencia:
         if overwrite and processostr in ProcessManager: # delete from database in case of overwrite            
             del ProcessManager[processostr]
         estudo = Interferencia(wpage, processostr, verbose=verbose)
-        estudo.processo.salvaPageScmHtml(estudo.processo_path, 'basic', overwrite)
-        estudo.processo.salvaPageScmHtml(estudo.processo_path, 'polygon', overwrite)                    
+        estudo._processo.salvaPageScmHtml(estudo.processo_path, 'basic', overwrite)
+        estudo._processo.salvaPageScmHtml(estudo.processo_path, 'polygon', overwrite)                    
         estudo.fetchnsaveHTML(overwrite)
         estudo.getcLayers()
         # only if retirada interferencia html is saved we can create spreadsheets        
@@ -137,7 +143,7 @@ class Interferencia:
         """
         Cancela ultimo estudo em aberto. ('opção', 'interferencia' etc..)
         """
-        return cancelaUltimo(self.wpage, self.processo.number, self.processo.year)        
+        return cancelaUltimo(self.wpage, self.number, self.year)        
 
     def createTable(self):
         """Parse the .html previous downloaded containing interferentes data. 
@@ -172,21 +178,22 @@ class Interferencia:
             if self.verbose:
                 print(f"createTable: fetching data for associado {name} ", file=sys.stderr)   
             try:                              
-                processo  = ProcessManager.GetorCreate(name, 
+                ProcessManager.GetorCreate(name, 
                                 self.wpage, SCM_SEARCH.ALL, self.verbose) # needs polygon, associados = ALL
+                pdados = ProcessManager[name].dados
             except PoligonalErrorSCM: # might not have poligonal due some other reason
                 continue
             except Exception as e:
                 raise Exception(f"{traceback.format_exc()}\n\nInterferencia.createTable error at {name}: {e}")
             indexes = (self.tabela_interf.Processo == name)
-            self.tabela_interf.loc[indexes, 'Ativo'] = True if 'S' in processo['ativo'] else False # Sim/Nao to True/False
-            if processo['associados']:
-                self.tabela_interf.loc[indexes, 'Sons'] = len(processo['sons'])
-                self.tabela_interf.loc[indexes, 'Dads'] = len(processo['parents'])
-                assoc_items = pd.DataFrame({ "Main" : processo.name, "Target" : processo['associados'].keys() })
-                assoc_items = assoc_items.join(pd.DataFrame(processo['associados'].values()))                
+            self.tabela_interf.loc[indexes, 'Ativo'] = True if 'S' in pdados['ativo'] else False # Sim/Nao to True/False
+            if pdados['associados']:
+                self.tabela_interf.loc[indexes, 'Sons'] = len(pdados['sons'])
+                self.tabela_interf.loc[indexes, 'Dads'] = len(pdados['parents'])
+                assoc_items = pd.DataFrame({ "Main" : name, "Target" : pdados['associados'].keys() })
+                assoc_items = assoc_items.join(pd.DataFrame(pdados['associados'].values()))                
                 # not using prioridade of associados
-                # assoc_items['Prior'] = processo['prioridadec'] if processo['prioridadec'] else processo['prioridade']
+                # assoc_items['Prior'] = self.getPrioridade()
                 # number of direct sons/ ancestors
                 self.tabela_assoc = pd.concat([self.tabela_assoc, assoc_items], sort=False, ignore_index=True, axis=0, join='outer')                
         return True
@@ -202,8 +209,6 @@ class Interferencia:
         """
         if self.tabela_interf is None:            
             return False
-        if self.tabela_interf_master is not None:
-            return self.tabela_interf_master
 
         self.tabela_interf_master = pd.DataFrame()
         for _,row in self.tabela_interf.iterrows(): # for each possible prioritário
@@ -214,8 +219,8 @@ class Interferencia:
             events['Data'] = events.Data.apply(
                 lambda strdate: datetime.strptime(strdate, "%d/%m/%Y %H:%M:%S"))     
             # we will add ['Observação','Publicação D.O.U'] from SCM Basicos    
-            processo = ProcessManager[row['Processo']]           
-            eventos_scm = processo['eventos']
+            pdados = ProcessManager[row['Processo']].dados
+            eventos_scm = pdados['eventos']
             eventos_scm = pd.DataFrame(eventos_scm[1:], columns=eventos_scm[0])
             events['Obs'] = eventos_scm['Observação']
             events['DOU'] = eventos_scm['Publicação D.O.U']
@@ -230,7 +235,7 @@ class Interferencia:
             events['Processo'] = events.Processo.apply(lambda x: fmtPname(x)) # standard names
             ##### Add an additional event row if necessary: #######
             # caso a primeira data dos eventos diferente da prioritária correta
-            prioridade = processo['prioridadec'] if 'prioridadec' in processo else processo['prioridade']             
+            prioridade = pdados['prioridadec'] if 'prioridadec' in pdados else pdados['prioridade']             
             if events['Data'].values[-1] > np.datetime64(prioridade):                
                 events = pd.concat([events, events.tail(1)], ignore_index=True, axis=0, join='outer')
                 events.loc[events.index[-1], 'Data'] = np.datetime64(prioridade)
@@ -238,9 +243,9 @@ class Interferencia:
             # check if it's possível opção pending
             events['Popc'] = False
             if(events['Ativo'].any() and # ativo
-                'polygon' in processo and
-                len(processo['polygon']) > 1 and   # mais de 1 área
-                'requerimento' in processo['fase'].lower() and # fase de requerimento                
+                'polygon' in pdados and
+                len(pdados['polygon']) > 1 and   # mais de 1 área
+                'requerimento' in pdados['fase'].lower() and # fase de requerimento                
                 events['Descrição'].apply(lambda ev: 'EXIGÊNCIA' in ev).any()):  # exigência
                 events['Popc'] = True # Possível opção pendente - mark todas as rows de eventos
 
@@ -260,8 +265,7 @@ class Interferencia:
         ### Cria coluna 'EvPrior'
         # onde eventos anteriores a data de prioridade são marcados 1 or 0 otherwise
         self.tabela_interf_master['EvPrior'] = 0 # 1 prioritario 0 otherwise        
-        data_prioridade = ( self.processo['prioridadec'] if 'prioridadec' in 
-            self.processo else self.processo['prioridade'] )               
+        data_prioridade = self.getPrioridade()           
         # Verifica se a data de evento é anterior a data de prioridade
         # exceção: licenciamento tem prioridade retroagida pela licença
         # emitida pela prefeitura em até 90 dias       
@@ -314,16 +318,13 @@ class Interferencia:
 
 
     def to_database(self):
-        """update database with ['iestudo']['table']"""
-        iestudo = {'iestudo': 
-                { 'done' : False, 'time' : datetime.now() , 'clayers' : self.clayers } 
-            }
+        """update database with ['estudo']['table']"""
+        estudo = { 'done' : False, 'time' : datetime.now() , 'clayers' : self.clayers }             
         if self.tabela_interf_master is not None:            
             table = self.tabela_interf_master.copy()
             table = TableStr(table)      
-            iestudo['iestudo']['table'] = table.to_dict()                    
-        self.processo.db.dados.update(iestudo)        
-        self.processo._manager.session.commit()
+            estudo['table'] = table.to_dict()                    
+        ProcessManager[name].update('estudo', estudo)
   
 
     def to_excel(self):
@@ -333,7 +334,7 @@ class Interferencia:
         table = self.tabela_interf_master.copy()
 
         excelfile = os.path.join(self.processo_path, config['interferencia']['file_prefix'] + '_' +
-                '_'.join([self.processo.number,self.processo.year])+'.xlsx')        
+                '_'.join([self.number,self.year])+'.xlsx')        
         # Get max string size each collum for setting excel width column
         txt_table = table.values.astype(str).T
         minsize = np.apply_along_axis(lambda array: np.max([ len(string) for string in array ] ),
@@ -418,9 +419,9 @@ class Interferencia:
         else:
             processo = ProcessManager[name]
             estudo = Interferencia(wpage, name, verbose=False, getprocesso=False)   
-            estudo.processo = processo    
-        estudo.processo.salvaPageScmHtml(estudo.processo_path, 'basic', overwrite)
-        estudo.processo.salvaPageScmHtml(estudo.processo_path, 'polygon', overwrite)                    
+            estudo._processo = processo    
+        estudo._processo.salvaPageScmHtml(estudo.processo_path, 'basic', overwrite)
+        estudo._processo.salvaPageScmHtml(estudo.processo_path, 'polygon', overwrite)                    
         estudo.fetchnsaveHTML(overwrite)
         # only if retirada interferencia html is saved we can create spreadsheets        
         if estudo.createTable(): # sometimes there is no interferences 
@@ -435,7 +436,7 @@ class Interferencia:
         name = util.findfmtPnames(pathlib.Path(dir).absolute().stem)[0]
         processo = ProcessManager[name]
         estudo = Interferencia(None, processo.name, verbose=False, getprocesso=False)     
-        estudo.processo = processo         
+        estudo._processo = processo         
         file_path = list(pathlib.Path(dir).glob(config['interferencia']['file_prefix']+'*.xlsx'))
         if not file_path: 
             raise RuntimeError("Legacy Excel prioridade not found, something like eventos_prioridade_*.xlsx")
@@ -445,13 +446,13 @@ class Interferencia:
     def fetchnsaveHTML(self, overwrite=False):
         """fetch and save html interferencia raises DownloadInterferenciaFailed on fail"""
         html_file = (config['interferencia']['html_prefix']['this']+'_'+
-            '_'.join([self.processo.number, self.processo.year]))  
+            '_'.join([self.number, self.year]))  
         html_file = pathlib.Path(self.processo_path) / html_file        
         if not overwrite and html_file.with_suffix('.html').exists():
             self.cancel_ultimo = True # did not download - did not need to cancel
             return        
-        fetch_save_Html(self.wpage, self.processo.number, self.processo.year, html_file.absolute())
-        self.cancel_ultimo = cancelaUltimo(self.wpage, self.processo.number, self.processo.year) # clean up for next usage
+        fetch_save_Html(self.wpage, self.number, self.year, html_file.absolute())
+        self.cancel_ultimo = cancelaUltimo(self.wpage, self.number, self.year) # clean up for next usage
       
             
 
@@ -459,8 +460,8 @@ class Interferencia:
 # def salvaEstudoOpcaoDeAreaHtml(self, html_path):
 #     self.wpage.get('http://sigareas.dnpm.gov.br/Paginas/Usuario/ConsultaProcesso.aspx?estudo=8')
 #     formcontrols = {
-#         'ctl00$cphConteudo$txtNumProc': self.processo.number,
-#         'ctl00$cphConteudo$txtAnoProc': self.processo.year,
+#         'ctl00$cphConteudo$txtNumProc': self.number,
+#         'ctl00$cphConteudo$txtAnoProc': self.year,
 #         'ctl00$cphConteudo$btnEnviarUmProcesso': 'Processar'
 #     }
 #     formdata = formdataPostAspNet(self.wpage.response, formcontrols)
@@ -472,6 +473,6 @@ class Interferencia:
 #         # provavelmente estudo aberto
 #         return False
 #     #wpage.response.url # response url deve ser 'http://sigareas.dnpm.gov.br/Paginas/Usuario/Mapa.aspx?estudo=1'
-#     fname = 'sigareas_opcao_'+self.processo.number+'_'+self.processo.year
+#     fname = 'sigareas_opcao_'+self.number+'_'+self.year
 #     self.wpage.save(os.path.join(html_path, fname))
 #     return True
