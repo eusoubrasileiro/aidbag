@@ -12,10 +12,9 @@ def closest_string(choice, options):
     """
     choice = unidecode(choice).lower()
     max_ratio = 0
-    closest_match = None    
-    options = [unidecode(option).lower() for option in options]
+    closest_match = None        
     for option in options: # get the closest (order matters)
-        ratio = fuzz.token_sort_ratio(choice, option)
+        ratio = fuzz.token_sort_ratio(choice, unidecode(option).lower())
         if ratio > max_ratio:
             max_ratio = ratio
             closest_match = option    
