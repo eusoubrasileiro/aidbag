@@ -313,7 +313,7 @@ class Interferencia:
             soup = BeautifulSoup(f, features="html.parser")              
         trs = soup.select("div[id*='tvn'] tr") 
         trs = list(filter(lambda x: True if x.select("input[checked]") else False, trs))
-        trs = [ list(unidecode(tr.children)[7].text.strip()) for tr in trs ]        
+        trs = [ unidecode(list(tr.children)[7].text.strip()) for tr in trs ]        
         self.clayers = trs
 
 
@@ -324,7 +324,7 @@ class Interferencia:
             table = self.tabela_interf_master.copy()
             table = TableStr(table)      
             estudo['table'] = table.to_dict()                    
-        ProcessManager[name].update('estudo', estudo)
+        ProcessManager[self.name]['estudo'] = estudo
   
 
     def to_excel(self):
