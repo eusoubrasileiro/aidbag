@@ -102,8 +102,12 @@ class ProcessManagerClass(dict):
         """
         with self.lock:             
             with self.session() as session:
-                processes = self.session.query(Processodb).filter(filter_condition).all()            
-            return processes    
+                processes = self.session.query(Processodb).filter(filter_condition).all()   
+            list_processes = []
+            for process in processes:
+                processo = Processo(process.name, processodb=process, manager=self) # replace with a newer guy  
+                list_processes.append(processo)
+            return list_processes    
 
 
     # Detached mode TODO: clean-up local dictionary for deleted objects 
