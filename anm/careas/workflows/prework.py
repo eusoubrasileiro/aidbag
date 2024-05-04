@@ -1,17 +1,14 @@
-from enum import Flag, auto
+import traceback
+import sys 
+import tqdm
+
 from .. import estudos
 from .. import scm
 from ..config import config
 from ..util import processPath
 from .sei import Sei, Processo
+from .enums import ESTUDO_TYPE
 
-import tqdm
-import traceback
-import sys 
-
-class ESTUDO_TYPE(Flag):
-    INTERFERENCIA = auto()
-    OPCAO = auto()
 
 def BatchPreAnalyses(wpage, processos, estudo=ESTUDO_TYPE.INTERFERENCIA, verbose=False, overwrite=False, **kwargs):
     """        
@@ -35,9 +32,10 @@ def BatchPreAnalyses(wpage, processos, estudo=ESTUDO_TYPE.INTERFERENCIA, verbose
         try:            
             if estudo is ESTUDO_TYPE.INTERFERENCIA:
                 _ = estudos.Interferencia.make(wpage, processo, verbose=verbose, overwrite=overwrite)   
-                proc = _.processo              
+                proc = scm.ProcessManager[processo].dados
             elif estudo is ESTUDO_TYPE.OPCAO:
-                proc = scm.ProcessManager.GetorCreate(processo, wpage, task=scm.SCM_SEARCH.BASICOS_POLIGONAL, verbose=verbose)
+                _ = scm.ProcessManager.GetorCreate(processo, wpage, task=scm.SCM_SEARCH.BASICOS_POLIGONAL, verbose=verbose)
+                proc = scm.ProcessManager[processo].dados     
                 with Sei(kwargs['user'], kwargs['passwd'], headless=True) as seid:
                     psei = Processo.fromSei(seid, proc['NUP'])
                     psei.download_latest_documents(10)                

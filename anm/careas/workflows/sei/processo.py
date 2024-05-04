@@ -12,7 +12,7 @@ from .....web.selenium import *
 from .cls import Sei
 from .config import *
 from .forms import fillFormPrioridade
-from .docs import insertHTMLDoc
+from .docs import insertHTMLDoc, HTMLDOC
 
 class BARRACOMANDOS_STATE(Enum):
     MAIN_OPEN = 1 # it's the main barra comandos and the process is open
@@ -192,10 +192,10 @@ class Processo(Sei):
         """
         docnames = [ 'Externo', 
             'Termo de Abertura de Processo Eletrônico', 
-            'Nota Técnica' # here can use accents and ç anything Unicode but bellow you need ASCII
+            'Nota Técnica', # here can use accents and ç anything Unicode but bellow you need ASCII
             'Formulário de Análise do Direito de Prioridade']
         docname = closest_string(partial_text, docnames)
-        self.barraComandos(BARRACOMANDOS_BUTTONS.INSERIR_DOCUMENTO)  
+        self.barraComandos(BARRACOMANDOS_BUTTONS.INCLUIR_DOCUMENTO)  
         # *= contains text in lowercase - before convert to ASCII
         click(self.driver, f"tr[data-desc*='{unidecode(docname.lower())}'] td a:last-child", delay=DELAY_SMALL)                          
     
@@ -226,8 +226,8 @@ class Processo(Sei):
         
     def insereNotaTecnica(self, htmltext):
         self.insereDocumento("Nota Técnica") # Inclui Nota Tecnica
-        editableHTMLDoc(self.driver, htmltext)
-        driver.switch_to.window(self.mainwindow) # go to main window
+        insertHTMLDoc(self.driver, htmltext, self.mainwindow, HTMLDOC.NOTA_TECNICA)
+        self.driver.switch_to.window(self.mainwindow) # go to main window
 
     def InsereTermoAberturaProcessoEletronico(self):
         """Inclui Termo de Abertura de Processo Eletronico"""
@@ -270,8 +270,8 @@ class Processo(Sei):
         """
         htmltext = fillFormPrioridade(infos)
         self.insereDocumento("Formulário Prioridade") # Inclui Nota Tecnica   
-        insertHTMLDoc(self.driver, htmltext)
-        driver.switch_to.window(self.mainwindow) # go to main window
+        insertHTMLDoc(self.driver, htmltext, self.mainwindow, HTMLDOC.FORMULARIO_PRIORIDADE)
+        self.driver.switch_to.window(self.mainwindow) # go to main window
         
     def insereMarcador(self, marcador):
         self.barraComandos(BARRACOMANDOS_BUTTONS.GERENCIAR_MARCADOR)                  

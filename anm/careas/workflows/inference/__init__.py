@@ -1,4 +1,2 @@
-from .work import (
-    inferWork, 
-    WORK_ACTIVITY
-)
+from .work import inferWork
+

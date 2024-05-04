@@ -1,8 +1,10 @@
-from concurrent.futures import process
+from datetime import datetime
+from unidecode import unidecode
+import pathlib
 from . import *
 from .config import *
-from ..prework import WORK_ACTIVITY
-from datetime import datetime
+from ..enums import WORK_ACTIVITY
+from .....general.string import closest_string
 
 def xget(fdict, choice):
     keys = list(fdict.keys())
@@ -57,7 +59,7 @@ form_data = {
     'Resultado da Analise - A area e livre': '',
     'Resultado da Analise - A area interfere totalmente': '',
     'Resultado da Analise - parcial 1 area remanescente': '',
-    'Resultado da Analise - parcial n areas remanescente': '',
+    'Resultado da Analise - parcial n areas remanescentes': '',
     'Resultado da Analise - A descricao da area nao atende': '',
     'Resultado da Analise - Ausencia de licenca municipal ou licenca instruindo varios requerimentos': '',
     'Resultado da Analise - Deve ser indeferido com base no art 167-I Portaria 155 12/05/2016': '',
@@ -69,69 +71,73 @@ form_data = {
 def fillFormPrioridade(infos, **kwargs):
     form = form_data.copy()
     Obs=""    
-    xset(form, 'data prioridade', infos['dados']['prioridade'])    
-    xset(form, 'Memorial Descritivo Sim') # default        
-    match infos: # awesome powerful match - multiple matches allowed and strong pattern matching
-        case { 'estudo' : 'ok' }:            
-            if infos['areas']['count'] == 1:
-                if infos['areas']['percs'][0] >= 100:
-                    xset(form, 'Resultado área livre')
-                else: 
-                    xset(form, 'Resultado 1 área')
-            else:
-                xset(form, 'Resultado n áreas')
-        case { 'estudo' : 'interferencia total'}:
-            xset(form, 'Resultado interfere totalmente') 
-        case { 'work': activity }:
-            match activity:
-                case WORK_ACTIVITY.REQUERIMENTO_PESQUISA: 
-                    xset(form, 'Regime Autorização Pesquisa')
-                case WORK_ACTIVITY.REQUERIMENTO_LICENCIAMENTO:
-                    xset(form, 'Regime Registro Licença')
-                    xset(form, 'Licença Municipal Sim')
-                    xset(form, 'Licença Municipal Satisfatório')
-                case WORK_ACTIVITY.REQUERIMENTO_PLG:
-                    xset(form, 'Regime Permissão Lavra')
-                case WORK_ACTIVITY.REQUERIMENTO_REGISTRO_EXTRAÇÃO:
-                    xset(form, 'Regime Registro Extracao')
-                    xset(form, 'Anuência de Titular Sim')
-        case { 'edital' : {'tipo' : tipo, 'pai' : nup_pai} }:
-            if nup_pai == infos['dados']['NUP']:  # processo é originário do edital (não é filho!)                
-                raise Exception(f"Este processo  {nup_pai} é Pai e foi à edital {tipo} e seu arquivamento é por nota técnica")
-            Obs += f"Proveniente de edital de disponibilidade {tipo} sendo sua origem do processo {nup_pai}"
+    xset(form, 'data prioridade', infos['prioridade'])    
+    xset(form, 'Memorial Descritivo Sim') # default   
+    xset(form, 'Área especial de restrição parcial - Não')
+    xset(form, 'Área especial de restrição total - Não')
+    work = infos['work']     
+    match work: # awesome powerful match - NO multiple matches allowed but strong pattern matching
+        case { 'resultado' : 'ok' }:                        
+            if infos['work']['areas']['percs'][0] >= 100:
+                xset(form, 'Resultado - área livre')
+            else: 
+                xset(form, 'Resultado - parcial 1 área remanescente')
+        case { 'resultado' : 'interferência total'}:
+            xset(form, 'Resultado - interfere totalmente') 
+        case { 'resultado' : 'opção'}:
+            xset(form, 'Resultado - parcial n áreas remanescentes')
+    match work['type']:        
+        case WORK_ACTIVITY.REQUERIMENTO_PESQUISA: 
+            xset(form, 'Regime Autorização Pesquisa')
+        case WORK_ACTIVITY.REQUERIMENTO_LICENCIAMENTO:
+            xset(form, 'Regime Registro Licença')
+            xset(form, 'Licença Municipal Sim')
+            xset(form, 'Licença Municipal Satisfatório')
+        case WORK_ACTIVITY.REQUERIMENTO_PLG:
+            xset(form, 'Regime Permissão Lavra')
+        case WORK_ACTIVITY.REQUERIMENTO_REGISTRO_EXTRAÇÃO:
+            xset(form, 'Regime Registro Extracao')
+            xset(form, 'Anuência de Titular Sim')
+    if work['edital']:
+        tipo, nup_pai = work['edital']['tipo'], work['edital']['pai']
+        if nup_pai == infos['NUP']:  # processo é originário do edital (não é filho!)                
+            raise Exception(f"Este processo  {nup_pai} é Pai e foi à edital {tipo} e seu arquivamento é por nota técnica")
+        Obs += f"Proveniente de edital de disponibilidade {tipo} sendo sua origem do processo {nup_pai}"
 
-    layer = list(map(lambda x: unicode(x.lower()), infos['dados']['iestudo']['clayers']))
-    match layer:
-        case layer if 'bloqueio' in layer:
+    layer = list(map(lambda x: unidecode(x.lower()), infos['estudo']['clayers']))
+    for text_layer in layer:
+        text_layer = unidecode(text_layer)
+        if 'bloqueio' in text_layer:
             xset(form, 'Área restrição parcial Sim')
-            xset(form, 'Área restrição parcial Bloqueio')
-        case layer if 'sustentavel' in layer:            
+            xset(form, 'Área restrição parcial - especifique - Bloqueio')
+        elif 'sustentavel' in text_layer:          
             xset(form, 'Área restrição parcial Sim')
-            xset(form, 'Área restrição parcial Conservação')
-        case layer if 'quilombola' in layer:            
+            xset(form, 'Área restrição parcial - especifique - Uso Sustentavel')
+        elif 'quilombola' in text_layer:          
             xset(form, 'Área restrição parcial Sim')
-            xset(form, 'Área restrição parcial Quilombola')
-        case layer if 'garimpeira' in layer:            
+            xset(form, 'Área restrição parcial - especifique - Quilombola')
+        elif 'garimpeira' in text_layer:          
             xset(form, 'Área restrição parcial Sim')
-            xset(form, 'Área restrição parcial Garimpeira')
-        case layer if 'urbana' in layer:
+            xset(form, 'Área restrição parcial - especifique - Garimpeira')
+        elif 'urbana'in text_layer:
             xset(form, 'Área restrição parcial Sim')
-            xset(form, 'Área restrição parcial Urbana')
-        case layer if 'assentamento' in layer:
+            xset(form, 'Área restrição parcial - especifique - Urbana')
+        elif 'assentamento' in text_layer:
             xset(form, 'Área restrição parcial Sim')
-            xset(form, 'Área restrição parcial Assentamento')
-        case layer if 'sitios' in layer:
+            xset(form, 'Área restrição parcial - especifique - Assentamento')
+        elif 'sitios' in text_layer:
             xset(form, 'Área restrição parcial Sim')
-            xset(form, 'Área restrição parcial Arqueologicos')    
-        case layer if 'integral' in layer:
+            xset(form, 'Área restrição parcial - especifique - Arqueologicos')    
+        elif 'integral' in text_layer:
             xset(form, 'Área restrição total Sim')
-            xset(form, 'Área restrição total Integral')    
-        case layer if 'extrativista' in layer:
+            xset(form, 'Área restrição total - especifique - Integral')    
+        elif 'extrativista' in text_layer:
             xset(form, 'Área restrição total Sim')
-            xset(form, 'Área restrição total Reserva')
-        case layer if 'indigena' in layer:
+            xset(form, 'Área restrição total - especifique - Reserva')
+        elif 'indigena' in text_layer:
             xset(form, 'Área restrição total Sim')
-            xset(form, 'Área restrição total Indígena')                
+            xset(form, 'Área restrição total - especifique - Indígena')                
+
     xset(form, 'observacoes', Obs)   
     doc_templates = pathlib.Path(config['sei']['doc_templates'])            
     template_path = next(doc_templates.glob(f"*form_analise*.html")) # get the template by name 

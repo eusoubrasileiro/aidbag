@@ -1,5 +1,5 @@
 import sys 
-from .. import scm
+from ... import scm
 
 def editalTipo(obj):
     tipo = obj['tipo'].lower()  

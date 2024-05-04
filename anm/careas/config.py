@@ -17,6 +17,7 @@ config['scm'].update({'html_prefix' : {'basic': 'scm_basicos_', 'polygon': 'scm_
 
 # sei module configurations
 config['sei'] = {}
+config['sei']['nome_assinatura'] = 'set-this-at-run-time'
 config['sei']['atribuir_default'] = 'set-this-at-run-time'
 config['sei']['marcador_default'] = 'set-the-default-marcador-at-run-time'
 config['sei']['doc_templates'] = ''
