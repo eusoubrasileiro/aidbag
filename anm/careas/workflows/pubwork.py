@@ -102,14 +102,18 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
         # formulário de prioridade
         # Inclui Estudo Interferência pdf como Doc Externo no SEI
         psei.insereDocumentoExterno("Estudo Interferência", 
-            info['estudo']['sigareas']['pdf_path'])                
-        pdf_adicional = info['work']['pdf_adicional']
-        if pdf_adicional:                        
-            if not pdf_adicional.exists():                
+            info['estudo']['sigareas']['pdf_path'])      
+        if 'ok' in info['work']['resultado']:
+            pdf_adicional = info['work']['pdf_adicional']
+            if pdf_adicional and not pdf_adicional.exists():                
                 downloadMinuta(wpage, process.name, 
-                    str(pdf_adicional.absolute()), MINUTA.fromName(info['work']['minuta']['title']))                          
-        psei.insereDocumentoExterno(info['work']['minuta']['title'], str(pdf_adicional.absolute()))
+                    str(pdf_adicional.absolute()), MINUTA.fromName(info['work']['minuta']['title']))                       
+            # licenciamento - minuta by hand hence None for empty external doc
+            pdf_adicional = str(pdf_adicional.absolute()) if pdf_adicional else None 
+            psei.insereDocumentoExterno(info['work']['minuta']['title'], pdf_adicional)
         psei.insereFormPrioridade(info)
+        # debugging clayers
+        print(f" {info['NUP']} clayers {info['estudo']['clayers']}", file=sys.stderr)
 
     # EDITAL GOES ABOVE TOO! but for now .. let's wait
 

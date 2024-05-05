@@ -66,12 +66,13 @@ form_data = {
     'Resultado da Analise - Observacoes': ''
 }
 
-
+"""decimal print"""
+pdecimal = lambda x: f"{x:.2f}".replace('.', ',')
 
 def fillFormPrioridade(infos, **kwargs):
     form = form_data.copy()
     Obs=""    
-    xset(form, 'data prioridade', infos['prioridade'])    
+    xset(form, 'data prioridade', infos['prioridade'].strftime("%d/%m/%Y %H:%M:%S")) # better date/view format        
     xset(form, 'Memorial Descritivo Sim') # default   
     xset(form, 'Área especial de restrição parcial - Não')
     xset(form, 'Área especial de restrição total - Não')
@@ -80,12 +81,21 @@ def fillFormPrioridade(infos, **kwargs):
         case { 'resultado' : 'ok' }:                        
             if infos['work']['areas']['percs'][0] >= 100:
                 xset(form, 'Resultado - área livre')
+                Obs += "Área livre. Recomenda-se dar seguimento a análise de plano."
             else: 
                 xset(form, 'Resultado - parcial 1 área remanescente')
+                Obs += (f"Área original requerida foi reduzida "
+                    f"à {pdecimal(infos['work']['areas']['percs'][0])}%"
+                f" Recomenda-se comunicação e notificação para dar-se seguimento a análise de plano.")
         case { 'resultado' : 'interferência total'}:
             xset(form, 'Resultado - interfere totalmente') 
+            Obs += "Recomenda-se o indeferimento por interferência total."
         case { 'resultado' : 'opção'}:
             xset(form, 'Resultado - parcial n áreas remanescentes')
+            areas = [f"{pdecimal(area)}," for area in infos['work']['areas']['values']]
+            Obs += ("A área original requerida após interferência foi reduzida"
+                f" às seguintes áreas: {areas[:-1]} em ha." # remove last ','
+                f" Recomenda-se formular exigência de opção conforme fundamentação acima.")
     match work['type']:        
         case WORK_ACTIVITY.REQUERIMENTO_PESQUISA: 
             xset(form, 'Regime Autorização Pesquisa')
@@ -102,40 +112,50 @@ def fillFormPrioridade(infos, **kwargs):
         tipo, nup_pai = work['edital']['tipo'], work['edital']['pai']
         if nup_pai == infos['NUP']:  # processo é originário do edital (não é filho!)                
             raise Exception(f"Este processo  {nup_pai} é Pai e foi à edital {tipo} e seu arquivamento é por nota técnica")
-        Obs += f"Proveniente de edital de disponibilidade {tipo} sendo sua origem do processo {nup_pai}"
+        Obs = f"Proveniente de edital de disponibilidade {tipo} sendo sua origem do processo {nup_pai} " + Obs
 
     layer = list(map(lambda x: unidecode(x.lower()), infos['estudo']['clayers']))
     for text_layer in layer:
         text_layer = unidecode(text_layer)
         if 'bloqueio' in text_layer:
-            xset(form, 'Área restrição parcial Sim')
+            xset(form, 'Área restrição parcial Sim') 
+            xset(form, 'Área especial de restrição parcial - Não', '') # unmark
             xset(form, 'Área restrição parcial - especifique - Bloqueio')
         elif 'sustentavel' in text_layer:          
             xset(form, 'Área restrição parcial Sim')
+            xset(form, 'Área especial de restrição parcial - Não', '') # unmark
             xset(form, 'Área restrição parcial - especifique - Uso Sustentavel')
         elif 'quilombola' in text_layer:          
             xset(form, 'Área restrição parcial Sim')
+            xset(form, 'Área especial de restrição parcial - Não', '') # unmark
             xset(form, 'Área restrição parcial - especifique - Quilombola')
         elif 'garimpeira' in text_layer:          
             xset(form, 'Área restrição parcial Sim')
+            xset(form, 'Área especial de restrição parcial - Não', '') # unmark
             xset(form, 'Área restrição parcial - especifique - Garimpeira')
         elif 'urbana'in text_layer:
             xset(form, 'Área restrição parcial Sim')
+            xset(form, 'Área especial de restrição parcial - Não', '') # unmark
             xset(form, 'Área restrição parcial - especifique - Urbana')
         elif 'assentamento' in text_layer:
-            xset(form, 'Área restrição parcial Sim')
+            xset(form, 'Área restrição parcial Sim')    
+            xset(form, 'Área especial de restrição parcial - Não', '') # unmark
             xset(form, 'Área restrição parcial - especifique - Assentamento')
         elif 'sitios' in text_layer:
             xset(form, 'Área restrição parcial Sim')
+            xset(form, 'Área especial de restrição parcial - Não', '') # unmark
             xset(form, 'Área restrição parcial - especifique - Arqueologicos')    
         elif 'integral' in text_layer:
             xset(form, 'Área restrição total Sim')
+            xset(form, 'Área especial de restrição total - Não', '') # unmark
             xset(form, 'Área restrição total - especifique - Integral')    
         elif 'extrativista' in text_layer:
             xset(form, 'Área restrição total Sim')
+            xset(form, 'Área especial de restrição total - Não', '') # unmark
             xset(form, 'Área restrição total - especifique - Reserva')
         elif 'indigena' in text_layer:
             xset(form, 'Área restrição total Sim')
+            xset(form, 'Área especial de restrição total - Não', '') # unmark
             xset(form, 'Área restrição total - especifique - Indígena')                
 
     xset(form, 'observacoes', Obs)   
