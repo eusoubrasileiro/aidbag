@@ -33,14 +33,11 @@ form_data = {
     'Anuencia de Titular de Direito Minerario - Nao': '',
     'Anuencia de Titular de Direito Minerario - Sim': '',  # PLG ou Registro de Extracao
     'Memorial Descritivo - Sim': '',
-    'Memorial Descritivo - Nao': '',
-    'Memorial Descritivo - Especificacao condicao nao atendida Os lados nao atendem': '',
+    'Memorial Descritivo - Nao': '',    
     'Memorial Descritivo - Especificacao condicao nao atendida ligadas': '', # ligadas por corredor
-    'Memorial Descritivo - Especificacao condicao nao atendida corredor': '', # e um corredor
-    'Memorial Descritivo - Especificacao condicao nao atendida Outros': '',
+    'Memorial Descritivo - Especificacao condicao nao atendida corredor': '', # e um corredor    
     'Area objetivada incide em area especial de restricao parcial - Nao': '',
-    'Area objetivada incide em area especial de restricao parcial - Sim': '',
-    'Area objetivada incide em area especial de restricao parcial - Especifique - Faixa de Fronteira': '',
+    'Area objetivada incide em area especial de restricao parcial - Sim': '',    
     'Area objetivada incide em area especial de restricao parcial - Especifique - Bloqueio provisorio': '',
     'Area objetivada incide em area especial de restricao parcial - Especifique - Unidade de Conservacao de Uso Sustentavel': '',
     'Area objetivada incide em area especial de restricao parcial - Especifique - Territorio Quilombola': '',
@@ -54,15 +51,10 @@ form_data = {
     'Area objetivada incide em area especial de restricao total - Especifique - Unidade de Conservacao de Protecao Integral': '',
     'Area objetivada incide em area especial de restricao total - Especifique - Reserva Extrativista e Reserva Particular do Patrimonio Natural': '',
     'Area objetivada incide em area especial de restricao total - Especifique - Terra indigena homologada': '',
-    'Area objetivada incide em area especial de restricao total - Especifique - Outros': '',
-    'Area objetivada incide em area especial de restricao total - Especifique - Especifique': '',
     'Resultado da Analise - A area e livre': '',
     'Resultado da Analise - A area interfere totalmente': '',
     'Resultado da Analise - parcial 1 area remanescente': '',
-    'Resultado da Analise - parcial n areas remanescentes': '',
-    'Resultado da Analise - A descricao da area nao atende': '',
-    'Resultado da Analise - Ausencia de licenca municipal ou licenca instruindo varios requerimentos': '',
-    'Resultado da Analise - Deve ser indeferido com base no art 167-I Portaria 155 12/05/2016': '',
+    'Resultado da Analise - parcial n areas remanescentes': '',            
     'Resultado da Analise - Observacoes': ''
 }
 
@@ -93,6 +85,7 @@ def fillFormPrioridade(infos, **kwargs):
         case { 'resultado' : 'opção'}:
             xset(form, 'Resultado - parcial n áreas remanescentes')
             areas = [f"{pdecimal(area)}," for area in infos['work']['areas']['values']]
+            areas = ' '.join(areas)
             Obs += ("A área original requerida após interferência foi reduzida"
                 f" às seguintes áreas: {areas[:-1]} em ha." # remove last ','
                 f" Recomenda-se formular exigência de opção conforme fundamentação acima.")
@@ -120,7 +113,14 @@ def fillFormPrioridade(infos, **kwargs):
         if 'bloqueio' in text_layer:
             xset(form, 'Área restrição parcial Sim') 
             xset(form, 'Área especial de restrição parcial - Não', '') # unmark
-            xset(form, 'Área restrição parcial - especifique - Bloqueio')
+            xset(form, 'Área restrição parcial - especifique - Bloqueio')             
+            Obs = ("Houve interferência com a área de bloqueio provisório da +X+X+X+X+X+ "
+            "A análise deste processo deve ser suspensa até demais desdobramentos sobre o bloqueio. "
+            "Recomenda-se comunicar a interferência ao titular bem como sobre o "
+            "PARECER/PROGE Nº 500/2008-FMM-LBTL-MP-SDM-JA que é o dispositivo legal "
+            "que disciplina o procedimento de bloqueio. "
+            "O termo de renúncia anexo ao Parecer é o dispositivo que possibilita, "
+            "à critério da ANM, prosseguir com a análise do requerimento.")
         elif 'sustentavel' in text_layer:          
             xset(form, 'Área restrição parcial Sim')
             xset(form, 'Área especial de restrição parcial - Não', '') # unmark
@@ -148,7 +148,7 @@ def fillFormPrioridade(infos, **kwargs):
         elif 'integral' in text_layer:
             xset(form, 'Área restrição total Sim')
             xset(form, 'Área especial de restrição total - Não', '') # unmark
-            xset(form, 'Área restrição total - especifique - Integral')    
+            xset(form, 'Área especial de restrição total - especifique - unidade de conservação integral')    
         elif 'extrativista' in text_layer:
             xset(form, 'Área restrição total Sim')
             xset(form, 'Área especial de restrição total - Não', '') # unmark
@@ -162,5 +162,7 @@ def fillFormPrioridade(infos, **kwargs):
     doc_templates = pathlib.Path(config['sei']['doc_templates'])            
     template_path = next(doc_templates.glob(f"*form_analise*.html")) # get the template by name 
     template = templateEnv.get_template(template_path.name) 
+    # turn it in a numbered index dictionary - easier to fill in jinja2 template
+    form = {index+1: form[key] for index, key in enumerate(form.keys())} # 0 is 1
     return template.render(fm=form, xget=xget)  
     
