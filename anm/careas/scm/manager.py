@@ -69,9 +69,9 @@ class ProcessManagerClass(dict):
         be careful with this 
         """
         if self[key]:                
-            self[key].delete()
-            del self[key]
+            p = self[key]                                    
             super().__delitem__(key)
+            p.delete()
     
     def __getitem__(self, key : str) -> Processo:
         """
