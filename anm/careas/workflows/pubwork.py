@@ -12,7 +12,7 @@ from ..estudos.util import (
 )
 
 from .config import __workflow_debugging__
-from .enums import WORK_ACTIVITY
+from .enums import WORK_ACTIVITY, requerimentos_names
 from .sei import Processo
 
 from .inference import (    
@@ -79,7 +79,8 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
         if process_name not in ProcessPathStorage:     
             raise FileNotFoundError(f"Process {process_name} folder not found! Just checked in ProcessPathStorage. Did you run it?")
         process_folder = ProcessPathStorage[process_name]
-    info = inferWork(process, process_folder)       
+    info = inferWork(process, process_folder)     
+        
     if not activity:        
         activity = info['work']['type'] # get from inferred information
 
@@ -114,8 +115,21 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
         psei.insereFormPrioridade(info)
         # debugging clayers
         print(f" {info['NUP']} clayers {info['estudo']['clayers']}", file=sys.stderr)
-
     # EDITAL GOES ABOVE TOO! but for now .. let's wait
+    elif activity in WORK_ACTIVITY.REQUERIMENTO_RESTUDO:
+        # Inclui Estudo Interferência pdf como Doc Externo no SEI
+        psei.insereDocumentoExterno("Estudo Interferência", 
+            info['estudo']['sigareas']['pdf_path'])      
+        if 'ok' in info['work']['resultado']:
+            pdf_adicional = info['work']['pdf_adicional']
+            if pdf_adicional and not pdf_adicional.exists():                
+                downloadMinuta(wpage, process.name, 
+                    str(pdf_adicional.absolute()), MINUTA.fromName(info['work']['minuta']['title']))      
+            pdf_adicional = str(pdf_adicional.absolute()) if pdf_adicional else None 
+            psei.insereDocumentoExterno(info['work']['minuta']['title'], pdf_adicional)
+        psei.insereNotaTecnicaRequerimento("req_restudo", info, 
+            requerimento=requerimentos_names[info['work']['type']], 
+            minuta=info['work']['minuta']['title'])     
 
     # elif activity in WORK_ACTIVITY.REQUERIMENTO_EDITAL:
     #     psei.insereDocumentoExterno("Estudo Interferência", str(info['pdf_sigareas'].absolute()))   
