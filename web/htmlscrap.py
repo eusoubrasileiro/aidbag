@@ -5,7 +5,10 @@ import requests
 from urllib3.util.retry import Retry
 from requests import adapters
 from bs4 import BeautifulSoup
-from .io import saveFullHtmlPage
+from .io import (
+    saveSimpleHTMLFolder, 
+    saveSimpleHTML
+    )
 
 # to disable warnings when ssl is False
 from urllib3.exceptions import InsecureRequestWarning
@@ -46,14 +49,25 @@ class wPage: # html  webpage scraping with soup and requests
     # wp = wPage()
     # wp.get("https://br.yahoo.com/")
     # wp.save("yahoo", verbose=True)
-    def save(self, pagepath='page', verbose=False):
+    def saveSimpleHTMLFolder(self, pagepath='page', verbose=False):
         """
-        using last page accessed (or 'html' str passed)
-        save its html and supported contents        
+        Using last page accessed (or 'html' str passed)
+        save its html and supported contents uses `saveSimpleHtmlFolder` 
+        creates *.html + folder of resources    
         * pagepath : path-to-page   
         """       
-        saveFullHtmlPage(self.response.url, pagepath, 
+        saveSimpleHTMLFolder(self.response.url, pagepath, 
                      self.session, self.response.text, verbose)
+
+    def saveSimpleHTML(self, pagepath='page', verbose=False):
+        """
+        Using last page accessed (or 'html' str passed)
+        Saves a web page html complete as a SINGLE *.html file.
+        Encode images as base64 strings!        
+        All other resources scrits, links etc will be gone.                  
+        * pagepath : path-to-page   
+        """      
+        saveSimpleHTML(self.response.url, pagepath, self.session, self.response.text)
 
     def post(self, arg, save=True, **kwargs):
         """save : save response overwriting the last"""

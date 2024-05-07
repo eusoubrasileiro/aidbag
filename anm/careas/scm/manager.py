@@ -1,14 +1,19 @@
 import sys 
 import datetime
+import threading
 from functools import wraps
 from threading import local
 from contextlib import contextmanager
-from sqlalchemy import create_engine
-from sqlalchemy.orm import object_session
+from sqlalchemy import (
+    create_engine,
+    text,
+    func
+    )
 from sqlalchemy.orm import (
     Session,
-    scoped_session,
-    sessionmaker
+    scoped_session,    
+    sessionmaker,
+    object_session
     )
 
 from ..config import config
@@ -35,75 +40,94 @@ class ProcessManagerClass(dict):
     * value : `scm.Processo` object
     """    
     def __init__(self, debug=False): 
-        """
-        * save_on_set: save on database on set 
-        """        
         super().__init__()      
         self._engine = create_engine(f"sqlite:///{config['scm']['process_storage_file']+'.db'}")                    
         self.__session = scoped_session(sessionmaker(bind=self._engine))
-        self.debug = debug   
-  
-    @property
-    def _session(self):
-        """
-        Thread-unique session to use as a context manager using the scoped_session
-        Always return the same session for the same thread. 
-        with ProcessManager._session() as session:
-            # do something ...
-        automatically closes the session making objects not bound to a session
-        """
-        return self.__session
+        self.debug = debug           
+        self.lock = threading.RLock()
     
     @property
     def session(self):
         """
-        Thread-unique session uses scoped_session but don't close it.
-        Always return the same session for the same thread. 
-        """
-        return self._session()
+        Thread-unique session from scoped_session . 
+        `scoped_session` returns the same session for the same thread and 
+        closes it in case the thread ends somehow. 
+        Usage:
+        with ProcessManager.session() as session:
+            session.refresh(processo.db)
+            # do something ...
+            session.commit() # or not depending on what you do
+        That automatically closes the session making objects not bound to a 
+        session. But `updatedb` reataches the object to a 
+        session no matter what happened before
+        """        
+        return self.__session
 
-    def __delitem__(self, key : str):        
-        self.session.delete(self[key].db)
-        self.session.commit()
-        super().__delitem__(key)
+    def __delitem__(self, key : str):    
+        """
+        this is called when del ProcessManager[key] 
+        be careful with this 
+        """
+        if self[key]:                
+            p = self[key]                                    
+            super().__delitem__(key)
+            p.delete()
     
     def __getitem__(self, key : str) -> Processo:
         """
-        Get process from local dictionary first or Database second
-        In case its session or thread was closed add it to the current new session.
-        Delete the previous in case is not closed yet.
-        (That's the case for a web application : each request is a new thread)
+        Get process from local dictionary first or Database second. 
         """
-        key = fmtPname(key)    
-        if key in self:
-            processo = super().__getitem__(key)   
-            # in the case the session or thread that create it was closed add it back to a new session
-            # this will cause an exception if the previous session was not closed!
-            # Flask request request_context sometimes is closed and reopened 
-            # during the same request
-            # (which can happen due to the way threads are managed), the session you created
-            # is lost so we delete it and add a new one
-            # more bellow about that
-            session_db = object_session(processo.db)
-            if session_db is not self.session:    
-                if session_db is not None: 
-                    session_db.close()            
-                self.session.add(processo.db)
-            return processo
-        else:
-            processodb = self.session.query(Processodb).filter_by(name=key).first()
-            if processodb is not None:
-                processo = Processo(processodb.name, processodb=processodb, manager=self)   
-                self.update({processo.name : processo})
-                return processo    
-            return None
+        with self.lock:
+            key = fmtPname(key)    
+            if key in self:
+                processo = super().__getitem__(key)   
+                return processo
+            else:
+                with self.session() as session:
+                    processodb = session.query(Processodb).filter_by(name=key).first()                                        
+                if processodb is not None:
+                    processo = Processo(key, processodb=processodb, manager=self)                           
+                    self.update({key : processo})
+                    return processo    
+                return None
 
-    def __setitem__(self, key, process : Processo):                           
-        self.session.add(process.db)            
-        self.session.commit()
-        super().__setitem__(key, process)
+    def _getwithFilter(self, filter_condition):
+        """
+        Get `.all()` processos querying with sqlalchemy filter 
+        example:
+        getting processes with 'clayers' key in 'dados->iestudo'
+        ProcessManager.getwithFilter( text("dados->'estudo ? 'clayers'"))
+        hence can't close session otherwise processes will be detached 
+        raising DetachedInstanceError
+        """
+        with self.lock:             
+            with self.session() as session:
+                processes = self.session.query(Processodb).filter(filter_condition).all()   
+            list_processes = []
+            for process in processes:
+                processo = Processo(process.name, processodb=process, manager=self) # replace with a newer guy  
+                list_processes.append(processo)
+            return list_processes    
 
-    
+
+    # Detached mode TODO: clean-up local dictionary for deleted objects 
+    # def update(self, key):
+    #     with self.lock:        
+    #         processo = self[key]
+    #         # check version and get a new one in case it is outdated
+    #         processodb = self.queryProcessodb(key)
+    #         if processodb is None: # deleted externally
+    #             super().__delitem__(key) # delete locally 
+    #             # will not call del object!
+    #             return None
+    #         elif processo.db.version != processodb.version: # updated externally                
+    #             # modify the local one since it might been used by some other thread
+    #             processo.update(processodb)
+    #             self.session.merge(processodb) # we want to keep the old ones
+    #             # since it is possibly been used by another thread
+    #         return processo
+
+   
     def runTask(self, wp, *args, **kwargs):
         """run `runTask` on every process on database    
 
@@ -113,16 +137,18 @@ class ProcessManagerClass(dict):
         Any aditional args or keywork args for `runTask` can be passed. 
         Like dados=Processo.SCM_SEARCH.BASICOS or any tuple (function, args) pair
         """
-        for processodb in progressbar(self.session.query(Processodb).all()):
-            processo = Processo(processodb.name, processodb=processodb, 
-                wpagentlm=wPageNtlm(wp.user, wp.passwd, ssl=True))
-            #must be one independent requests.Session for each process otherwise mess                        
-            processo.runTask(*args, **kwargs)
-        self.session.commit()
+        with self.session() as session:
+            for processodb in progressbar(session.query(Processodb).all()):
+                processo = Processo(processodb.name, processodb=processodb, 
+                    wpagentlm=wPageNtlm(wp.user, wp.passwd, ssl=True))
+                #must be one independent requests.Session for each process otherwise mess                        
+                processo.runTask(*args, **kwargs)
+            session.commit()
    
     def GetorCreate(self, processostr, wpagentlm, task=SCM_SEARCH.ALL, verbose=False, run=True):
         """
-        Create a new or get a Processo if it has not expired. (config['scm']['process_expire'])
+        Create a new or get a Processo if it has not expired. 
+        (config['scm']['process_expire'])
 
         processostr : numero processo format xxx.xxx/ano
         wpage : wPage html webpage scraping class com login e passwd preenchidos
@@ -132,10 +158,10 @@ class ProcessManagerClass(dict):
         processo = self[processostr]                        
         if processo is not None:
             processo._verbose = verbose
-            processo._wpage = wPageNtlm(wpagentlm.user, wpagentlm.passwd)
+            processo._wpage = wPageNtlm(wpagentlm.user, wpagentlm.passwd)            
             if processo.modified + config['scm']['process_expire'] < datetime.datetime.now():         
                 if verbose:       
-                    print("Processo placing on storage ", processostr, file=sys.stderr)
+                    print("Processo placing on storage ", processostr, file=sys.stderr)                
                 del self[processostr] # delete here and on database before adding a new one               
                 processo = Processo(processostr, wpagentlm, manager=self, verbose=verbose) # replace with a newer guy  
                 self[processostr] = processo
@@ -203,22 +229,8 @@ Stores web-scrapped and parsed data on local dictionary and Database
 * value : `scm.Processo` object
 Not using any other layer of cache making sqlite3 queries everytime.
 Everytime means: each object property access/modification is a new query by SQL Alchemy ORM standard. 
-Default behaviour is the scoped_session is never closed in each-thread until it closes itself. 
 """
 
-def sync_with_database(func):
-    """ProcessManager decorator that uses the session context manager 
-    and updates the database after the wrapped function/method is executed.
-    Uses the session given by scoped_session that's thread-local specific.
-    Closes the session at the end."""
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        with ProcessManager._session() as session:
-            result = func(*args, **kwargs)
-            session.commit()
-            session.close()
-        return result
-    return wrapper
 
 
 

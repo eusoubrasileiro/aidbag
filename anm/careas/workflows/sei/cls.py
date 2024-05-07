@@ -1,7 +1,4 @@
-from lib2to3.pytree import Base
-from ....web.selenium import *
-#from seleniumbase import BaseCase
-
+from .....web.selenium import *
 
 class Sei:
     # https://book.pythontips.com/en/latest/context_managers.html
@@ -39,6 +36,13 @@ class Sei:
           
     def _login(self):
         options = ChromeOptions()
+        # not exactly needed since I am downloading pdfs with requets
+        # but keeping it since it makes navigation faster ? when not loading pdf's 
+        options.add_experimental_option('prefs', {            
+            "download.prompt_for_download": False, # To auto download the file
+            "download.directory_upgrade": True,
+            "plugins.always_open_pdf_externally": True # It will not show PDF directly in chrome
+        })
         if self.headless:
             options.add_argument("headless") # to hide window in 'background'
         self.driver = Chrome(options=options)        

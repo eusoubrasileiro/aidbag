@@ -1,52 +1,66 @@
-from sqlalchemy import create_engine, Column, Integer, String, JSON, Text, DateTime, func
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from aidbag.anm.careas.scm import sqlalchemy as sql
+"""
+run with 
+pytest -v test_sqlalchemy.py (current folder)
+or 
+pytest -v aidbag/anm/careas/scm/test_sqlalchemy.py (Projects folder)
 
-# engine = create_engine('sqlite:////home/andre/ProcessesStored.db')
-# sql.Base.metadata.create_all(engine)
+you can also inspect the pytestdb.db file in the current folder using
+db browser for sqlie (https://sqlitebrowser.org/)
+"""
+import random
+import string
+import pytest
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import (
     Session,
     scoped_session,
-    sessionmaker
+    sessionmaker    
     )
-engine = create_engine(f"sqlite:///mydb.db", echo=True)                    
-# session = sessionmaker(bind=engine)()
-sql.Base.metadata.create_all(engine)
 
-with Session(engine) as session:
-    p = sql.Processodb('test')
-    session.add(p)    
-    session.commit()
-with Session(engine) as session:
-    p = session.query(sql.Processodb).filter_by(name='test').first()
-    p.polygon_html = p.polygon_html+'something on html text'
-    session.commit()
-    p = sql.Processodb('test2')
+from aidbag.anm.careas.scm import sqlalchemy as sql
+
+@pytest.fixture
+def engine():
+    engine = create_engine(f"sqlite:///pytestdb.db", echo=True) # create pytestdb.db file 
+    yield engine
+    engine.dispose()
+
+@pytest.fixture
+def session(engine):
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    sql.Base.metadata.create_all(session.get_bind()) # create tables 
+    yield session
+    session.close()
+
+def generate_random_name(length):
+    return ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(length))
+
+
+def test_basic_html(session):
+    pname = generate_random_name(7)
+    p = sql.Processodb(pname)
     session.add(p)
     session.commit()
     p.basic_html = 'something on basic html'
     session.commit()
-    p.dados['xxx'] = { 'x' : 'y'}
+    p = session.query(sql.Processodb).filter_by(name=pname).first()
+    assert p.basic_html == 'something on basic html'
+
+def test_dados(session):
+    pname = generate_random_name(7)
+    p = sql.Processodb(pname)
+    session.add(p)
     session.commit()
-with Session(engine) as session:
-    p = session.query(sql.Processodb).filter_by(name='test2').first()
-    assert p.dados['xxx'] == { 'x' : 'y' }
-with Session(engine) as session:
-    p = session.query(sql.Processodb).filter_by(name='test2').first()
+    p.dados['xxx'] = {'x': 'y'}
+    session.commit()
+    p = session.query(sql.Processodb).filter_by(name=pname).first()
+    assert p.dados['xxx'] == {'x': 'y'}
     p.dados['xxx']['x'] = 'z'
     session.commit()
-with Session(engine) as session:
-    p = session.query(sql.Processodb).filter_by(name='test2').first()
+    p = session.query(sql.Processodb).filter_by(name=pname).first()
     assert p.dados['xxx']['x'] == 'z'
-# delete everything
-with Session(engine) as session:
-    p = session.query(sql.Processodb).filter_by(name='test').first()
-    session.delete(p)
-    session.commit()
-with Session(engine) as session:
-    p = session.query(sql.Processodb).filter_by(name='test2').first()
-    session.delete(p)
-    session.commit()
+    # p = session.query(sql.Processodb).filter_by(name=pname).first()
+    # session.delete(p)
+    # session.commit()

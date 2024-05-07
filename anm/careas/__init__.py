@@ -11,18 +11,14 @@ from .scm import (
 
 from .config import *
 
-from .util import ContaPrazo
+from .util import (
+    ContaPrazo,
+    processPath
+)
 
 # needed for connection so better be here
 # widely visible from careas
 from ...web import (
     wPageNtlm,
     wPage
-)
-
-from .workflows import (
-    IncluiDocumentosSEI, 
-    EstudoBatchRun,
-    IncluiDocumentosSEIFirstN,
-    folder_process
 )

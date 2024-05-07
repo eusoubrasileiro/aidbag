@@ -5,6 +5,7 @@ import requests
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 import pathlib
+import base64
 
 
 def try_read_html(path):
@@ -23,14 +24,15 @@ def try_read_html(path):
     return html
 
 
-def saveHtmlPage(path, html):
-    html = html if type(html) is bytes else html.encode('utf-8')
+def writeHTML(path, html):
+    """write string `html` at `path`.html with 'utf-8' encoding """
+    whtml = html if type(html) is bytes else html.encode('utf-8')
     with pathlib.Path(path).with_suffix('.html').open('wb') as f:
-        f.write(html)
+        f.write(whtml)
 
 
-def saveFullHtmlPage(url, pagepath='page', session=requests.Session(), html=None, verbose=True):
-    """Save web page html and supported contents      
+def saveSimpleHTMLFolder(url, pagepath='page', session=requests.Session(), html=None, verbose=True):
+    """Save web page html and supported contents (works fo basic static pages)     
         * url:  
         * pagepath : path-to-page   
         It will create a file  `'path-to-page'.html` and a folder `'path-to-page'_files`
@@ -69,4 +71,48 @@ def saveFullHtmlPage(url, pagepath='page', session=requests.Session(), html=None
                   'script': 'src'}  # tag&attrs tags to grab
     for tag, inner in tags_attrs.items():  # saves resource files and rename refs
         savenRename(soup, pagefolder, session, url, tag, inner)
-    saveHtmlPage(pagepath, soup.prettify('utf-8'))
+    writeHTML(pagepath, soup.prettify('utf-8'))
+
+
+def fetchSimpleHTMLStr(url, session=requests.Session(), html=None, verbose=True):
+    """
+    Returns a web page html as a string (works fo basic static pages).
+    Encode images as base64 strings!        
+    All other resources scrits, links etc will be gone.          
+    if `html` is not None - it will be used instead of web request.
+    """
+    if not html:
+        html = session.get(url).content    
+    soup = BeautifulSoup(html, 'html.parser')
+    def img_base64(image_url):
+        """download image and encode the image data to base64"""
+        img_data = session.get(image_url).content
+        return base64.b64encode(img_data).decode('utf-8')    
+    # Iterate over each image tag and replace the src attribute with base64 encoded image data
+    for img in soup.find_all('img'):
+        if 'src' in img.attrs:
+            img_src = img['src']
+            if not img_src.startswith('http'):
+                img_src = urljoin(url, img_src)                
+            img['src'] = f'data:image;base64,{img_base64(img_src)}'
+    # return html as text - and remove unecessary '\n' I don't care for saving or displaying it
+    return soup.decode('utf-8').replace('\n', '') 
+    
+
+def saveSimpleHTML(url, pagepath='page', session=requests.Session(), html=None, verbose=True):
+    """
+    Saves a web page html complete as a SINGLE *.html file.
+    Encode images as base64 strings!        
+    All other resources scrits, links etc will be gone.          
+    if `html` is not None - it will be used instead of web request.
+    """
+    html = fetchSimpleHTMLStr(url, session, html, verbose)
+    writeHTML(pagepath, html)
+
+    
+        
+
+
+    
+
+

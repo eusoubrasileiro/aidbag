@@ -1,6 +1,9 @@
 from .interferencia import (
     Interferencia,    
-    getEventosSimples,
+    getEventosSimples
+)
+
+from .scraping import (
     DownloadInterferenciaFailed,
     CancelaUltimoEstudoFailed
 )

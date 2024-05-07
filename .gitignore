@@ -40,5 +40,6 @@
 *.cpg
 *.dbf
 *.egg*
+*.db
 dist
 build

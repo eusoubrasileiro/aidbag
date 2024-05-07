@@ -1,18 +1,22 @@
 import json
-from sqlalchemy.ext.declarative import declarative_base
+import copy 
 from sqlalchemy.types import TypeDecorator, TEXT
 from sqlalchemy_json import mutable_json_type
-from sqlalchemy.orm import mapped_column
+from sqlalchemy.orm import (
+    mapped_column, 
+    declarative_base,
+    object_session
+    )
 
 from sqlalchemy import (
     Column, Integer, String, Text, Date, DateTime, 
-    func, JSON    
+    func, JSON,     
     )
 
 from ....web.json import (
     datetime_to_json,
     json_to_datetime
-)    
+    )    
 
 class JSONdt(TypeDecorator):
     impl = TEXT
@@ -46,9 +50,29 @@ class Processodb(Base):
     polygon_html = mapped_column('PAGE_POLYGON', Text)  
     # New column for last modification timestamp (auto updated)
     modified = mapped_column('MODIFIED', DateTime, default=func.now(), onupdate=func.now())    
+    version = mapped_column('VERSION', Integer, default=1, nullable=False, 
+        onupdate=lambda ctx: 
+        ctx.current_parameters['VERSION'] + 1 if ctx.current_parameters['VERSION'] is not None else 1)
+
     def __init__(self, name):
         # real data to store in the database - instance variables 
         self.name = name
         self.dados = {}        
         self.basic_html = ''
         self.polygon_html = ''        
+
+    def __repr__(self):
+        dados = copy.deepcopy(self.dados)
+        if 'estudo' in dados and 'table' in dados['estudo']:
+            dados['estudo']['table'] = f"...omitted..."
+            if 'states' in dados['estudo']:
+                dados['estudo']['states'] = ['...omitted...']
+        if 'polygon' in dados:
+            for p in dados['polygon']:
+                if 'memo' in p:
+                    p['memo'] = f"...omitted..."
+        if 'eventos' in dados:
+            dados['eventos'] = [ dados['eventos'][0], dados['eventos'][1], '...omitted...']            
+        return f"{self.name} - modified {self.modified} \n{ json.dumps(dados, indent=4, default=datetime_to_json) }"
+
+    

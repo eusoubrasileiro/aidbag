@@ -154,7 +154,7 @@ def formatMemorial(latlon, fmt='sigareas', close_poly=True, view=False,
     if len(latlon.shape) == 2: # decimal degree array as input shape(-1, 2) len(2) instead of len(3)
         # turn in [ degree, minutes, seconds ] array
         latlon = np.array(list(map(ddegree2dms, latlon.flatten()))).reshape(-1, 2, 3)
-    if close_poly and (not np.alltrue(latlon[0] == latlon[-1])):  
+    if close_poly and (not (latlon[0] == latlon[-1]).all()):
         latlon = np.append(latlon, latlon[0:1], axis=0) # add first point to the end        
     fmtlines = ""
     if fmt == "sigareas":

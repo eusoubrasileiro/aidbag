@@ -3,7 +3,9 @@ from .util import (
     findPnames,
     fmtPname,
     numberyearPname,        
-    comparePnames
+    comparePnames,
+    regex_process,
+    regex_processg
 )
 
 from .processo import (
@@ -12,12 +14,10 @@ from .processo import (
     default_run_state
 )
 
-from .manager import (
-    ProcessManager,
-    sync_with_database
-)
+from .manager import ProcessManager    
 
 from .requests import (
-    ErrorProcessSCM   
+    BasicosErrorSCM,
+    PoligonalErrorSCM
 )
 
