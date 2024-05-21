@@ -177,7 +177,7 @@ class Processo():
     
     @threadsafe
     @updatedb
-    def _update_dados(self, _dict):
+    def update_dados(self, _dict):
         """
         update ENTIRE dados dictionary (careful)
         better read copy it first then use this to update
@@ -334,7 +334,7 @@ class Processo():
     
         dados['run'].update({'ancestry': True})
         dados['prioridadec'] = dados['prioridade']
-        self._update_dados(dados)
+        self.update_dados(dados)
             
         # if dados['associados']: # not dealing with grupamento many parents yet
         #     try:                
@@ -391,7 +391,7 @@ class Processo():
                     self.name, self._verbose, data_tags) 
                 dados.update(newdados)           
                 dados['run']['basicos'] = True
-                self._update_dados(dados)      
+                self.update_dados(dados)      
 
                 
     def _dadosPoligonalGetIf(self, **kwargs):
@@ -420,7 +420,7 @@ class Processo():
                 newdados = parseDadosPoligonal(self.polygon_html, self._verbose)
                 dados.update({'polygon' : newdados})           
                 dados['run']['polygonal'] = True
-                self._update_dados(dados)  
+                self.update_dados(dados)  
 
     @threadsafe
     def _dadosBasicosFillMissing(self):
@@ -435,7 +435,7 @@ class Processo():
             father = self._manager.GetorCreate(dados['parents'][0], self._wpage, verbose=self._verbose, run=False)
             father._dadosBasicosGetIf(data_tags=miss_data_tags)
             dados.update(father.dados)
-            self._update_dados(dados)
+            self.update_dados(dados)
             return True
         else:
             return False        
