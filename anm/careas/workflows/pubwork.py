@@ -12,7 +12,7 @@ from ..estudos.util import (
 )
 
 from .config import __workflow_debugging__
-from .enums import WORK_ACTIVITY, requerimentos_names
+from .enums import WORK_ACTIVITY
 from .sei import Processo
 
 from .inference import (    
@@ -64,7 +64,7 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
 
     process_name = scm.fmtPname(process_name)         
 
-    if (activity is WORK_ACTIVITY.REQUERIMENTO_EDITAL_DAD):
+    if (activity is WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL_DAD):
         usefolder = False
 
     if not usefolder:
@@ -98,8 +98,8 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
     if termo_abertura and process['data_protocolo'].year < 2020:  
         psei.InsereTermoAberturaProcessoEletronico()    
         
-    if (activity in WORK_ACTIVITY.REQUERIMENTO_GENERICO_NOT_EDITAL or 
-        activity in WORK_ACTIVITY.REQUERIMENTO_REGISTRO_EXTRAÇÃO):
+    if (activity in WORK_ACTIVITY.INTERFERENCIA_GENERICO_NOT_EDITAL or 
+        activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_REGISTRO_EXTRAÇÃO):
         # formulário de prioridade
         # Inclui Estudo Interferência pdf como Doc Externo no SEI
         psei.insereDocumentoExterno("Estudo Interferência", 
@@ -116,10 +116,14 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
         # debugging clayers
         print(f" {info['NUP']} clayers {info['estudo']['clayers']}", file=sys.stderr)
     # EDITAL GOES ABOVE TOO! but for now .. let's wait
-    elif activity in WORK_ACTIVITY.REQUERIMENTO_RESTUDO:
-        # Inclui Estudo Interferência pdf como Doc Externo no SEI
-        psei.insereDocumentoExterno("Estudo Interferência", 
+    elif (activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_RESTUDO or 
+        activity in WORK_ACTIVITY.OPCAO_REQUERIMENTO):
+        
+        doc_externo = "Estudo Interferência" if WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_RESTUDO else "Estudo de Opção"
+        # Inclui Estudo Interferência pdf como Doc Externo no SEI        
+        psei.insereDocumentoExterno(doc_externo, 
             info['estudo']['sigareas']['pdf_path'])      
+
         if 'ok' in info['work']['resultado']:
             pdf_adicional = info['work']['pdf_adicional']
             if pdf_adicional and not pdf_adicional.exists():                
@@ -127,8 +131,15 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
                     str(pdf_adicional.absolute()), MINUTA.fromName(info['work']['minuta']['title']))      
             pdf_adicional = str(pdf_adicional.absolute()) if pdf_adicional else None 
             psei.insereDocumentoExterno(info['work']['minuta']['title'], pdf_adicional)
-        psei.insereNotaTecnicaRequerimento("req_restudo", info, 
-            requerimento=requerimentos_names[info['work']['type']], 
+    
+        doc_model = ""
+        if activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_RESTUDO:
+            doc_model = "req_restudo"
+        if activity in WORK_ACTIVITY.OPCAO_REQUERIMENTO:
+            doc_model = "req_opcao_feita"
+            
+        psei.insereNotaTecnicaRequerimento(doc_model, info, 
+            requerimento=info['tipo'], 
             minuta=info['work']['minuta']['title'])     
 
     # elif activity in WORK_ACTIVITY.REQUERIMENTO_EDITAL:

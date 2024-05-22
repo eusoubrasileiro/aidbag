@@ -215,6 +215,7 @@ class Processo(Sei):
         send_keys(self.driver, '#txtNumero.infraText', desc) # Nome na Arvore
         click(self.driver, '#optNato.infraRadio') #  Nato-digital
         click(self.driver, '#lblPublico.infraLabelRadio') # Publico
+        pdf_path = str(pdf_path) # convert to string case pathlib.Path
         if pdf_path is not None: # existe documento para anexar
             send_keys(self.driver, 'input#filArquivo', pdf_path) # upload by path
         click(self.driver, 'button#btnSalvar') # this was problematic       

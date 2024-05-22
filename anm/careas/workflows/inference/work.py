@@ -8,13 +8,47 @@ from .....general.pdf import readPdfText
 from .edital import dispDadSon
 from ..enums import WORK_ACTIVITY
 
+def activityFromDados(dados):
+    """
+    Determines the appropriate work activity.
+    """
+    match dados['tipo'].lower(), dados['fase'].lower():
+        # case (tipo, fase) if 'leilão' in tipo or 'pública' in tipo: # will block following cases
+        #     return WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL
+        case (tipo, fase) if 'garimpeira' in fase and 'requerimento' in tipo:
+            return WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_PLG
+        case (tipo, fase) if 'lavra' in fase and 'requerimento' in tipo:
+            return WORK_ACTIVITY.FORMULARIO_1_DIREITO_RLAVRA
+        case (tipo, fase) if 'licenciamento' in fase and 'requerimento' in tipo:
+            return WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_LICENCIAMENTO
+        case (tipo, fase) if 'extração' in fase and 'requerimento' in tipo:
+            return WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_REGISTRO_EXTRAÇÃO
+        case (tipo, fase) if 'pesquisa' in fase and 'requerimento' in tipo:
+            return WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_PESQUISA  
+
+def minutaName(tipo, fase):    
+    """
+    minuta name for docs publishing based on the given data
+    """
+    tipo, fase = tipo.lower(), fase.lower()
+    if 'lavra' in fase:
+        return "Minuta de Portaria de Lavra"
+    elif "pesquisa" in tipo:
+        return "Minuta de Alvará de Pesquisa"
+    elif "licenciamento"in tipo:
+        return "Minuta de Licenciamento"
+    elif "extração" in tipo:
+        return "Minuta de Registro de Extração"
+    elif "garimpeira" in tipo:
+        return "Minuta de Lavra Garimpeira"
+
+
 def inferWork(process, folder='.'):
     """
     From a Processo object and work-folder, infer the work done and fill in a dictionary with information to fill out documents and forms.
     
     Returns a dictionary with various key-value pairs containing the inferred information.
-    """
-    """
+
     From Processo object and work-folder try to infer the work done.
     Fill in a dictionary with information to fill out docs and forms.     
     returns dict with lots of infos key,value pairs    
@@ -32,26 +66,11 @@ def inferWork(process, folder='.'):
         'resultado' : ''
         }
     work = infos['work']
+    work['type'] = activityFromDados(infos)
 
-    match infos['tipo'].lower(), infos['fase'].lower():
-        case (tipo, fase) if 'garimpeira' in fase and 'requerimento' in tipo:
-            work['type'] = WORK_ACTIVITY.REQUERIMENTO_PLG
-            work['minuta']['title'] = 'Minuta de Permissão de Lavra Garimpeira'
-        case (tipo, fase) if 'lavra' in fase and 'requerimento' in tipo:
-            work['type'] = WORK_ACTIVITY.DIREITO_RLAVRA_FORMULARIO_1
-            work['minuta']['title'] = 'Minuta de Portaria de Lavra'
-        case (tipo, fase) if 'licenciamento' in fase and 'requerimento' in tipo:
-            work['type'] = WORK_ACTIVITY.REQUERIMENTO_LICENCIAMENTO
-            work['minuta']['title'] = 'Minuta de Licenciamento'
-            # must be inserted empty so it's inserted by hand after
-        case (tipo, fase) if 'extração' in fase and 'requerimento' in tipo:
-            work['type'] = WORK_ACTIVITY.REQUERIMENTO_REGISTRO_EXTRAÇÃO
-            work['minuta']['title'] = 'Minuta de Registro de Extração'
-        case (tipo, fase) if 'pesquisa' in fase and 'requerimento' in tipo:
-            work['type'] = WORK_ACTIVITY.REQUERIMENTO_PESQUISA
-            work['minuta']['title'] = 'Minuta de Alvará de Pesquisa'
     tipo = infos['tipo'].lower()
-    if 'leilão' in tipo or 'pública' in tipo:        
+    if 'leilão' in tipo or 'pública' in tipo:  
+        work['type'] = WORK_ACTIVITY.REQUERIMENTO_EDITAL      
         son, dad = dispSonDad(process)
         dadnup = getNUP(dad)            
         if 'leilão' in tipo:
@@ -80,10 +99,10 @@ def inferWork(process, folder='.'):
                 work['bloqueio'] = True
                 # if 'bloqueio' in infos['estudo]['clayers']                
             if 'OPÇÃO DE ÁREA' in pdf_sigareas_text:
-                work['type'] = WORK_ACTIVITY.REQUERIMENTO_OPCAO_ALVARA
+                work['type'] = WORK_ACTIVITY.OPCAO_REQUERIMENTO
                 work['resultado'] = 'ok' # minuta de alvará
             elif 'MUDANÇA DE REGIME COM REDUÇÃO' in pdf_sigareas_text:
-                infos['work'] = WORK_ACTIVITY.REQUERIMENTO_MUDANCA_REGIME
+                infos['work'] = WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_MUDANCA_REGIME
                 work['resultado'] = 'ok'
             elif 'ENGLOBAMENTO' in pdf_sigareas_text:
                 work['resultado'] = 'ok' 
@@ -107,6 +126,8 @@ def inferWork(process, folder='.'):
                     work['areas']['values'] = areas
         if 'ok' in work['resultado']:                
             infos['work']['pdf_adicional'] = folder / "minuta.pdf"   
+            infos['work']['minuta']['title'] = minutaName(infos['tipo'], infos['fase'])
+    
 
     if __workflow_debugging__:
         print(infos)              
