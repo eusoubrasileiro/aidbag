@@ -133,7 +133,7 @@ def parseDadosPoligonal(poligonal_page, verbose):
         if verbose:
             print("parseDadosPoligonal failed!", file=sys.stderr)
         return []
-    return polydata
+    return {'polygon' : polydata} 
 
 
 def getMissingTagsBasicos(dados):

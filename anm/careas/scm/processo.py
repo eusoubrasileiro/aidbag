@@ -7,6 +7,7 @@ import time
 import tqdm
 from threading import RLock
 from functools import wraps
+from typing import Literal
 
 from ....general import progressbar 
 from ....web.htmlscrap import wPageNtlm
@@ -28,17 +29,17 @@ from .util import (
 )
 
 from .parsing import (
+    parseDadosBasicos,
     parseDadosPoligonal,
     scm_data_tags,
-    parseNUP,
-    parseDadosBasicos,
+    parseNUP,    
     getMissingTagsBasicos
 )
 
 from .sqlalchemy import Processodb, object_session
 
 default_run_state = lambda: copy.deepcopy({ 'run' : 
-    { 'basicos': False, 'associados': False, 'ancestry': False, 'polygonal': False } })
+    { 'basic': False, 'associados': False, 'ancestry': False, 'polygon': False } })
 """ start state of running parsing processes of process - without deepcopy all mess expected"""
 
 class SCM_SEARCH(enum.Flag):
@@ -52,7 +53,7 @@ class SCM_SEARCH(enum.Flag):
     ALL = BASICOS | ASSOCIADOS | PRIORIDADE | POLIGONAL
 
 
-def updatedb(method):
+def updatedb(method: callable) -> callable: 
     """
     Decorator that refreshes the object at the beginning of the wrapped method and
     updates the database after the wrapped method is executed.
@@ -71,7 +72,7 @@ def updatedb(method):
         return result
     return wrapper
 
-def readdb(method):
+def readdb(method: callable) -> callable:
     """
     Decorator that refreshes-updates the sqlalchemy object at the begging.
     `refresh` re-add it to the session if it is not already attached to the session.
@@ -88,7 +89,7 @@ def readdb(method):
         return result 
     return wrapper
 
-def threadsafe(function):   
+def threadsafe(function: callable) -> callable:   
     """Decorator for methods of `Processo` needing thread safe execution.
     The same 'Processo' may exist on different threads but method execution 
     must be controled by `threading.RLock` so that only one thread can write on 
@@ -109,6 +110,7 @@ class Processo():
             verbose : bool = False ):
         super().__init__()     
         name = fmtPname(processostr)
+        self.name = name # will/MUST never change
         self._manager = manager
         with manager.session() as session:                        
             if processodb is None:
@@ -142,28 +144,28 @@ class Processo():
     @readdb    
     def basic_html(self):
         return self.db.basic_html
-    
-    @threadsafe
-    @updatedb
-    def _basic_html(self, value):
-        "basich_html setter"
-        self.db.basic_html  = value
-    
+
     @property
     @readdb
     def polygon_html(self):
-        return self.db.polygon_html
-
+        return self.db.polygon_html    
+    
     @threadsafe
     @updatedb
-    def _polygon_html(self, value):
-        "polygon_html setter"
-        self.db.polygon_html = value
-    
-    @property
+    def _set_html(self, page: Literal['basic', 'polygon'], value):        
+        "html page setter"
+        if page == 'basic':
+            self.db.basic_html = value
+        elif page == 'polygon':
+            self.db.polygon_html = value        
+
     @readdb
-    def name(self):
-        return self.db.name
+    def _get_html(self, page: Literal['basic', 'polygon']):
+        "html page getter"
+        if page == 'basic':
+            return self.db.basic_html
+        elif page == 'polygon':
+            return self.db.polygon_html
     
     @property
     @readdb
@@ -177,27 +179,12 @@ class Processo():
     
     @threadsafe
     @updatedb
-    def update_dados(self, _dict):
-        """
-        update ENTIRE dados dictionary (careful)
+    def update(self, _dict):
+        """        
         better read copy it first then use this to update
+        no existing keys will be added
         """
         self.db.dados.update(_dict)
-
-    @threadsafe # avoid multiple threads writing at the same time
-    @updatedb    
-    def update(self, key, newdict):    
-        """ 
-        update the dictionary at key with newdict 
-        `db.dados[key].update(newdict)`
-        """   
-        self.db.dados[key].update(newdict)
-
-    @threadsafe # avoid multiple threads writing at the same time
-    @updatedb    
-    def __setitem__(self, key, value):  # 
-        """use only for 1st level keys set"""  
-        self.db.dados[key] = value
 
     @readdb
     def __repr__(self):
@@ -207,11 +194,6 @@ class Processo():
     def __getitem__(self, key):
         """get a copy of property from the data dictionary if exists"""        
         return copy.deepcopy(self.db.dados[key])
-
-    @readdb
-    def __contains__(self, key):
-        """check if property exist on self.dados"""
-        return key in self.db.dados
     
     def runTask(self, task=SCM_SEARCH.BASICOS, wpage=None):
         """Run task from enum SCM_SEARCH desired data."""
@@ -219,10 +201,10 @@ class Processo():
         if self._wpage is None: # to support being called without wp set 
             self._wpage = wpage
         if task in SCM_SEARCH: # passed argument to perform a default call without args
-            if SCM_SEARCH.BASICOS in task and not run['basicos']:
-                self._dadosBasicosGetIf()
-            if SCM_SEARCH.POLIGONAL in task and not run['polygonal']:
-                self._dadosPoligonalGetIf()
+            if SCM_SEARCH.BASICOS in task and not run['basic']:
+                self._dadosScmGet('basic')
+            if SCM_SEARCH.POLIGONAL in task and not run['polygon']:
+                self._dadosScmGet('polygon')
             if SCM_SEARCH.ASSOCIADOS in task and not run['associados']:
                 self._expandAssociados()
             if SCM_SEARCH.PRIORIDADE in task and not run['ancestry']:
@@ -244,8 +226,8 @@ class Processo():
 
         """
         dados = self.dados
-        if not dados['run']['basicos']:
-            self._dadosBasicosGetIf()
+        if not dados['run']['basic']:
+            self._dadosScmGet('basic')
 
         if self._verbose:
             print("expandAssociados - getting associados: ", self.name,
@@ -255,7 +237,8 @@ class Processo():
             return dados['associados']
 
         if not dados['associados']:
-            self.update('run', {'associados': True})
+            dados['run']['associados'] = True
+            self.update(dados)
             return
         
         # local copy for object search -> removing circular reference
@@ -306,7 +289,7 @@ class Processo():
                             # since basic data wont be on it, will break ancestry search etc... 
                             del self._manager[process_name]
                             del dados['associados'][process_name]
-                            self.update('associados', dados['associados'])
+                            self.update(dados)
                             print(str(e) + f" Removed from associados. Exception ignored!",
                                 file=sys.stderr)
                         else:
@@ -314,7 +297,8 @@ class Processo():
                             raise # re-raise                  
         if self._verbose:
             print("expandAssociados - finished associados: ", self.name, file=sys.stderr)
-        self.update('run', {'associados': True})        
+        dados['run']['associados'] = True
+        self.update(dados)
 
     @threadsafe
     def _ancestry(self):
@@ -323,18 +307,18 @@ class Processo():
         Get root node or older parent.               
         """
         dados = self.dados
-        if not dados['run']['basicos']:
-            self._dadosBasicosGetIf()
+        if not dados['run']['basic']:
+            self._dadosScmGet('basic')
             
         if dados['run']['ancestry']:
             return dados['prioridadec']
 
         if self._verbose:
-            print("ancestrySearch - building graph: ", self.name, file=sys.stderr)    
-    
-        dados['run'].update({'ancestry': True})
+            print("ancestrySearch - building graph: ", self.name, file=sys.stderr)        
+        
+        dados['run']['ancestry'] = True        
         dados['prioridadec'] = dados['prioridade']
-        self.update_dados(dados)
+        self.update(dados)
             
         # if dados['associados']: # not dealing with grupamento many parents yet
         #     try:                
@@ -346,81 +330,42 @@ class Processo():
         #     except RecursionError:
         #         # TODO analyse case of graph with closed loop etc.
         #         pass 
-
-    
-    def _pageRequest(self, name):
+        
+    def _pageRequest(self, name : Literal['basic', 'polygon']):
         """python requests page and get response unicode str decoded"""
         if not isinstance(self._wpage, wPageNtlm):
             raise Exception('Invalid `wPage` instance!')
         # str unicode page
         html, url = requests.pageRequest(name, self.name, self._wpage, False)        
         if name == 'basic':
-            self._basic_html(html) # I don't need images here
+            self._set_html('basic', html) # I don't need images here
         else: # polygon images will be embedded as base64 strings hence perfectly displayable
-            self._polygon_html(fetchSimpleHTMLStr(url, html=html, 
+            self._set_html('polygon', fetchSimpleHTMLStr(url, html=html, 
                 session=self._wpage.session, verbose=self._verbose))
 
-    
-    def _dadosBasicosGetIf(self, **kwargs):
-        """wrap around `_dadosBasicosGet`to download only if page html
-        was not downloaded yet"""
-        if not self.basic_html:
-            self._dadosBasicosGet(**kwargs)
-        else: 
-            self._dadosBasicosGet(download=False, **kwargs)    
-
-
     @threadsafe
-    def _dadosBasicosGet(self, data_tags=None, download=True):
-        """dowload the dados basicos scm main html page or 
-        use the existing one stored at `self._pages` 
-        than parse all data_tags passed storing the resulting in `self.db.dados`
-        return True if succeed on parsing every tag False ortherwise
-        """        
-        dados = self.dados
-        if not dados['run']['basicos']: # if not done yet
-            if data_tags is None: # data tags to fill in 'dados' with
-                data_tags = scm_data_tags.copy()
-            if download: # download get with python.requests page html response            
-                self._pageRequest('basic')        
-            if self.basic_html:
-                if self._verbose:
-                    print("dadosBasicosGet - parsing: ", self.name, file=sys.stderr)        
-                # using class field directly       
-                newdados = parseDadosBasicos(self.basic_html, 
-                    self.name, self._verbose, data_tags) 
-                dados.update(newdados)           
-                dados['run']['basicos'] = True
-                self.update_dados(dados)      
-
-                
-    def _dadosPoligonalGetIf(self, **kwargs):
-        """wrap around `_dadosPoligonalGet`to download only if page html
-        was not downloaded yet"""
-        if not self.polygon_html:
-            self._dadosPoligonalGet(**kwargs)
-        else: 
-            self._dadosPoligonalGet(download=False, **kwargs)    
-
-    @threadsafe
-    def _dadosPoligonalGet(self, download=True):
-        """dowload the dados scm poligonal html page or 
-        use the existing one stored at `self._pages` 
-        than parse all data_tags passed storing the resulting in `self.db.dados['poligonal']`
-        return True           
-          * note: not used by self.run!
+    def _dadosScmGet(self, 
+        page_key : Literal['basic', 'polygon'],
+        data_tags : dict = None, 
+        redownload : bool = False):
+        """
+        download or redownload the dados scm basic html or polygon page or
+        use the existing one stored at `self._pages` if `redownload` False
         """
         dados = self.dados
-        if not dados['run']['polygonal']: 
-            if download: # download get with python.requests page html response  
-                self._pageRequest('polygon')
-            if self.polygon_html:
+        if not dados['run'][page_key]:            
+            if redownload or self._get_html(page_key) is None: # download get with python.requests page html response
+                self._pageRequest(page_key)
+            if self._get_html(page_key): # if sucessful get html
                 if self._verbose:
-                    print("dadosPoligonalGet - parsing: ", self.name, file=sys.stderr)   
-                newdados = parseDadosPoligonal(self.polygon_html, self._verbose)
-                dados.update({'polygon' : newdados})           
-                dados['run']['polygonal'] = True
-                self.update_dados(dados)  
+                    print(f"_dadosScmGet - parsing {page_key} for {self.name}", file=sys.stderr)
+                if page_key == 'basic':
+                    newdados = parseDadosBasicos(self.basic_html, self.name, self._verbose, data_tags) 
+                elif page_key == 'polygon':
+                    newdados = parseDadosPoligonal(self.poligonal_html, self._verbose)
+                dados.update(newdados)           
+                dados['run'][page_key] = True
+                self.update(dados)  
 
     @threadsafe
     def _dadosBasicosFillMissing(self):
@@ -433,14 +378,16 @@ class Processo():
         if self['associados']:
             miss_data_tags = getMissingTagsBasicos(dados)        
             father = self._manager.GetorCreate(dados['parents'][0], self._wpage, verbose=self._verbose, run=False)
-            father._dadosBasicosGetIf(data_tags=miss_data_tags)
+            father._dadosScmGet('basic', data_tags=miss_data_tags)
             dados.update(father.dados)
-            self.update_dados(dados)
+            self.update(dados)
             return True
         else:
             return False        
     
-    def salvaPageScmHtml(self, html_path, pagename='basic', overwrite=False):
+    def salvaPageScmHtml(self, html_path, 
+        pagename : Literal['basico', 'polygon'] = 'basico', 
+        overwrite: bool = False):
         """Save SCM Html page 'Basicos' or 'Poligonal' tab.
 
         Args:
@@ -452,12 +399,10 @@ class Processo():
                                                 self.number+'_'+self.year)
         if not overwrite and path.with_suffix('.html').exists():
             return 
-        if( (pagename == 'basic'and not self.basic_html) or
-            (pagename == 'polygon'and not self.polygon_html) ):
-            self._pageRequest(pagename)             
-        html = self.basic_html if(pagename == 'basic') else self.polygon_html        
+        if not self._get_html(pagename) or overwrite:
+            self._pageRequest(pagename)                     
         # save the already fetched html as single file
-        writeHTML(str(path), html)   
+        writeHTML(str(path), self._get_html(pagename)  )   
 
 
         

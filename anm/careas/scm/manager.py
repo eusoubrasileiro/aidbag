@@ -195,8 +195,8 @@ class ProcessManagerClass(dict):
         """
         processo = Processo(processostr, None, manager=self, verbose=verbose)
         processo.db.basic_html = html_basicos
-        processo.db.poligon_html = html_poligonal
-        processo._dadosBasicosGet(download=False) 
+        processo.db.polygon_html = html_poligonal
+        processo._dadosScmGet('basic', download=False) 
         if html_poligonal:            
             if not processo._dadosPoligonalGet(download=False) and verbose:
                 print('Some error on poligonal page cant read poligonal table', file=sys.stderr)            
@@ -208,18 +208,18 @@ class ProcessManagerClass(dict):
         """
         path = pathlib.Path(path)        
         path_main_html = list(path.glob('*basicos*.html')) # html file on folder
-        path_poligon_html = list(path.glob('*poligonal*.html')) # html file on folder
+        path_polygon_html = list(path.glob('*poligonal*.html')) # html file on folder
         if not path_main_html:
             raise FileNotFoundError(".fromHtml main scm html file not found!")
         if not processostr: # get process str name by file name
             processostr= fmtPname(str(path_main_html[0]))
-        poligon_html = None
+        polygon_html = None
         main_html = try_read_html(path_main_html[0])
-        if path_poligon_html: # if present
-            path_poligon_html = try_read_html(path_poligon_html[0])
+        if path_polygon_html: # if present
+            path_polygon_html = try_read_html(path_polygon_html[0])
         elif verbose:            
             print('Didnt find a poligonal page html saved', file=sys.stderr)                
-        return Processo.fromStrHtml(processostr, main_html, poligon_html, verbose=verbose)
+        return Processo.fromStrHtml(processostr, main_html, polygon_html, verbose=verbose)
 
 
 ProcessManager = ProcessManagerClass()   
