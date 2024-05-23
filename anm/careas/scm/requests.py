@@ -1,11 +1,13 @@
-from ....web import (
+import sys 
+from ....web import (    
     htmlscrap,
     wPageNtlm
     )
+from requests.exceptions import (
+    HTTPError,
+    ReadTimeout
+)
 from ..config import config
-import sys 
-from requests.exceptions import ReadTimeout
-
 from .util import (
     fmtPname
 )
@@ -61,6 +63,9 @@ def pageRequest(pagename : str, processostr : str, wpage : wPageNtlm,
                     data=formdata, timeout=config['scm']['timeout'])
             if "Processo não encontrado" in wpage.response.text:            
                 raise BasicosErrorSCM(f"Processo {processostr} not found! Couldn't download.") 
+            elif ("ctl00_conteudo_gridPessoas" not in wpage.response.text or 
+                    "ctl00_conteudo_gridEventos" not in wpage.response.text): # integrity check of 'gridPessoas'
+                raise BasicosErrorSCM(f"Processo {processostr} download error.")
         elif pagename == 'polygon': # first connection to 'dadosbasicos' above MUST have been made before
             if (not hasattr(wpage, 'response') or 
                 'ctl00$conteudo$btnPoligonal' not in wpage.response.text or 
@@ -75,19 +80,19 @@ def pageRequest(pagename : str, processostr : str, wpage : wPageNtlm,
             if 'Erro ao mudar a versão para a data selecionada.' in wpage.response.text:
                 if retry_on_error:
                     return pageRequest(pagename, processostr, wpage, retry_on_error=retry_on_error-1)
-                raise BasicosErrorSCM(f"Processo {processostr} failed download poligonal from SCM database.")
-    except htmlscrap.requests.exceptions.HTTPError as http_error:
-        if "Object reference not set to an instance of an object" in wpage.response.text:                
-            raise BasicosErrorSCM(f"Processo {processostr} corrupted on SCM database. Couldn't download.")
-        elif 'xxxxxxxxxxx' in str(http_error): #  another case not yet implemented
-            if retry_on_error: 
-                return pageRequest(pagename, processostr, wpage, retry_on_error=retry_on_error-1)
-            raise
-    except ReadTimeout:
+                raise BasicosErrorSCM(f"Processo {processostr} failed download poligonal from SCM database.")    
+    except (BasicosErrorSCM, HTTPError, ReadTimeout) as e:
         if retry_on_error: 
             return pageRequest(pagename, processostr, wpage, retry_on_error=retry_on_error-1)
-        elif pagename == 'basic':
-            raise BasicosErrorSCM(f"Processo {processostr} Couldn't download. Timeout error x2.") 
-        elif pagename == 'polygon':
-            raise PoligonalErrorSCM(f"Processo {processostr} Couldn't download. Timeout error x2.")        
+        elif isinstance(e, BasicosErrorSCM):
+            raise
+        elif isinstance(e, HTTPError):
+            if "Object reference not set to an instance of an object" in wpage.response.text:                
+                raise BasicosErrorSCM(f"Processo {processostr} corrupted on SCM database. Couldn't download.")
+            ## todo implement error check for other specific http errors
+        elif isinstance(e, ReadTimeout):
+            if pagename == 'basic':
+                raise BasicosErrorSCM(f"Processo {processostr} Couldn't download. Timeout error x2.") 
+            elif pagename == 'polygon':
+                raise PoligonalErrorSCM(f"Processo {processostr} Couldn't download. Timeout error x2.") 
     return wpage.response.text, wpage.response.url
