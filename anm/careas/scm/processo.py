@@ -104,7 +104,31 @@ def threadsafe(function: callable) -> callable:
         return result 
     return wrapper
 
-class Processo():        
+class Processo():     
+    """
+    Class representing a mining process (Processo).
+
+    This class handles the retrieval, parsing, and storage of data related to a mining process SCM website.
+    The data is stored in a SQLite database using the SQLAlchemy ORM.
+
+    Attributes:
+        name (str): The formatted name of the mining process.
+        number (int): The process number.
+        year (int): The year of the process.
+        _isdisp (bool): Indicates if the process is related to availability (starts with 3xx.xxx/xxx).
+        _wpage (wPageNtlm): An instance of the wPageNtlm class for web scraping.
+        db (Processodb): The SQLAlchemy object representing the database row for this process.
+        lock (RLock): A reentrant lock for thread-safe access to the object.
+
+    Note:
+        The `dados` attribute, which contains the process data, is stored as a single JSON column in the SQLite database.
+        To retrieve the data, use `self.dados` (a deep copy is returned to avoid reference changes).
+        To update the data, first modify the dictionary obtained from `self.dados`, then call `self.update(modified_dict)`.
+        This will update the entire `dados` column in the database with the modified dictionary.
+        
+    Update Effect:
+        Based on this if the process is downloaded again only the fields that changed from the dictionary will be updated.
+    """       
     def __init__(self, processostr : str, wpagentlm : wPageNtlm = None, 
             processodb : Processodb = None, manager = None, 
             verbose : bool = False ):
@@ -137,8 +161,6 @@ class Processo():
         with self._manager.session() as session:
             session.delete(self.db)
             session.commit()
-
-    # properties to be used by other classes/functions not self
 
     @property
     @readdb    
@@ -181,20 +203,19 @@ class Processo():
     @updatedb
     def update(self, _dict):
         """        
-        better read copy it first then use this to update
-        no existing keys will be added
+        Read with self.dados first then update the dict,
+        and then call this to update the database.
+        Note:
+        There's only ONE column DADOS (JSON) on the DB.
+        No matter if you modify only one key the ENTIRE dictionary 
+        will ALWAYS be updated on the database.
         """
         self.db.dados.update(_dict)
 
     @readdb
     def __repr__(self):
         return self.db.__repr__()
-
-    @readdb
-    def __getitem__(self, key):
-        """get a copy of property from the data dictionary if exists"""        
-        return copy.deepcopy(self.db.dados[key])
-    
+   
     def runTask(self, task=SCM_SEARCH.BASICOS, wpage=None):
         """Run task from enum SCM_SEARCH desired data."""
         run = self['run']

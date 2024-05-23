@@ -97,8 +97,6 @@ class ProcessManagerClass(dict):
         example:
         getting processes with 'clayers' key in 'dados->iestudo'
         ProcessManager.getwithFilter( text("dados->'estudo ? 'clayers'"))
-        hence can't close session otherwise processes will be detached 
-        raising DetachedInstanceError
         """
         with self.lock:             
             with self.session() as session:
@@ -109,24 +107,19 @@ class ProcessManagerClass(dict):
                 list_processes.append(processo)
             return list_processes    
 
-
-    # Detached mode TODO: clean-up local dictionary for deleted objects 
-    # def update(self, key):
-    #     with self.lock:        
-    #         processo = self[key]
-    #         # check version and get a new one in case it is outdated
-    #         processodb = self.queryProcessodb(key)
-    #         if processodb is None: # deleted externally
-    #             super().__delitem__(key) # delete locally 
-    #             # will not call del object!
-    #             return None
-    #         elif processo.db.version != processodb.version: # updated externally                
-    #             # modify the local one since it might been used by some other thread
-    #             processo.update(processodb)
-    #             self.session.merge(processodb) # we want to keep the old ones
-    #             # since it is possibly been used by another thread
-    #         return processo
-
+    # def _getAll(self):
+    #     """
+    #     Get all processes from Database no dictionary interaction - 
+    #       for database interactions direct from python no SQL needed
+    #     """
+    #     with self.lock:
+    #         with self.session() as session:
+    #             processes = session.query(Processodb).all()
+    #         list_processes = []
+    #         for process in processes:
+    #             processo = Processo(process.name, processodb=process, manager=self) 
+    #             list_processes.append(processo)
+    #         return list_processes 
    
     def runTask(self, wp, *args, **kwargs):
         """run `runTask` on every process on database    
@@ -136,15 +129,13 @@ class ProcessManagerClass(dict):
 
         Any aditional args or keywork args for `runTask` can be passed. 
         Like dados=Processo.SCM_SEARCH.BASICOS or any tuple (function, args) pair
-        """
-        with self.session() as session:
-            for processodb in progressbar(session.query(Processodb).all()):
-                processo = Processo(processodb.name, processodb=processodb, 
-                    wpagentlm=wPageNtlm(wp.user, wp.passwd, ssl=True))
-                #must be one independent requests.Session for each process otherwise mess                        
-                processo.runTask(*args, **kwargs)
-            session.commit()
-   
+        """    
+        for processodb in progressbar(session.query(Processodb).all()):
+            processo = Processo(processodb.name, processodb=processodb, 
+                wpagentlm=wPageNtlm(wp.user, wp.passwd, ssl=True))
+            #must be one independent requests.Session for each process otherwise mess                        
+            processo.runTask(*args, **kwargs)            
+
     def GetorCreate(self, processostr, wpagentlm, task=SCM_SEARCH.ALL, verbose=False, run=True):
         """
         Create a new or get a Processo if it has not expired. 
