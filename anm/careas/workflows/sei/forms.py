@@ -71,7 +71,7 @@ def fillFormPrioridade(infos, **kwargs):
     work = infos['work']     
     match work: # awesome powerful match - NO multiple matches allowed but strong pattern matching
         case { 'resultado' : 'ok' }:                        
-            if infos['work']['areas']['percs'][0] >= 100:
+            if round(infos['work']['areas']['percs'][0], 2) >= 100:
                 xset(form, 'Resultado - área livre')
                 Obs += "Área livre. Recomenda-se dar seguimento a análise de plano."
             else: 
@@ -84,21 +84,21 @@ def fillFormPrioridade(infos, **kwargs):
             Obs += "Recomenda-se o indeferimento por interferência total."
         case { 'resultado' : 'opção'}:
             xset(form, 'Resultado - parcial n áreas remanescentes')
-            areas = [f"{pdecimal(area)}," for area in infos['work']['areas']['values']]
+            areas = [f"{pdecimal(area)} ha," for area in infos['work']['areas']['values']]
             areas = ' '.join(areas)
             Obs += ("A área original requerida após interferência foi reduzida"
-                f" às seguintes áreas: {areas[:-1]} em ha." # remove last ','
+                f" às seguintes áreas: {areas[:-1]}." # remove last ','
                 f" Recomenda-se formular exigência de opção conforme fundamentação acima.")
     match work['type']:        
-        case WORK_ACTIVITY.REQUERIMENTO_PESQUISA: 
+        case WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_PESQUISA: 
             xset(form, 'Regime Autorização Pesquisa')
-        case WORK_ACTIVITY.REQUERIMENTO_LICENCIAMENTO:
+        case WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_LICENCIAMENTO:
             xset(form, 'Regime Registro Licença')
             xset(form, 'Licença Municipal Sim')
             xset(form, 'Licença Municipal Satisfatório')
-        case WORK_ACTIVITY.REQUERIMENTO_PLG:
+        case WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_PLG:
             xset(form, 'Regime Permissão Lavra')
-        case WORK_ACTIVITY.REQUERIMENTO_REGISTRO_EXTRAÇÃO:
+        case WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_REGISTRO_EXTRAÇÃO:
             xset(form, 'Regime Registro Extracao')
             xset(form, 'Anuência de Titular Sim')
     if work['edital']:
@@ -106,7 +106,8 @@ def fillFormPrioridade(infos, **kwargs):
         if nup_pai == infos['NUP']:  # processo é originário do edital (não é filho!)                
             raise Exception(f"Este processo  {nup_pai} é Pai e foi à edital {tipo} e seu arquivamento é por nota técnica")
         Obs = f"Proveniente de edital de disponibilidade {tipo} sendo sua origem do processo {nup_pai} " + Obs
-
+        # limpar o resultado para evitar confusão sobre opção
+        xset(form, 'Resultado - parcial n áreas remanescentes', '')
     layer = list(map(lambda x: unidecode(x.lower()), infos['estudo']['clayers']))
     for text_layer in layer:
         text_layer = unidecode(text_layer)
@@ -121,6 +122,7 @@ def fillFormPrioridade(infos, **kwargs):
             "que disciplina o procedimento de bloqueio. "
             "O termo de renúncia anexo ao Parecer é o dispositivo que possibilita, "
             "à critério da ANM, prosseguir com a análise do requerimento.")
+
         elif 'sustentavel' in text_layer:          
             xset(form, 'Área restrição parcial Sim')
             xset(form, 'Área especial de restrição parcial - Não', '') # unmark
