@@ -1,0 +1,112 @@
+import re 
+
+class pnum():
+    """
+    Class to handle process numbers like 847/1945, 02.537/1938, 832537-2016, 
+    48403.832.537/2016-09, 832.537/2016-09 or any other variation also
+    including mixing unexpected separators
+
+    Note inequality comparison is not fully support for processes 
+    300 like 300.xxx/yyyy due its nature.
+    """
+    # reversed pattern - the only way that effectly works for anything
+    # since year is the more striking characteristic to match first 
+    # [1-2]\d{3} years from 1900-2999 - reversed pattern
+    rpattern = '(\d{3}[1-2])\D(\d{1,3})\D*(\d{0,3})'
+    pattern = re.compile(rpattern)
+    def __init__(self, str_: str = None, yng: list = None):                 
+        if yng:
+            y, n, g = yng
+        elif str_: # use first found only             
+            y, n, g = pnum._getAllgroups(str_)[0]
+        else:
+            raise ValueError("str or yng must be provided")
+        g = (3-len(g))*'0'+g # prepend with zeros
+        n = (3-len(n))*'0'+n # prepend with zeros
+        self._g = g
+        self._n = n
+        self._y = y
+        self.std = f'{g}.{n}/{y}' # standard number-name anm
+        self._unumber = int(f"{y}{g}{n}")
+        self._number = f"{g}{n}"
+        # processo descarte 300.xxx/year
+        self._isdisp = True if g == '300' else False 
+
+    @classmethod
+    def _getAllgroups(cls, str_: str):
+        """Get all process groups numbers in string """
+        unreverse = lambda x: [g[::-1] for g in x]
+        yngs = [] # reverse match then reverse the groups
+        try:
+            for found in pnum.pattern.findall(str_[::-1])[::-1]:
+                yngs.append(unreverse(found))
+        except Exception as e:
+            raise ValueError("Not a valid process number as str")
+        return yngs
+
+    @classmethod
+    def getAll(cls, str_: str):
+        """
+        Find all process numbers in a string
+        """
+        yngs = pnum._getAllgroups(str_)
+        return [ pnum(yng=yng) for yng in yngs]         
+
+    def __repr__(self):
+        return self.std
+
+    @property
+    def year(self):
+        return self._y
+
+    @property
+    def number(self):
+        return self._number
+
+    @property
+    def unumber(self):
+        return self._unumber
+
+    @property
+    def isdisp(self):
+        """is disponibilidade or starts with '300.xxx/yyyy'"""
+        return self._isdisp
+
+    def __eq__(self, other):
+        return other.unumber == self.unumber 
+
+    def __lt__(self, other): # less than 
+        if not self.isdisp or not other.isdisp:
+            return other.unumber < self.unumber
+        match (self.isdisp, other.isdisp):
+            case (True, True):
+                if self.year != other.year:
+                    return other.year < self.year
+                # same year
+                return other.number < self.number
+            case (False, True) | (True, False):
+                if self.year != other.year:
+                    return other.year < self.year
+                # same year
+                raise ValueError("can't compare 300 process number with" 
+                    "the same year of other not 300")
+
+
+def test_pnum_getAll():
+    testtext = "847/1945,xx2.537/2016,832537-2016,48403.832.537/2016-09,832.537/2016-09"
+    result = [p.unumber for p in pnum.getAll(testtext)]
+    expected = [1945000847, 2016002537, 2016832537, 2016832537, 2016832537]
+    assert  result == expected
+
+def test_pnum_cmp():
+    a = pnum('847/1945')
+    b = pnum('1325/1944')
+    a.number, a.year, a.unumber, b.unumber, b < a, b > a
+    assert a.number == '000847'
+    assert a.year == '1945'
+    assert a.unumber == 1945000847
+    assert b.unumber == 1944001325
+    assert a < b
+
+test_pnum_cmp()
+test_pnum_getAll()
