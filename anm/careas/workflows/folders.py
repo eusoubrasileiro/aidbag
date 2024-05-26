@@ -2,8 +2,11 @@ from aidbag.web.json import json_to_path, path_to_json
 
 from ..config import config
 from ..util import processPath
-from .. import scm 
-from ..scm import regex_process
+from ..scm import (
+    pud, 
+    NotProcessNumber, 
+    ProcessManager
+)
 
 import json
 import pathlib
@@ -49,16 +52,19 @@ def currentProcessGet(path=None, sort='name', clear=True):
     if not path: # default work folder of processes
         path = config['processos_path']        
     path = pathlib.Path(path)    
-    process_folders = []
     paths = path.glob('*') 
     if 'time' in sort:
         paths = sorted(paths, key=os.path.getmtime)[::-1]        
     elif 'name' in sort:
         paths = sorted(paths)   
     for cur_path in paths: # remove what is NOT a process folder
-        if regex_process.search(str(cur_path)) and cur_path.is_dir():
-            process_folders.append(cur_path.absolute())   
-            ProcessPathStorage.update({ scm.fmtPname(str(cur_path)) : cur_path.absolute()})            
+        if not cur_path.is_dir():
+            continue
+        try:
+            pud(str(cur_path))
+            ProcessPathStorage.update({ pud(str(cur_path)).str : cur_path.absolute()})      
+        except NotProcessNumber:
+            continue 
     with open(config['wf_processpath_json'], "w") as f: # Serialize data into file
         json.dump(ProcessPathStorage, f, default=path_to_json)
     return ProcessPathStorage
@@ -77,7 +83,7 @@ def currentProcessMove(process_str, dest_folder='Concluidos',
     * delpath : False (default) 
         delete the path from `ProcessPathStorage` (stop tracking)
     """    
-    process_str = scm.fmtPname(process_str) # just to make sure it is unique
+    process_str = pud(process_str).str # just to make sure it is unique
     dest_path =  pathlib.Path(rootpath).joinpath(dest_folder).joinpath(
         processPath(process_str, fullpath=False)).resolve() # resolve, solves "..\" to an absolute path 
     shutil.move(ProcessPathStorage[process_str].absolute(), dest_path)    
@@ -90,10 +96,10 @@ def currentProcessMove(process_str, dest_folder='Concluidos',
 
 
 def ProcessManagerFromHtml(path=None):    
-    """fill in `scm.ProcessManager` using html from folders of processes"""    
+    """fill in `ProcessManager` using html from folders of processes"""    
     if not path:
         path = pathlib.Path(config['processos_path']).joinpath("Concluidos")    
     currentProcessGet(path)
-    scm.ProcessManager.fromHtmls(ProcessPathStorage.values())        
+    ProcessManager.fromHtmls(ProcessPathStorage.values())        
 
 

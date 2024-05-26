@@ -1,4 +1,4 @@
-from ..scm.util import numberyearPname
+from ..scm.pud import pud 
 from enum import Enum
 from ....general import closest_enum
 
@@ -26,7 +26,7 @@ def downloadMinuta(wpage, processtr, pdfpath="minuta.pdf", tipo=MINUTA.MINUTA_AL
             path and name to save the pdf             
         * tipo: MINUTA
     """
-    number, year = numberyearPname(processtr) # `fmtPname` unique 
+    number, year = pud(processtr).numberyear 
     minuta_get = f"""http://sigareas.dnpm.gov.br/Paginas/Usuario/Imprimir.aspx?tipo={tipo.value}&numero={number}&ano={year}"""
     wpage.get(minuta_get)
     if wpage.response.status_code != 200:

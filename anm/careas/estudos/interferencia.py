@@ -11,11 +11,10 @@ from bs4 import BeautifulSoup
 
 
 from ..config import config
-from ..scm import (
-    numberyearPname,
-    fmtPname,
+from ..scm import (    
     SCM_SEARCH,
     util,
+    pud,
     ProcessManager,
     PoligonalErrorSCM,
     BasicosErrorSCM
@@ -82,10 +81,11 @@ class Interferencia:
         """
         self._processo = None 
         self.processo_path = processPath(processostr, create=True)
-        self.name = fmtPname(processostr)
+        self.pud = pud(processostr)
+        self.name = self.pud.str
         if getprocesso:
             self._processo = ProcessManager.GetorCreate(self.name, wpage, SCM_SEARCH.ALL, verbose)  
-        self.number, self.year = numberyearPname(self.name)
+        self.number, self.year = self.pud.numberyear
         self.wpage = wpage
         self.verbose = verbose       
         """tabele de interferencia extraida do sigareas html"""
@@ -172,7 +172,7 @@ class Interferencia:
         self.tabela_interf['Dads'] = 0
         self.tabela_interf['Sons'] = 0
         self.tabela_interf['Ativo'] = True
-        self.tabela_interf.loc[:,'Processo'] = self.tabela_interf.Processo.apply(lambda x: fmtPname(x))
+        self.tabela_interf.loc[:,'Processo'] = self.tabela_interf.Processo.apply(lambda x: pud(x).std)
         # tabela c/ processos associadoas aos processos interferentes
         self.tabela_assoc = pd.DataFrame()
         for name in list(set(self.tabela_interf.Processo)): # Unique Process Only
@@ -233,7 +233,7 @@ class Interferencia:
             events['Dads'] = row['Dads']
             events['Sons'] = row['Sons']
             events['Ativo'] = row['Ativo']
-            events['Processo'] = events.Processo.apply(lambda x: fmtPname(x)) # standard names
+            events['Processo'] = events.Processo.apply(lambda x: pud(x).std) # standard names
             ##### Add an additional event row if necessary: #######
             # caso a primeira data dos eventos diferente da prioritária correta
             prioridade = pdados['prioridadec'] if 'prioridadec' in pdados else pdados['prioridade']             
@@ -272,7 +272,7 @@ class Interferencia:
         # emitida pela prefeitura em até 90 dias       
         for _,row in self.tabela_interf_master.iterrows():
             EventData = row['Data']
-            if ('licen' in ProcessManager[row['Processo']]['tipo'].lower() 
+            if ('licen' in ProcessManager[row['Processo']].dados['tipo'].lower() 
                 and (row['EvSeq'] == -3 or row['EvSeq'] == 1) ): # only on 1st event
                 EventData = np.datetime64(EventData) - np.timedelta64(90,'D')
             if EventData < data_prioridade:
@@ -318,13 +318,23 @@ class Interferencia:
 
 
     def to_database(self):
-        """update database with ['estudo']['table']"""
-        estudo = { 'done' : False, 'time' : datetime.now() , 'clayers' : self.clayers }             
+        """
+        update database with ['estudo']['table'] 
+        keep important old information (like 'done', 'pdf' etc.)
+        if 'estudo' already on dados
+        """
+        dados = ProcessManager[self.name].dados        
+        if 'estudo' in dados: # keep some old information
+            estudo = dados['estudo']                        
+            estudo.update({'clayers' : self.clayers}) 
+        else:
+            estudo = { 'done' : False, 'clayers' : self.clayers, 'type' : 'interferencia'}             
+        estudo['time'] = datetime.now() # update time
         if self.tabela_interf_master is not None:            
             table = self.tabela_interf_master.copy()
             table = TableStr(table)      
-            estudo['table'] = table.to_dict()                    
-        ProcessManager[self.name]['estudo'] = estudo
+            estudo['table'] = table.to_dict()                            
+        ProcessManager[self.name].update({'estudo' : estudo})
   
 
     def to_excel(self):
@@ -412,7 +422,7 @@ class Interferencia:
           
     @staticmethod
     def from_html(wpage, dir='.', overwrite=False):
-        name = util.findfmtPnames(pathlib.Path(dir).absolute().stem)[0]
+        name = pud.getAll(pathlib.Path(dir).absolute().stem)[0]
         if overwrite and processostr in ProcessManager: # delete from database in case of overwrite            
             del ProcessManager[processostr]
             estudo = Interferencia(wpage, name, verbose=False, getprocesso=True)        
@@ -433,7 +443,7 @@ class Interferencia:
 
     @staticmethod
     def from_excel(dir='.'):            
-        name = util.findfmtPnames(pathlib.Path(dir).absolute().stem)[0]
+        name = pud.getAll(pathlib.Path(dir).absolute().stem)[0]
         processo = ProcessManager[name]
         estudo = Interferencia(None, processo.name, verbose=False, getprocesso=False)     
         estudo._processo = processo         

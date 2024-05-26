@@ -20,10 +20,8 @@ from ..config import config
 from .processo import (
     Processo, 
     Processodb,
-    SCM_SEARCH
-    )
-from .util import (
-    fmtPname
+    SCM_SEARCH,
+    pud 
     )
 from ....web.htmlscrap import wPageNtlm
 from ....web.io import try_read_html
@@ -36,7 +34,7 @@ class ProcessManagerClass(dict):
         1. connecting/open page of SCM again
         2. parsing all information again    
     * If it was already parsed save in the sqlite3 database
-    * key : unique `fmtPname` process string
+    * key : unique `pud` process string
     * value : `scm.Processo` object
     """    
     def __init__(self, debug=False): 
@@ -78,7 +76,7 @@ class ProcessManagerClass(dict):
         Get process from local dictionary first or Database second. 
         """
         with self.lock:
-            key = fmtPname(key)    
+            key = pud(key).str     
             if key in self:
                 processo = super().__getitem__(key)   
                 return processo
@@ -144,7 +142,7 @@ class ProcessManagerClass(dict):
         processostr : numero processo format xxx.xxx/ano
         wpage : wPage html webpage scraping class com login e passwd preenchidos
         """
-        processostr = fmtPname(processostr)        
+        processostr = pud(processostr).str        
         # try from database or self
         processo = self[processostr]                        
         if processo is not None:
@@ -203,7 +201,7 @@ class ProcessManagerClass(dict):
         if not path_main_html:
             raise FileNotFoundError(".fromHtml main scm html file not found!")
         if not processostr: # get process str name by file name
-            processostr= fmtPname(str(path_main_html[0]))
+            processostr= pud(str(path_main_html[0])).str
         polygon_html = None
         main_html = try_read_html(path_main_html[0])
         if path_polygon_html: # if present
@@ -216,7 +214,7 @@ class ProcessManagerClass(dict):
 ProcessManager = ProcessManagerClass()   
 """Container and Factory of Processos's 
 Stores web-scrapped and parsed data on local dictionary and Database
-* key : unique `fmtPname` process string
+* key : unique `pud.str` process string
 * value : `scm.Processo` object
 Not using any other layer of cache making sqlite3 queries everytime.
 Everytime means: each object property access/modification is a new query by SQL Alchemy ORM standard. 

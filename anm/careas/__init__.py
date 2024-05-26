@@ -3,10 +3,7 @@ from . import scm
 from .scm import (
     Processo, 
     ProcessManager, 
-    findfmtPnames,
-    findPnames,
-    fmtPname,
-    numberyearPname,    
+    pud    
 )
 
 from .config import *

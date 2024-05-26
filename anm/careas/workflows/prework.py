@@ -2,6 +2,7 @@ import traceback
 import sys 
 import tqdm
 
+from ....web.htmlscrap import wPageNtlm
 from .. import estudos
 from .. import scm
 from ..config import config
@@ -10,7 +11,9 @@ from .sei import Sei, Processo
 from .enums import ESTUDO_TYPE
 
 
-def BatchPreAnalyses(wpage, processos, estudo=ESTUDO_TYPE.INTERFERENCIA, verbose=False, overwrite=False, **kwargs):
+def BatchPreAnalyses(wpage : wPageNtlm, processos: list[scm.pud], 
+    estudo : ESTUDO_TYPE = ESTUDO_TYPE.INTERFERENCIA, 
+    verbose : bool = False, overwrite: bool = False, **kwargs):
     """        
     Batch run pre-analyses (prepare analyses) for *multiple processos* generating their estudos of interferência or opção.
     Create folders, spreadsheets and database entries from web-scrapped data.
@@ -29,6 +32,7 @@ def BatchPreAnalyses(wpage, processos, estudo=ESTUDO_TYPE.INTERFERENCIA, verbose
     succeed_NUPs = [] # suceed 
     failed_NUPS = [] # failed
     for processo in tqdm.tqdm(processos):        
+        processo = processo.str
         try:            
             if estudo is ESTUDO_TYPE.INTERFERENCIA:
                 _ = estudos.Interferencia.make(wpage, processo, verbose=verbose, overwrite=overwrite)   
@@ -41,7 +45,7 @@ def BatchPreAnalyses(wpage, processos, estudo=ESTUDO_TYPE.INTERFERENCIA, verbose
                     psei.download_latest_documents(10)                
         except Exception as e:              
             print(f"Process {processo} Exception: {traceback.format_exc()}", file=sys.stderr)                       
-            failed_NUPS.append((scm.ProcessManager[scm.fmtPname(processo)]['NUP'],''))            
+            failed_NUPS.append((scm.ProcessManager[processo].dados['NUP'],''))            
         else:
             succeed_NUPs.append(proc['NUP'])  
     # print all NUPS

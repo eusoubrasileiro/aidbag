@@ -46,7 +46,7 @@ def dispDadSon(name, infer=True, areatol=0.1):
             print('associdados: ', scm.ProcessManager[name]['associados'], file=sys.stdout)
             raise Exception(f'`dispSearch` did not found son-dad from {name}')                
         return found
-    p = scm.ProcessManager[scm.fmtPname(name)]
+    p = scm.ProcessManager[name]
     nparents = len(p['parents'])
     nsons = len(p['sons'])
     if nparents > 1 or nsons > 1:        

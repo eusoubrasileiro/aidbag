@@ -2,9 +2,9 @@ import sys, copy
 from datetime import datetime
 from bs4 import BeautifulSoup
 from ....web import htmlscrap
+from .pud import pud 
 from .util import (
     comparePnames,
-    fmtPname
 )
 
 # HTML tags for SCM main page 
@@ -32,8 +32,10 @@ def parseNUP(basicos_page):
     return soup.select_one('[id=ctl00_conteudo_lblNup]').text   
 
 
-def parseDadosBasicos(basicos_page, name, verbose, data_tags=scm_data_tags):    
+def parseDadosBasicos(basicos_page, name, verbose, data_tags):    
     soup = BeautifulSoup(basicos_page, "html.parser")
+    if not data_tags:
+        data_tags = scm_data_tags
     dados = htmlscrap.dictDataText(soup, data_tags)
     if dados['data_protocolo'] == '': # might happen
         dados['data_protocolo'] = dados['prioridade']
@@ -58,7 +60,7 @@ def parseDadosBasicos(basicos_page, name, verbose, data_tags=scm_data_tags):
         # table_associados[1][0] # coluna 0 'processo'                      
         associados = {}
         for i in range(1, nrows): # A -> B due all kinds of mess is same as B -> A
-            associado = [fmtPname(table_associados[i][j]) for j in [0, 5]] # a A->B pair first
+            associado = [pud(table_associados[i][j]).str for j in [0, 5]] # a A->B pair first
             associado.remove(name) # remove self 
             associado = associado[0]
             # check for duplicated process associations - drop and anotate inconsistency
@@ -89,7 +91,7 @@ def parseDadosBasicos(basicos_page, name, verbose, data_tags=scm_data_tags):
                 }
             )
         dados['associados'] = associados
-        # remove associados after deassociados = they are meaningless now
+        # remove associados deassociados = they are meaningless now
         dados['associados'] = { name : attrs for name, attrs in dados['associados'].items() 
                                 if not attrs['data-deass'] }
         # from here we get direct sons and parents/anscestors - from process names only

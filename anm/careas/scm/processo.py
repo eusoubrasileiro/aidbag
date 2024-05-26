@@ -22,11 +22,7 @@ from . import requests
 from . import ancestry
 from ..config import config
 
-from .util import (
-    fmtPname,
-    numberyearPname,
-    processUniqueNumber
-)
+from .pud import pud 
 
 from .parsing import (
     parseDadosBasicos,
@@ -132,20 +128,19 @@ class Processo():
     def __init__(self, processostr : str, wpagentlm : wPageNtlm = None, 
             processodb : Processodb = None, manager = None, 
             verbose : bool = False ):
-        super().__init__()     
-        name = fmtPname(processostr)
-        self.name = name # will/MUST never change
+        super().__init__()                     
+        self.pud = pud(processostr)
+        self.name = self.pud.str # will/MUST never change
         self._manager = manager
         with manager.session() as session:                        
             if processodb is None:
-                self.db = Processodb(fmtPname(processostr))
+                self.db = Processodb(self.name)
                 self.db.dados.update(default_run_state())
             else:
                 self.db = processodb     
             session.add(self.db)   
-            session.commit()
-        # `fmtPname` unique string process number/year
-        self.number, self.year = numberyearPname(name)
+            session.commit()                
+        self.number, self.year = self.pud.numberyear        
         self._isdisp = True if str(self.number)[0] == 3 else False # if starts 3xx.xxx/xxx disponibilidade  
         if wpagentlm: 
             self._wpage = wPageNtlm(wpagentlm.user, wpagentlm.passwd)
@@ -218,7 +213,7 @@ class Processo():
    
     def runTask(self, task=SCM_SEARCH.BASICOS, wpage=None):
         """Run task from enum SCM_SEARCH desired data."""
-        run = self['run']
+        run = self.dados['run']
         if self._wpage is None: # to support being called without wp set 
             self._wpage = wpage
         if task in SCM_SEARCH: # passed argument to perform a default call without args
@@ -246,22 +241,18 @@ class Processo():
         the source of the search is always passed to be ignored on the next search.
 
         """
-        dados = self.dados
-        if not dados['run']['basic']:
+
+        if not self.dados['run']['basic']:
             self._dadosScmGet('basic')
 
         if self._verbose:
             print("expandAssociados - getting associados: ", self.name,
             ' - ass_ignore: ', ass_ignore, file=sys.stderr)
 
-        if dados['run']['associados']: 
+        if self.dados['run']['associados']: 
             return dados['associados']
 
-        if not dados['associados']:
-            dados['run']['associados'] = True
-            self.update(dados)
-            return
-        
+        dados = self.dados        
         # local copy for object search -> removing circular reference
         associados = dados['associados']      
         if ass_ignore: # equivalent to ass_ignore != ''
@@ -326,17 +317,17 @@ class Processo():
         """
         Build graph of all associados.
         Get root node or older parent.               
-        """
-        dados = self.dados
+        """        
         if not dados['run']['basic']:
             self._dadosScmGet('basic')
             
-        if dados['run']['ancestry']:
+        if self.dados['run']['ancestry']:
             return dados['prioridadec']
 
         if self._verbose:
             print("ancestrySearch - building graph: ", self.name, file=sys.stderr)        
         
+        dados = self.dados
         dados['run']['ancestry'] = True        
         dados['prioridadec'] = dados['prioridade']
         self.update(dados)
@@ -375,7 +366,7 @@ class Processo():
         """
         dados = self.dados
         if not dados['run'][page_key]:            
-            if redownload or self._get_html(page_key) is None: # download get with python.requests page html response
+            if redownload or not self._get_html(page_key): # download get with python.requests page html response
                 self._pageRequest(page_key)
             if self._get_html(page_key): # if sucessful get html
                 if self._verbose:
@@ -383,7 +374,7 @@ class Processo():
                 if page_key == 'basic':
                     newdados = parseDadosBasicos(self.basic_html, self.name, self._verbose, data_tags) 
                 elif page_key == 'polygon':
-                    newdados = parseDadosPoligonal(self.poligonal_html, self._verbose)
+                    newdados = parseDadosPoligonal(self.polygon_html, self._verbose)
                 dados.update(newdados)           
                 dados['run'][page_key] = True
                 self.update(dados)  
@@ -392,14 +383,14 @@ class Processo():
     def _dadosBasicosFillMissing(self):
         """try fill dados faltantes pelo processo associado (pai) 1. UF 2. substancias
             need to be reviewed, wrong assumption about parent process   
-        """
-        dados = self.dados
-        if not dados['run']['associados']:
+        """        
+        if not self.dados['run']['associados']:
             self._expandAssociados()
-        if self['associados']:
+        dados = self.dados
+        if dados['associados']:
             miss_data_tags = getMissingTagsBasicos(dados)        
             father = self._manager.GetorCreate(dados['parents'][0], self._wpage, verbose=self._verbose, run=False)
-            father._dadosScmGet('basic', data_tags=miss_data_tags)
+            father._dadosScmGet('basic', data_tags=miss_data_tags)            
             dados.update(father.dados)
             self.update(dados)
             return True

@@ -62,7 +62,7 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
     if not ProcessPathStorage: # empty process path storage
         currentProcessGet() # get current list of processes
 
-    process_name = scm.fmtPname(process_name)         
+    process_name = pud(process_name).str         
 
     if (activity is WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL_DAD):
         usefolder = False
@@ -97,6 +97,12 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
     # Inclui termo de abertura de processo eletronico se data < 2020 (protocolo digital nov/2019)
     if termo_abertura and process['data_protocolo'].year < 2020:  
         psei.InsereTermoAberturaProcessoEletronico()    
+
+    #
+    #
+    # verificar clayers bloqueio to rename doc externo to Simulação
+    #
+    #
         
     if (activity in WORK_ACTIVITY.INTERFERENCIA_GENERICO_NOT_EDITAL or 
         activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_REGISTRO_EXTRAÇÃO):
@@ -114,7 +120,7 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
             psei.insereDocumentoExterno(info['work']['minuta']['title'], pdf_adicional)
         psei.insereFormPrioridade(info)
         # debugging clayers
-        print(f" {info['NUP']} clayers {info['estudo']['clayers']}", file=sys.stderr)
+        # print(f" {info['NUP']} clayers {info['estudo']['clayers']}", file=sys.stderr)
     # EDITAL GOES ABOVE TOO! but for now .. let's wait
     elif (activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_RESTUDO or 
         activity in WORK_ACTIVITY.OPCAO_REQUERIMENTO):

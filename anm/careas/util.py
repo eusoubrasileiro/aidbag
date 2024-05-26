@@ -11,7 +11,7 @@ def processPath(process_str, create=False, fullpath=True):
     * create: bool (default False)
         create the path/folder if true (default)
     """
-    folder_name = '-'.join(scm.numberyearPname(process_str))
+    folder_name = '-'.join(scm.pud(process_str).numberyear)
     processo_path = os.path.join(config['processos_path'], folder_name)  
     if create and not os.path.exists(processo_path): # cria a pasta se nao existir
         os.mkdir(processo_path)      

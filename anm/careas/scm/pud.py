@@ -1,10 +1,15 @@
 import re 
 
-class pnum():
+class NotProcessNumber(Exception):
     """
-    Class to handle process numbers like 847/1945, 02.537/1938, 832537-2016, 
-    48403.832.537/2016-09, 832.537/2016-09 or any other variation also
-    including mixing unexpected separators
+    Raised when a string is not a valid process number
+    """
+
+class pud():
+    """
+    Class to handle process unique identification numbers like 847/1945, 
+    02.537/1938, 832537-2016, 48403.832.537/2016-09, 832.537/2016-09 or 
+    any other variation also including mixing unexpected separators
 
     Note inequality comparison is not fully support for processes 
     300 like 300.xxx/yyyy due its nature.
@@ -18,7 +23,7 @@ class pnum():
         if yng:
             y, n, g = yng
         elif str_: # use first found only             
-            y, n, g = pnum._getAllgroups(str_)[0]
+            y, n, g = pud._getAllgroups(str_)[0]
         else:
             raise ValueError("str or yng must be provided")
         g = (3-len(g))*'0'+g # prepend with zeros
@@ -36,12 +41,13 @@ class pnum():
     def _getAllgroups(cls, str_: str):
         """Get all process groups numbers in string """
         unreverse = lambda x: [g[::-1] for g in x]
-        yngs = [] # reverse match then reverse the groups
-        try:
-            for found in pnum.pattern.findall(str_[::-1])[::-1]:
-                yngs.append(unreverse(found))
-        except Exception as e:
-            raise ValueError("Not a valid process number as str")
+        yngs = [] # reverse match then reverse the groups        
+        groups = pud.pattern.findall(str_[::-1])[::-1]
+        if groups:
+            for group in groups:
+                yngs.append(unreverse(group))
+        else:
+            raise NotProcessNumber(f"{str_} is not a valid process number")
         return yngs
 
     @classmethod
@@ -49,11 +55,19 @@ class pnum():
         """
         Find all process numbers in a string
         """
-        yngs = pnum._getAllgroups(str_)
-        return [ pnum(yng=yng) for yng in yngs]         
+        yngs = pud._getAllgroups(str_)
+        return [ pud(yng=yng) for yng in yngs]         
+
+    def __str__(self):
+        return self.std
 
     def __repr__(self):
-        return self.std
+        return self.__str__()
+
+    @property 
+    def str(self):
+        """standard name"""
+        return self.__str__()
 
     @property
     def year(self):
@@ -62,6 +76,11 @@ class pnum():
     @property
     def number(self):
         return self._number
+
+    @property
+    def numberyear(self) -> tuple:
+        """number and year as tuple"""
+        return self._number, self._y
 
     @property
     def unumber(self):
@@ -94,13 +113,13 @@ class pnum():
 
 def test_pnum_getAll():
     testtext = "847/1945,xx2.537/2016,832537-2016,48403.832.537/2016-09,832.537/2016-09"
-    result = [p.unumber for p in pnum.getAll(testtext)]
+    result = [p.unumber for p in pud.getAll(testtext)]
     expected = [1945000847, 2016002537, 2016832537, 2016832537, 2016832537]
     assert  result == expected
 
 def test_pnum_cmp():
-    a = pnum('847/1945')
-    b = pnum('1325/1944')
+    a = pud('847/1945')
+    b = pud('1325/1944')
     a.number, a.year, a.unumber, b.unumber, b < a, b > a
     assert a.number == '000847'
     assert a.year == '1945'

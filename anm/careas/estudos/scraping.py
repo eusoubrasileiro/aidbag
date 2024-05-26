@@ -3,10 +3,7 @@ from bs4 import BeautifulSoup
 import pandas as pd 
 from ..config import config 
 from ....web import htmlscrap
-from ..scm import (
-    numberyearPname,
-    fmtPname
-)
+from ..scm import pud 
 
 class CancelaUltimoEstudoFailed(Exception):
     """could not cancel ultimo estudo sigareas"""
@@ -80,7 +77,7 @@ def getEventosSimples(wpage, processostr):
     wpage : class wPage
     processostr : str
     return : (Pandas DataFrame)"""
-    processo_number, processo_year = numberyearPname(processostr)
+    processo_number, processo_year = pud(processostr).numberyear
     wpage.get(('http://sigareas.dnpm.gov.br/Paginas/Usuario/ListaEvento.aspx?processo='+
           processo_number+'_'+processo_year))
     htmltxt = wpage.response.content
