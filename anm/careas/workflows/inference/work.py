@@ -82,10 +82,11 @@ def inferWork(process, folder='.'):
 
     if isinstance(folder, pathlib.Path):
         # backward compatibility - search/parse local folder
-        # Estudo de Interferência deve chamar 'R@&.pdf' glob.glob("R@&*.pdf")[0] seja o primeiro encontrado   
+        # Estudo de Interferência deve chamar config['sigareas']['doc_prefix']*.pdf' 
+        # glob.glob [0] seja o primeiro encontrado   
         if 'sigareas' not in infos['estudo']:
             infos['estudo']['sigareas'] = {'pdf_path' : None, 'pdf_text' : None}        
-            pdf_sigareas = [ file for file in folder.glob(config['sigares']['doc_prefix'] + '*.pdf') ]
+            pdf_sigareas = [ file for file in folder.glob(config['sigareas']['doc_prefix'] + '*.pdf') ]
             infos['estudo']['sigareas']['pdf_path'] = pdf_sigareas[0] if pdf_sigareas else None
             infos['estudo']['sigareas']['pdf_text'] = readPdfText(infos['estudo']['sigareas']['pdf_path']) if pdf_sigareas else None                
         if infos['estudo']['sigareas']['pdf_text']:            

@@ -27,7 +27,7 @@ config['interferencia']['html_prefix'] = {'this' : 'interferencia', 'legacy': 's
 config['interferencia']['file_prefix'] = 'eventos_prioridade'
 
 # module independent configurations
-config['sigares'] = {'doc_prefix' : 'R@&' }
+config['sigareas'] = {'doc_prefix' : 'rltrx' } # can't use special characters issues with selenium
 
 def SetHome(home=str(Path.home())): # default get userhome folder
     """

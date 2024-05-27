@@ -272,7 +272,7 @@ class Interferencia:
         # emitida pela prefeitura em até 90 dias       
         for _,row in self.tabela_interf_master.iterrows():
             EventData = row['Data']
-            if ('licen' in ProcessManager[row['Processo']].dados['tipo'].lower() 
+            if ('licen' in ProcessManager[row['Processo']]['tipo'].lower() 
                 and (row['EvSeq'] == -3 or row['EvSeq'] == 1) ): # only on 1st event
                 EventData = np.datetime64(EventData) - np.timedelta64(90,'D')
             if EventData < data_prioridade:
