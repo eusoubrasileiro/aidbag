@@ -6,6 +6,8 @@ import datetime
 config = {}
 config['sigareas'] = {}
 config['sigareas']['timeout'] = 3*60 # sometimes sigareas server/r. interferncia takes a long long time to answer 
+# module independent configurations
+config['sigareas']['doc_prefix'] = 'rltrx' # can't use special characters issues with selenium
 
 #configs are per module
 config['scm'] = {} 
@@ -26,8 +28,7 @@ config['interferencia'] = {}
 config['interferencia']['html_prefix'] = {'this' : 'interferencia', 'legacy': 'sigareas_rinterferencia'}
 config['interferencia']['file_prefix'] = 'eventos_prioridade'
 
-# module independent configurations
-config['sigareas'] = {'doc_prefix' : 'rltrx' } # can't use special characters issues with selenium
+
 
 def SetHome(home=str(Path.home())): # default get userhome folder
     """
