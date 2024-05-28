@@ -4,13 +4,12 @@ from .pud import (
     NotProcessNumber
 )
 
-from .processo import (
-    Processo, 
+from .manager import (
+    ProcessManager,
+    Processo,
     SCM_SEARCH,
     default_run_state
 )
-
-from .manager import ProcessManager    
 
 from .requests import (
     BasicosErrorSCM,

@@ -16,15 +16,16 @@ from sqlalchemy.orm import (
     object_session
     )
 
+from ....web.htmlscrap import wPageNtlm
+from ....web.io import try_read_html
 from ..config import config
 from .processo import (
     Processo, 
     Processodb,
     SCM_SEARCH,
-    pud 
+    default_run_state
     )
-from ....web.htmlscrap import wPageNtlm
-from ....web.io import try_read_html
+from .pud import pud 
 
 
 class ProcessManagerClass(dict):

@@ -3,10 +3,10 @@ from pathlib import Path
 import os
 import datetime 
 
+# module independent configurations
 config = {}
 config['sigareas'] = {}
 config['sigareas']['timeout'] = 3*60 # sometimes sigareas server/r. interferncia takes a long long time to answer 
-# module independent configurations
 config['sigareas']['doc_prefix'] = 'rltrx' # can't use special characters issues with selenium
 
 #configs are per module
@@ -15,7 +15,6 @@ config['scm'] = {}
 config['scm']['process_expire'] = datetime.timedelta(weeks=1)
 config['scm']['timeout']= 40
 config['scm'].update({'html_prefix' : {'basic': 'scm_basicos_', 'polygon': 'scm_poligonal_'} })
-
 
 # sei module configurations
 config['sei'] = {}
@@ -27,7 +26,6 @@ config['sei']['doc_templates'] = ''
 config['interferencia'] = {}
 config['interferencia']['html_prefix'] = {'this' : 'interferencia', 'legacy': 'sigareas_rinterferencia'}
 config['interferencia']['file_prefix'] = 'eventos_prioridade'
-
 
 
 def SetHome(home=str(Path.home())): # default get userhome folder

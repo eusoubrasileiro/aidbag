@@ -157,6 +157,9 @@ class Processo():
             session.delete(self.db)
             session.commit()
 
+    def __getitem__(self, key):        
+        return self.dados[key]
+
     @property
     @readdb    
     def basic_html(self):
@@ -213,7 +216,7 @@ class Processo():
    
     def runTask(self, task=SCM_SEARCH.BASICOS, wpage=None):
         """Run task from enum SCM_SEARCH desired data."""
-        run = self.dados['run']
+        run = self['run']
         if self._wpage is None: # to support being called without wp set 
             self._wpage = wpage
         if task in SCM_SEARCH: # passed argument to perform a default call without args
@@ -242,15 +245,15 @@ class Processo():
 
         """
 
-        if not self.dados['run']['basic']:
+        if not self['run']['basic']:
             self._dadosScmGet('basic')
 
         if self._verbose:
             print("expandAssociados - getting associados: ", self.name,
             ' - ass_ignore: ', ass_ignore, file=sys.stderr)
 
-        if self.dados['run']['associados']: 
-            return dados['associados']
+        if self['run']['associados']: 
+            return self['associados']
 
         dados = self.dados        
         # local copy for object search -> removing circular reference
@@ -318,11 +321,11 @@ class Processo():
         Build graph of all associados.
         Get root node or older parent.               
         """        
-        if not dados['run']['basic']:
+        if not self['run']['basic']:
             self._dadosScmGet('basic')
             
-        if self.dados['run']['ancestry']:
-            return dados['prioridadec']
+        if self['run']['ancestry']:
+            return self['prioridadec']
 
         if self._verbose:
             print("ancestrySearch - building graph: ", self.name, file=sys.stderr)        
@@ -384,7 +387,7 @@ class Processo():
         """try fill dados faltantes pelo processo associado (pai) 1. UF 2. substancias
             need to be reviewed, wrong assumption about parent process   
         """        
-        if not self.dados['run']['associados']:
+        if not self['run']['associados']:
             self._expandAssociados()
         dados = self.dados
         if dados['associados']:
