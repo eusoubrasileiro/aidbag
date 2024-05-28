@@ -5,6 +5,7 @@ import tqdm
 from ....web.htmlscrap import wPageNtlm
 from .. import estudos
 from .. import scm
+from ..estudos.scraping import DownloadInterferenciaFailed
 from ..config import config
 from ..util import processPath
 from .sei import Sei, Processo
@@ -43,8 +44,10 @@ def BatchPreAnalyses(wpage : wPageNtlm, processos: list[scm.pud],
                 with Sei(kwargs['user'], kwargs['passwd'], headless=True) as seid:
                     psei = Processo.fromSei(seid, proc['NUP'])
                     psei.download_latest_documents(10)                
-        except Exception as e:              
-            print(f"Process {processo} Exception: {traceback.format_exc()}", file=sys.stderr)                       
+        except DownloadInterferenciaFailed as e:                                             
+            failed_NUPS.append((scm.ProcessManager[processo].dados['NUP'],''))            
+        except Exception as e:
+            print(f"Process {processo} Exception: {traceback.format_exc()}", file=sys.stderr)    
             failed_NUPS.append((scm.ProcessManager[processo].dados['NUP'],''))            
         else:
             succeed_NUPs.append(proc['NUP'])  
