@@ -45,10 +45,10 @@ def BatchPreAnalyses(wpage : wPageNtlm, processos: list[scm.pud],
                     psei = Processo.fromSei(seid, proc['NUP'])
                     psei.download_latest_documents(10)                
         except DownloadInterferenciaFailed as e:                                             
-            failed_NUPS.append((scm.ProcessManager[processo].dados['NUP'],''))            
+            failed_NUPS.append((scm.ProcessManager[processo].dados['NUP'], str(e)))            
         except Exception as e:
-            print(f"Process {processo} Exception: {traceback.format_exc()}", file=sys.stderr)    
-            failed_NUPS.append((scm.ProcessManager[processo].dados['NUP'],''))            
+            failed_NUPS.append((scm.ProcessManager[processo].dados['NUP'],
+                f"Process {processo} Exception: {traceback.format_exc()}"))            
         else:
             succeed_NUPs.append(proc['NUP'])  
     # print all NUPS
