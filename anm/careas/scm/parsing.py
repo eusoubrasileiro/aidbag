@@ -89,16 +89,16 @@ def parseDadosBasicos(basicos_page, name, verbose, data_tags):
                         'notes'        : table_associados[i][6], # observação
                     }
                 }
-            )
-        dados['associados'] = associados
-        # remove associados deassociados = they are meaningless now
-        dados['associados'] = { name : attrs for name, attrs in dados['associados'].items() 
+            )    
+        # remove associados that were 'deassociados' they are meaningless?
+        dados['associados'] = {'dict' : {}, 'graph' : {} }
+        dados['associados']['dict'] = { name : attrs for name, attrs in associados.items() 
                                 if not attrs['data-deass'] }
         # from here we get direct sons and parents/anscestors - from process names only
         # 800.xxx/2005 -> 300.yyy/2005 - TODO: Not the full picture tough!
         dados['sons'] = []
         dados['parents'] = []
-        for associado in dados['associados']:
+        for associado in dados['associados']['dict']:
             code = comparePnames(associado, name) # compare by number/year only
             if code == -1: # before
                 dados['parents'].append(associado)

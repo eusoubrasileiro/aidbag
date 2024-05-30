@@ -30,7 +30,7 @@ def dispDadSon(name, infer=True, areatol=0.1):
         """   
         root = scm.ProcessManager[name]
         found = False
-        for ass_name, attrs in scm.ProcessManager[name]['associados'].items():            
+        for ass_name, attrs in scm.ProcessManager[name]['associados']['dict'].items():            
             # print('associdado: ', ass_name, attrs, file=sys.stdout)
             Obj = attrs['obj']
             if not 'polygon' in Obj: #ignore 
@@ -43,7 +43,7 @@ def dispDadSon(name, infer=True, areatol=0.1):
                 found = ass_name
                 break # found    
         if not found:
-            print('associdados: ', scm.ProcessManager[name]['associados'], file=sys.stdout)
+            print('associdados: ', scm.ProcessManager[name]['associados']['dict'], file=sys.stdout)
             raise Exception(f'`dispSearch` did not found son-dad from {name}')                
         return found
     p = scm.ProcessManager[name]

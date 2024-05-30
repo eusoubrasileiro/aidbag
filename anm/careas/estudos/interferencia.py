@@ -188,11 +188,11 @@ class Interferencia:
                 raise Exception(f"{traceback.format_exc()}\n\nInterferencia.createTable error at {name}: {e}")
             indexes = (self.tabela_interf.Processo == name)
             self.tabela_interf.loc[indexes, 'Ativo'] = True if 'S' in pdados['ativo'] else False # Sim/Nao to True/False
-            if pdados['associados']:
+            if pdados['associados']['dict']:
                 self.tabela_interf.loc[indexes, 'Sons'] = len(pdados['sons'])
                 self.tabela_interf.loc[indexes, 'Dads'] = len(pdados['parents'])
-                assoc_items = pd.DataFrame({ "Main" : name, "Target" : pdados['associados'].keys() })
-                assoc_items = assoc_items.join(pd.DataFrame(pdados['associados'].values()))                
+                assoc_items = pd.DataFrame({ "Main" : name, "Target" : pdados['associados']['dict'].keys() })
+                assoc_items = assoc_items.join(pd.DataFrame(pdados['associados']['dict'].values()))                
                 # not using prioridade of associados
                 # assoc_items['Prior'] = self.getPrioridade()
                 # number of direct sons/ ancestors
