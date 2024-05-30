@@ -36,8 +36,7 @@ def BatchPreAnalyses(wpage : wPageNtlm, processos: list[scm.pud],
         processo = processo.str        
         try:            
             if estudo is ESTUDO_TYPE.INTERFERENCIA:
-                _ = estudos.Interferencia.make(wpage, processo, verbose=verbose, overwrite=overwrite)   
-                proc = scm.ProcessManager[processo]
+                _ = estudos.Interferencia.make(wpage, processo, verbose=verbose, overwrite=overwrite)                   
             elif estudo is ESTUDO_TYPE.OPCAO:
                 _ = scm.ProcessManager.GetorCreate(processo, wpage, task=scm.SCM_SEARCH.BASICOS_POLIGONAL, verbose=verbose)
                 proc = scm.ProcessManager[processo]     
@@ -45,18 +44,17 @@ def BatchPreAnalyses(wpage : wPageNtlm, processos: list[scm.pud],
                     psei = Processo.fromSei(seid, proc['NUP'])
                     psei.download_latest_documents(10) # autocreate processfolder                                  
         except DownloadInterferenciaFailed as e:
-            dados = proc.dados
+            pobj = scm.ProcessManager[processo] 
+            dados = pobj.dados
             dados['prework'] = {'status' : 'error', 'error' : str(e)} # save for use on workapp
-            scm.ProcessManager[processo].update(dados)
-            failed_NUPS.append((dados['NUP'], str(e))) 
-        except Exception as e:
-            failed_NUPS.append((proc['NUP'],
-                f"Process {processo} Exception: {traceback.format_exc()}"))            
+            pobj.update(dados)
+            failed_NUPS.append((pobj['NUP'], str(e)))             
         else:
-            dados = proc.dados
+            pobj = scm.ProcessManager[processo] 
+            dados = pobj.dados
             dados['prework'] = { 'status' : 'ok' } # save for use on workapp
-            scm.ProcessManager[processo].update(dados)
-            succeed_NUPs.append(proc['NUP']) 
+            pobj.update(dados)
+            succeed_NUPs.append(pobj['NUP']) 
     # print all NUPS
     print('SEI NUPs sucess:')
     for nup in succeed_NUPs:
