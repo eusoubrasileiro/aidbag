@@ -157,9 +157,6 @@ class Processo():
             session.delete(self.db)
             session.commit()
 
-    def __getitem__(self, key):        
-        return self.dados[key]
-
     @property
     @readdb    
     def basic_html(self):
@@ -197,6 +194,9 @@ class Processo():
     def dados(self):
         return copy.deepcopy(self.db.dados) # avoid reference change tracking    
     
+    def __getitem__(self, key):        
+        return self.dados[key]
+
     @threadsafe
     @updatedb
     def update(self, _dict):
@@ -258,61 +258,61 @@ class Processo():
         dados = self.dados        
         # local copy for object search -> removing circular reference
         associados = dados['associados']      
-        if ass_ignore: # equivalent to ass_ignore != ''
-            # if its going to be ignored it's because it already exists 
-            # being associated with someone 
-            # !inconsistency! bug situations identified where A -> B but B !-> A on 
-            # each of A and B SCM page -> SO check if ass_ignore exists on self.associados
-            if ass_ignore in dados['associados']:
-                # for outward search ignore this process
-                del associados[ass_ignore] # removing circular reference    
-            else: # !inconsistency! bug situation identified where A -> B but B !-> A 
-                # encontrada em grupamento mineiro 
-                # processo em mais de um grupamento mineiro
-                # sendo que um dos grupamentos havia sido cancelado mas a associação não removida                    
-                inconsistency = ["Process {0} associado to this process but this is NOT associado to {0} on SCM".format(
-                    ass_ignore)]
-                dados['inconsistencies'] += inconsistency 
-                if self._verbose:
-                    print("expandAssociados - inconsistency: ", self.name,
-                    ' : ', inconsistency, file=sys.stderr)
-        # helper function to search outward only
-        def _expandassociados(name, wp, ignore, verbosity):
-            """ *ass_ignore : must be set to avoid being waiting for parent-source 
-                Also make the search spread outward only"""
-            proc = self._manager.GetorCreate(name, wp, SCM_SEARCH.BASICOS, verbosity)                
-            proc._expandAssociados(ignore)
-            return proc
-        # ignoring empty lists 
-        if associados:
-            with futures.ThreadPoolExecutor() as executor: # thread number optimal       
-                # use a dict to map { process name : future_wrapped_Processo }             
-                # due possibility of exception on Thread and to know which process was responsible for that
-                future_processes = {process_name : executor.submit(_expandassociados, 
-                    process_name, self._wpage, self.name, self._verbose) 
-                    for process_name in associados}
-                futures.wait(future_processes.values()) 
-                #for future in concurrent.futures.as_completed(future_processes):         
-                for process_name, future_process in future_processes.items():               
-                    try:                        
-                        future_process.result()
-                    except Exception as e:                            
-                        print(f"Exception raised while running expandAssociados thread for process {process_name}",
-                            file=sys.stderr)     
-                        if type(e) is requests.BasicosErrorSCM:
-                            # MUST delete process if did not get scm page
-                            # since basic data wont be on it, will break ancestry search etc... 
-                            del self._manager[process_name]
-                            del dados['associados'][process_name]
-                            self.update(dados)
-                            print(str(e) + f" Removed from associados. Exception ignored!",
-                                file=sys.stderr)
-                        else:
-                            print(traceback.format_exc(), file=sys.stderr, flush=True)     
-                            raise # re-raise                  
-        if self._verbose:
-            print("expandAssociados - finished associados: ", self.name, file=sys.stderr)
-        dados['run']['associados'] = True
+        # if ass_ignore: # equivalent to ass_ignore != ''
+        #     # if its going to be ignored it's because it already exists 
+        #     # being associated with someone 
+        #     # !inconsistency! bug situations identified where A -> B but B !-> A on 
+        #     # each of A and B SCM page -> SO check if ass_ignore exists on self.associados
+        #     if ass_ignore in dados['associados']:
+        #         # for outward search ignore this process
+        #         del associados[ass_ignore] # removing circular reference    
+        #     else: # !inconsistency! bug situation identified where A -> B but B !-> A 
+        #         # encontrada em grupamento mineiro 
+        #         # processo em mais de um grupamento mineiro
+        #         # sendo que um dos grupamentos havia sido cancelado mas a associação não removida                    
+        #         inconsistency = ["Process {0} associado to this process but this is NOT associado to {0} on SCM".format(
+        #             ass_ignore)]
+        #         dados['inconsistencies'] += inconsistency 
+        #         if self._verbose:
+        #             print("expandAssociados - inconsistency: ", self.name,
+        #             ' : ', inconsistency, file=sys.stderr)
+        # # helper function to search outward only
+        # def _expandassociados(name, wp, ignore, verbosity):
+        #     """ *ass_ignore : must be set to avoid being waiting for parent-source 
+        #         Also make the search spread outward only"""
+        #     proc = self._manager.GetorCreate(name, wp, SCM_SEARCH.BASICOS, verbosity)                
+        #     proc._expandAssociados(ignore)
+        #     return proc
+        # # ignoring empty lists 
+        # if associados:
+        #     with futures.ThreadPoolExecutor() as executor: # thread number optimal       
+        #         # use a dict to map { process name : future_wrapped_Processo }             
+        #         # due possibility of exception on Thread and to know which process was responsible for that
+        #         future_processes = {process_name : executor.submit(_expandassociados, 
+        #             process_name, self._wpage, self.name, self._verbose) 
+        #             for process_name in associados}
+        #         futures.wait(future_processes.values()) 
+        #         #for future in concurrent.futures.as_completed(future_processes):         
+        #         for process_name, future_process in future_processes.items():               
+        #             try:                        
+        #                 future_process.result()
+        #             except Exception as e:                            
+        #                 print(f"Exception raised while running expandAssociados thread for process {process_name}",
+        #                     file=sys.stderr)     
+        #                 if type(e) is requests.BasicosErrorSCM:
+        #                     # MUST delete process if did not get scm page
+        #                     # since basic data wont be on it, will break ancestry search etc... 
+        #                     del self._manager[process_name]
+        #                     del dados['associados'][process_name]
+        #                     self.update(dados)
+        #                     print(str(e) + f" Removed from associados. Exception ignored!",
+        #                         file=sys.stderr)
+        #                 else:
+        #                     print(traceback.format_exc(), file=sys.stderr, flush=True)     
+        #                     raise # re-raise                  
+        # if self._verbose:
+        #     print("expandAssociados - finished associados: ", self.name, file=sys.stderr)
+        dados['run']['associados'] = True        
         self.update(dados)
 
     @threadsafe
