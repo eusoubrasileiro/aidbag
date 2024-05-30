@@ -106,19 +106,19 @@ class ProcessManagerClass(dict):
                 list_processes.append(processo)
             return list_processes    
 
-    # def _getAll(self):
-    #     """
-    #     Get all processes from Database no dictionary interaction - 
-    #       for database interactions direct from python no SQL needed
-    #     """
-    #     with self.lock:
-    #         with self.session() as session:
-    #             processes = session.query(Processodb).all()
-    #         list_processes = []
-    #         for process in processes:
-    #             processo = Processo(process.name, processodb=process, manager=self) 
-    #             list_processes.append(processo)
-    #         return list_processes 
+    def _getAll(self):
+        """
+        Get all processes from Database no dictionary interaction - 
+          for database interactions direct from python no SQL needed
+        """
+        with self.lock:
+            with self.session() as session:
+                processes = session.query(Processodb).all()
+            list_processes = []
+            for process in processes:
+                processo = Processo(process.name, processodb=process, manager=self) 
+                list_processes.append(processo)
+            return list_processes 
    
     def runTask(self, wp, *args, **kwargs):
         """run `runTask` on every process on database    
