@@ -2,10 +2,7 @@ import sys, copy
 from datetime import datetime
 from bs4 import BeautifulSoup
 from ....web import htmlscrap
-from .pud import pud 
-from .util import (
-    comparePnames,
-)
+from .pud import pud
 
 # HTML tags for SCM main page 
 scm_data_tags = { # "data name" ; soup.find fields( "tag", "attributes")
@@ -98,11 +95,10 @@ def parseDadosBasicos(basicos_page, name, verbose, data_tags):
         # 800.xxx/2005 -> 300.yyy/2005 - TODO: Not the full picture tough!
         dados['sons'] = []
         dados['parents'] = []
-        for associado in dados['associados']['dict']:
-            code = comparePnames(associado, name) # compare by number/year only
-            if code == -1: # before
+        for associado in dados['associados']['dict']:             
+            if pud(associado) < pud(name): # compare by number/year only
                 dados['parents'].append(associado)
-            elif code == 1: # after
+            else: # after
                 dados['sons'].append(associado)      
     # parsed copy  
     return dados 

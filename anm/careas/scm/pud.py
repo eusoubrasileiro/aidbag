@@ -96,16 +96,16 @@ class pud():
 
     def __lt__(self, other): # less than 
         if not self.isdisp or not other.isdisp:
-            return other.unumber < self.unumber
+            return self.unumber < other.unumber 
         match (self.isdisp, other.isdisp):
             case (True, True):
                 if self.year != other.year:
-                    return other.year < self.year
+                    return self.year < other.year
                 # same year
-                return other.number < self.number
+                return self.number < other.number
             case (False, True) | (True, False):
                 if self.year != other.year:
-                    return other.year < self.year
+                    return self.year < other.year
                 # same year
                 raise ValueError("can't compare 300 process number with" 
                     "the same year of other not 300")
@@ -117,15 +117,53 @@ def test_pnum_getAll():
     expected = [1945000847, 2016002537, 2016832537, 2016832537, 2016832537]
     assert  result == expected
 
-def test_pnum_cmp():
+def test_pnum_numbers():
     a = pud('847/1945')
-    b = pud('1325/1944')
-    a.number, a.year, a.unumber, b.unumber, b < a, b > a
+    b = pud('1325/1944')    
     assert a.number == '000847'
     assert a.year == '1945'
     assert a.unumber == 1945000847
     assert b.unumber == 1944001325
-    assert a < b
 
-test_pnum_cmp()
+def test_pnum_cmp():    
+    assert (pud('847/1945') < pud('1325/1944')) == False
+    assert (pud('847/1945') > pud('1325/1944')) == True
+    assert (pud('831.915/2023') < pud('831.012/2021')) == False
+
 test_pnum_getAll()
+test_pnum_numbers()
+test_pnum_cmp()
+
+
+
+# fonte de informação da data de origem do processo 
+# 1. numero do processo 
+# 2. data de associacao 
+# data de associacao não existe para self 
+# but data protocolo pode ou não existir
+# se prioridade existe pode não ser útil para associação
+# não há opção tem que ser por nome mesmo
+## this is a key function for associados 
+## it seams there is no other option 
+def cmpPud(process, other, check=False):
+    """simple check wether which process is older than other (e.g.) 
+    custom sort function for list based on
+    https://stackoverflow.com/questions/5213033/sort-a-list-of-lists-with-a-custom-compare-function
+
+    if item1 < item2 ? -1   
+    if item1 > item2 ? 1 
+    else  0        
+    e.g. 02/2005 < 03/2005
+    don't cover comparison with process starting with 300.xxx/...    
+    usage:
+        lst = ['02/2005', '03/2005' ...]
+        sorted(lst, key=cmp_to_key(careas.scm.cmpPud))
+    """
+    p = pud(process)
+    o = pud(other)
+    if p < o:
+        return -1
+    elif p > o:
+        return 1
+    else:
+        return 0 

@@ -1,48 +1,63 @@
-import networkx as nx
-import matplotlib.pyplot as plt
+import sys 
 import copy, numpy as np 
 import random 
 from functools import cmp_to_key
-from .util import comparePnames
+import networkx as nx
+import matplotlib.pyplot as plt
+from .pud import cmpPud, pud
 
 
-def graphAddEdges(process, G, ignore=''):
-    """ 
-    * process : `scm.processo.Processo` instance
-    * ignore : to avoid infinit-loop also builds outward
-    * G : `networkx` graph undirected
+class pGraph(nx.DiGraph):
     """
-    associados = copy.copy(process['associados'])    
-    if ignore in associados:
-        del associados[ignore]
-    # add edge source, target, edge attributes dict
-    G.add_edges_from([(process.name, associado, associados[associado]) for associado in associados.keys()])
-    for associado in associados.values():
-        raise NotImplementedError("not implemented - need to fix bellow")
-        #graphAddEdges(associado['obj'], G, process.name)
+    A networkx.Graph of processes and their associados 
+    use @threadSafe to avoid concurrent access
+    """
+    def __init__(self, ebunch_to_add=None):
+        """
+        Initializes and adds edges (if not None) from a list of edge bunches.        
+        Args:
+            ebunch_to_add (list, optional): A list of edge bunches to add to the graph. Defaults to None.
+            Can come from a pGraph.toList() or JSON deserialized.        
+        """        
+        super().__init__()
+        if ebunch_to_add and isinstance(ebunch_to_add, list):
+            self.add_edges_from(ebunch_to_add)            
+        
+    def toList(self):
+        """
+        Generates a List of 3-tuples (u, v, d) containing edge data.
+        tuple: A tuple containing the source node (u), target node (v), and
+                a dictionary (d) of edge data for the edge between u and v.
+        Note:
+        This should be used to save on a database or to load from a database 
+        using JSON serialization.
+        """
+        return list(self.edges(data=True))
 
 
-def createGraphAssociados(process):
+def toChronology(G: pGraph):
+    """turn Graph in a Directed Graph respecting chronology order 
+    from older (parent) to younger (children) a tree like structure 
+    uses `pud` for node comparision
+    may raise an exception in case on impossible comparision
     """
-    Create graph of associados direct -> each edge has a direction 
-    each node is a process, each edge (connection) has 
-    the attributes of `Processo.associados[process.name]`
-    It's a tree. Otherwise crash.
-    """
-    G = nx.Graph()
-    graphAddEdges(process, G)
-    # Returns oriented tree constructed from a depth-first-search from source (optional)
-    # Root process may not necessarily be older (grupamento mineiro)
-    # O que é certo é que é um graph acyclic 
-    # (inconsistencias removidas no parsing dos associados)
-    Gdtree = nx.dfs_tree(G)    
-    # dfs_tree dont preserve edge data at it back now
-    Gd = nx.DiGraph(G) # preserves the data, tough nx.dfs_tree(G) will not
-    data = { (u, v) : d for u, v, d in Gd.edges.data() }  # create a dict of { edge : data ...}
-    nx.set_edge_attributes(Gdtree, data) # inexistent edges are ignored per networkx docs
-    root = list(nx.topological_sort(Gdtree))[0] # assuming only one root
-    # this root is not the older process
-    return Gdtree, root
+    chronoG = pGraph()
+    for u, v, d in G.edges(data=True):
+        # Compare nodes u and v using the key function
+        if pud(u) < pud(v):
+            # Add a directed edge u -> v
+            chronoG.add_edge(u, v, **d)
+        else:
+            # Add a directed edge v -> u
+            chronoG.add_edge(v, u, **d)
+    return chronoG
+    
+
+
+
+###########################################################
+#                       Plotting 
+###########################################################
 
 
 def plotGraph(G, layout=nx.spring_layout, figsize=(9,9)):
@@ -50,7 +65,7 @@ def plotGraph(G, layout=nx.spring_layout, figsize=(9,9)):
     Node sizes are giving from older to younger
     Labels are 'tipo' e 'data' da associação"""
     # compare process to get older to create node sizes?    
-    sortedNodes = sorted(list(G.nodes), key=cmp_to_key(comparePnames), reverse=True)
+    sortedNodes = sorted(list(G.nodes), key=cmp_to_key(cmpPud), reverse=False)
     sizes = np.geomspace(100, 600,num=len(sortedNodes), dtype=int) # better sizes than limspace
     node_sizes = { k:v for k,v in zip(sortedNodes, sizes) }
     pos = layout(G)
@@ -68,20 +83,15 @@ def plotGraph(G, layout=nx.spring_layout, figsize=(9,9)):
     plt.show()
 
 
-
-# G = nx.Graph()
-# graphAddEdges(careas.scm.ProcessManager['832.547/2014'], G)
-# plotGraphAssociados(G)
-
 def plotDirectGraphAssociados(Gd, root=None):
     """*root: process to use as source of the tree"""
     # compare process to get older to create node sizes?    
-    sortedNodes = sorted(list(Gd.nodes), key=cmp_to_key(comparePnames), reverse=True)
+    sortedNodes = sorted(list(Gd.nodes), key=cmp_to_key(cmpPud))    
     sizes = np.geomspace(100, 600,num=len(sortedNodes), dtype=int) # better sizes than limspace
     node_sizes = { k:v for k,v in zip(sortedNodes, sizes) }
     # uses custom plotting layout bellow 
     if not root:
-        root = sortedNodes[-1]
+        root = sortedNodes[0] # oldest
     pos = hierarchy_pos(Gd, root) 
     plt.figure(figsize=(9,9))
     nx.draw(Gd, pos,
@@ -95,8 +105,6 @@ def plotDirectGraphAssociados(Gd, root=None):
     nx.draw_networkx_edge_labels(Gd, pos, edge_labels=labels, alpha=0.6)
     plt.axis("off")
     plt.show()
-
-
 
 # networkx custom plotting layout for tree-like graphs
 def hierarchy_pos(G, root=None, width=1., vert_gap = 0.2, vert_loc = 0, xcenter = 0.5):
@@ -159,3 +167,41 @@ def hierarchy_pos(G, root=None, width=1., vert_gap = 0.2, vert_loc = 0, xcenter 
         return pos
 
     return _hierarchy_pos(G, root, width, vert_gap, vert_loc, xcenter)
+
+
+########################################################
+#                        old 
+########################################################
+
+# def graphAddEdges(process, G: pGraph):
+#     """ 
+#     * process : `scm.processo.Processo` instance
+#     * ignore : to avoid infinit-loop also builds outward
+#     * G : `networkx` graph undirected
+#     """
+#     associados = process['associados']['dict']        
+#     for associado in associados: # expand outward adding node and edge
+#         if G.has_node(associado):
+#             continue        
+#         # add node source -> target and  edge (arrow ->) attributes dict
+#         G.add_edge(process.name, associado, **associados[associado])
+#         processo_ass = process._manager[associado]
+#         if not processo_ass:
+#             print(f"Associado {associado} not on DB. SKIPPED!", file=sys.stderr)
+#             continue
+#         # expand from this node outward recursively
+#         graphAddEdges(processo_ass, G, process.name)
+
+
+# def createGraphAssociados(process):
+#     """
+#     Create graph of associados direct -> each edge has a direction 
+#     each node is a process, each edge (connection) has 
+#     the attributes of `Processo['associados']['dict'][process.name]`
+#     It's a tree acyclic guaranteed above by not adding the same node twice.
+#     """
+#     G = pGraph()
+#     graphAddEdges(process, G)
+#     # O que é certo é que é um graph acyclic         
+#     oldest = sorted(list(G.nodes()), key=cmp_to_key(cmpPud), reverse=True)[0]
+#     return G, oldest

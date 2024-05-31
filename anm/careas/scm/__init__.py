@@ -1,6 +1,6 @@
-from .util import comparePnames
 from .pud import (
     pud,
+    cmpPud,
     NotProcessNumber
 )
 
@@ -15,5 +15,6 @@ from .requests import (
     BasicosErrorSCM,
     PoligonalErrorSCM
 )
+
 
 

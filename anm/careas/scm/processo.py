@@ -5,7 +5,8 @@ from concurrent import futures
 import enum
 import time
 import tqdm
-from threading import RLock
+from functools import cmp_to_key
+from threading import RLock, Lock
 from functools import wraps
 from typing import Literal
 
@@ -19,17 +20,19 @@ from ....web.io import (
     )
 
 from . import requests 
-from . import ancestry
 from ..config import config
-
-from .pud import pud 
-
+from .pud import pud, cmpPud
 from .parsing import (
     parseDadosBasicos,
     parseDadosPoligonal,
     scm_data_tags,
     parseNUP,    
     getMissingTagsBasicos
+)
+
+from .ancestry import (
+    pGraph,
+    toChronology
 )
 
 from .sqlalchemy import Processodb, object_session
@@ -251,69 +254,79 @@ class Processo():
         if self._verbose:
             print("expandAssociados - getting associados: ", self.name,
             ' - ass_ignore: ', ass_ignore, file=sys.stderr)
-
-        if self['run']['associados']: 
-            return self['associados']
-
-        dados = self.dados        
-        # local copy for object search -> removing circular reference
-        associados = dados['associados']      
-        # if ass_ignore: # equivalent to ass_ignore != ''
-        #     # if its going to be ignored it's because it already exists 
-        #     # being associated with someone 
-        #     # !inconsistency! bug situations identified where A -> B but B !-> A on 
-        #     # each of A and B SCM page -> SO check if ass_ignore exists on self.associados
-        #     if ass_ignore in dados['associados']:
-        #         # for outward search ignore this process
-        #         del associados[ass_ignore] # removing circular reference    
-        #     else: # !inconsistency! bug situation identified where A -> B but B !-> A 
-        #         # encontrada em grupamento mineiro 
-        #         # processo em mais de um grupamento mineiro
-        #         # sendo que um dos grupamentos havia sido cancelado mas a associação não removida                    
-        #         inconsistency = ["Process {0} associado to this process but this is NOT associado to {0} on SCM".format(
-        #             ass_ignore)]
-        #         dados['inconsistencies'] += inconsistency 
-        #         if self._verbose:
-        #             print("expandAssociados - inconsistency: ", self.name,
-        #             ' : ', inconsistency, file=sys.stderr)
-        # # helper function to search outward only
-        # def _expandassociados(name, wp, ignore, verbosity):
-        #     """ *ass_ignore : must be set to avoid being waiting for parent-source 
-        #         Also make the search spread outward only"""
-        #     proc = self._manager.GetorCreate(name, wp, SCM_SEARCH.BASICOS, verbosity)                
-        #     proc._expandAssociados(ignore)
-        #     return proc
-        # # ignoring empty lists 
-        # if associados:
-        #     with futures.ThreadPoolExecutor() as executor: # thread number optimal       
-        #         # use a dict to map { process name : future_wrapped_Processo }             
-        #         # due possibility of exception on Thread and to know which process was responsible for that
-        #         future_processes = {process_name : executor.submit(_expandassociados, 
-        #             process_name, self._wpage, self.name, self._verbose) 
-        #             for process_name in associados}
-        #         futures.wait(future_processes.values()) 
-        #         #for future in concurrent.futures.as_completed(future_processes):         
-        #         for process_name, future_process in future_processes.items():               
-        #             try:                        
-        #                 future_process.result()
-        #             except Exception as e:                            
-        #                 print(f"Exception raised while running expandAssociados thread for process {process_name}",
-        #                     file=sys.stderr)     
-        #                 if type(e) is requests.BasicosErrorSCM:
-        #                     # MUST delete process if did not get scm page
-        #                     # since basic data wont be on it, will break ancestry search etc... 
-        #                     del self._manager[process_name]
-        #                     del dados['associados'][process_name]
-        #                     self.update(dados)
-        #                     print(str(e) + f" Removed from associados. Exception ignored!",
-        #                         file=sys.stderr)
-        #                 else:
-        #                     print(traceback.format_exc(), file=sys.stderr, flush=True)     
-        #                     raise # re-raise                  
-        # if self._verbose:
-        #     print("expandAssociados - finished associados: ", self.name, file=sys.stderr)
+      
+        lock = Lock()  # to not modify the graph 
+        executor = futures.ThreadPoolExecutor()
+        manager = self._manager
+        def graphAddEdges(name:str, G: pGraph, previous: str = ''):
+            """ 
+            * process : processo name
+            * G : `networkx` graph 
+            * previous: previous node name where search came from
+                guarantee outward moving
+            """
+            process =  manager.GetorCreate(name, 
+                self._wpage, SCM_SEARCH.BASICOS, self._verbose)            
+            associados = process['associados']['dict']                    
+            if previous and previous in associados:
+                del associados[previous] # removing circular reference 
+            # first try to request the associados if they suceed we can add 
+            # in the graph since we need their basic data like 'data_protocolo'            
+            future_processes = { associado : 
+                executor.submit(graphAddEdges, associado, G, name)
+                for associado in associados }            
+            futures.wait(future_processes.values())  # wait then finish
+            # use a dict to map { process name : future_wrapped_Processo }             
+            # due possibility of exception on Thread and to know which process 
+            # was responsible for that 
+            for process_name, future_process in future_processes.items():               
+                try:
+                    future_process.result()
+                except requests.BasicosErrorSCM:
+                    if self._verbose:
+                        print(f"Exception raised while running"
+                        " expandAssociados->graphAddEdges thread for process {process_name}",
+                            file=sys.stderr)
+                    # MUST delete process if did not get scm page
+                    # Because will break by not having 'data_prioridade' 
+                    del manager[process_name]
+                    del associados[process_name]                    
+                    if self._verbose:
+                        print(str(e) + f" Removed from associados. Exception ignored!",
+                            file=sys.stderr)
+                    continue
+            # finally associados only contain valid processos - add to graph            
+            for associado in associados:
+                with lock:  
+                    if (G.has_edge(process.name, associado) or
+                        G.has_edge(associado, process.name)): # guarantee it acyclic
+                        continue        
+                    # add node source -> target and  edge (arrow ->) attributes dict
+                    G.add_edge(process.name, associado, **associados[associado])
+        # Create graph of associados direct -> each edge has a direction 
+        # each node is a process, each edge (connection) has 
+        # the attributes of `Processo['associados']['dict'][process.name]`
+        # It's a tree acyclic guaranteed above by not adding the same edge twice.
+        # not dealing with grupamento many parents yet
+        G = pGraph()
+        graphAddEdges(self.name, G)    
+        G = toChronology(G)                    
+        # graph is ready need to DB-save-it on ALL processes on its nodes
+        for name in G.nodes:
+            proc = manager[name]
+            dados = proc.dados
+            dados['associados']['graph'] = G.toList()
+            proc.update(dados)
+        # sort everything only by name for now... todo in future check also 
+        # data_assoc if an exception of comparision happens
+        nodes = sorted(list(G.nodes), key=cmp_to_key(cmpPud))
+        dados = self.dados
+        if nodes:
+            oldest = nodes[0]  
+            dados['prioridadec'] = manager[oldest]['prioridade']        
         dados['run']['associados'] = True        
         self.update(dados)
+
 
     @threadsafe
     def _ancestry(self):
@@ -322,29 +335,7 @@ class Processo():
         Get root node or older parent.               
         """        
         if not self['run']['basic']:
-            self._dadosScmGet('basic')
-            
-        if self['run']['ancestry']:
-            return self['prioridadec']
-
-        if self._verbose:
-            print("ancestrySearch - building graph: ", self.name, file=sys.stderr)        
-        
-        dados = self.dados
-        dados['run']['ancestry'] = True        
-        dados['prioridadec'] = dados['prioridade']
-        self.update(dados)
-            
-        # if dados['associados']: # not dealing with grupamento many parents yet
-        #     try:                
-        #         # graph, root = ancestry.createGraphAssociados(self)
-        #         #TODO: This is WRONG! root is not the real oldest process is only the graph root
-        #         # should use 'parents' and 'sons' instead and `comparePnames`
-        #         # self.db.dados['prioridadec'] = self._manager[root]['prioridade']
-        #         pass
-        #     except RecursionError:
-        #         # TODO analyse case of graph with closed loop etc.
-        #         pass 
+            self._dadosScmGet('basic')        
         
     def _pageRequest(self, name : Literal['basic', 'polygon']):
         """python requests page and get response unicode str decoded"""
@@ -368,7 +359,7 @@ class Processo():
         use the existing one stored at `self._pages` if `redownload` False
         """
         dados = self.dados
-        if not dados['run'][page_key]:            
+        if not dados['run'][page_key] or redownload:            
             if redownload or not self._get_html(page_key): # download get with python.requests page html response
                 self._pageRequest(page_key)
             if self._get_html(page_key): # if sucessful get html
@@ -390,7 +381,7 @@ class Processo():
         if not self['run']['associados']:
             self._expandAssociados()
         dados = self.dados
-        if dados['associados']:
+        if dados['associados']['dict']:
             miss_data_tags = getMissingTagsBasicos(dados)        
             father = self._manager.GetorCreate(dados['parents'][0], self._wpage, verbose=self._verbose, run=False)
             father._dadosScmGet('basic', data_tags=miss_data_tags)            
@@ -418,6 +409,7 @@ class Processo():
             self._pageRequest(pagename)                     
         # save the already fetched html as single file
         writeHTML(str(path), self._get_html(pagename)  )   
+
 
 
         
