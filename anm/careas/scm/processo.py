@@ -309,8 +309,8 @@ class Processo():
         # It's a tree acyclic guaranteed above by not adding the same edge twice.
         # not dealing with grupamento many parents yet
         G = pGraph()
-        graphAddEdges(self.name, G)    
-        G = toChronology(G)                    
+        graphAddEdges(self.name, G) # this graph is oriented by search
+        G = toChronology(G) # oriented by chronology is save                   
         # graph is ready need to DB-save-it on ALL processes on its nodes
         for name in G.nodes:
             proc = manager[name]

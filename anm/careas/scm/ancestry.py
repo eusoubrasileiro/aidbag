@@ -53,8 +53,6 @@ def toChronology(G: pGraph):
     return chronoG
     
 
-
-
 ###########################################################
 #                       Plotting 
 ###########################################################
@@ -84,7 +82,8 @@ def plotGraph(G, layout=nx.spring_layout, figsize=(9,9)):
 
 
 def plotDirectGraphAssociados(Gd, root=None):
-    """*root: process to use as source of the tree"""
+    """*root: process to use as source of the tree
+    default to the oldest"""
     # compare process to get older to create node sizes?    
     sortedNodes = sorted(list(Gd.nodes), key=cmp_to_key(cmpPud))    
     sizes = np.geomspace(100, 600,num=len(sortedNodes), dtype=int) # better sizes than limspace
@@ -167,41 +166,3 @@ def hierarchy_pos(G, root=None, width=1., vert_gap = 0.2, vert_loc = 0, xcenter 
         return pos
 
     return _hierarchy_pos(G, root, width, vert_gap, vert_loc, xcenter)
-
-
-########################################################
-#                        old 
-########################################################
-
-# def graphAddEdges(process, G: pGraph):
-#     """ 
-#     * process : `scm.processo.Processo` instance
-#     * ignore : to avoid infinit-loop also builds outward
-#     * G : `networkx` graph undirected
-#     """
-#     associados = process['associados']['dict']        
-#     for associado in associados: # expand outward adding node and edge
-#         if G.has_node(associado):
-#             continue        
-#         # add node source -> target and  edge (arrow ->) attributes dict
-#         G.add_edge(process.name, associado, **associados[associado])
-#         processo_ass = process._manager[associado]
-#         if not processo_ass:
-#             print(f"Associado {associado} not on DB. SKIPPED!", file=sys.stderr)
-#             continue
-#         # expand from this node outward recursively
-#         graphAddEdges(processo_ass, G, process.name)
-
-
-# def createGraphAssociados(process):
-#     """
-#     Create graph of associados direct -> each edge has a direction 
-#     each node is a process, each edge (connection) has 
-#     the attributes of `Processo['associados']['dict'][process.name]`
-#     It's a tree acyclic guaranteed above by not adding the same node twice.
-#     """
-#     G = pGraph()
-#     graphAddEdges(process, G)
-#     # O que é certo é que é um graph acyclic         
-#     oldest = sorted(list(G.nodes()), key=cmp_to_key(cmpPud), reverse=True)[0]
-#     return G, oldest
