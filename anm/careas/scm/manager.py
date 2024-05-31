@@ -149,7 +149,7 @@ class ProcessManagerClass(dict):
         if processo is not None:
             processo._verbose = verbose
             processo._wpage = wPageNtlm(wpagentlm.user, wpagentlm.passwd)            
-            if processo.modified + config['scm']['process_expire'] < datetime.datetime.now():         
+            if processo.modified + config['scm']['process_expire'] < datetime.datetime.utcnow():         
                 if verbose:       
                     print("Processo placing on storage ", processostr, file=sys.stderr)                
                 del self[processostr] # delete here and on database before adding a new one               

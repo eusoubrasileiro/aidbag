@@ -10,12 +10,13 @@ from sqlalchemy.orm import (
 
 from sqlalchemy import (
     Column, Integer, String, Text, Date, DateTime, 
-    func, JSON,     
+    JSON     
     )
 
 from ....web.json import (
     datetime_to_json,
-    json_to_datetime
+    json_to_datetime,
+    datetime
     )    
 
 class JSONdt(TypeDecorator):
@@ -49,7 +50,8 @@ class Processodb(Base):
     basic_html = mapped_column('PAGE_BASIC', Text)  
     polygon_html = mapped_column('PAGE_POLYGON', Text)  
     # New column for last modification timestamp (auto updated)
-    modified = mapped_column('MODIFIED', DateTime, default=func.now(), onupdate=func.now())    
+    modified = mapped_column('MODIFIED', DateTime, 
+        default=datetime.utcnow(), onupdate=datetime.utcnow())    
     version = mapped_column('VERSION', Integer, default=1, nullable=False, 
         onupdate=lambda ctx: 
         ctx.current_parameters['VERSION'] + 1 if ctx.current_parameters['VERSION'] is not None else 1)
@@ -63,16 +65,21 @@ class Processodb(Base):
 
     def __repr__(self):
         dados = copy.deepcopy(self.dados)
-        if 'estudo' in dados and 'table' in dados['estudo']:
-            dados['estudo']['table'] = f"...omitted..."
-            if 'states' in dados['estudo']:
-                dados['estudo']['states'] = ['...omitted...']
-        if 'polygon' in dados:
-            for p in dados['polygon']:
-                if 'memo' in p:
-                    p['memo'] = f"...omitted..."
-        if 'eventos' in dados:
-            dados['eventos'] = [ dados['eventos'][0], dados['eventos'][1], '...omitted...']            
-        return f"{self.name} - modified {self.modified} \n{ json.dumps(dados, indent=4, default=datetime_to_json) }"
+        # if 'estudo' in dados and 'table' in dados['estudo']:        
+        #     dados['estudo']['table'] = f"...omitted..."
+        #     if 'states' in dados['estudo']:
+        #         dados['estudo']['states'] = ['...omitted...']
+        # if 'polygon' in dados:
+        #     for p in dados['polygon']:
+        #         if 'memo' in p:
+        #             p['memo'] = f"...omitted..."
+        # if 'eventos' in dados:
+        #     dados['eventos'] = [ dados['eventos'][0], dados['eventos'][1], '...omitted...']            
+        # return f"{self.name} - modified {self.modified} \n{ json.dumps(dados, indent=4, default=datetime_to_json) }"
+        keys = "non empty keys: "
+        for key, value in dados.items():
+            if value is not None and value != '' and (not isinstance(value, dict) or value):
+                keys += f"{key}, "
+        return f"{self.name} - modified {self.modified} \n{ keys }"
 
     
