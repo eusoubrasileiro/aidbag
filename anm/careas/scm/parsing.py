@@ -49,7 +49,7 @@ def parseDadosBasicos(basicos_page, name, verbose, data_tags):
     dados['inconsistencies'] = [] # tuple of inconsistencies found (tupple to be able to be hashed)
     # associados
     if "Nenhum processo associado" in dados['associados'][0][0]:
-        dados['associados'] = {} # overwrite by an empty dictionary 
+        dados['associados'] = {'dict' : {}, 'graph' : {} } # overwrite by an empty dictionary 
     else:
         table_associados = dados['associados'] # it will be overwritten
         nrows = len(table_associados)   
