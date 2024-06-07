@@ -62,7 +62,10 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
     if not ProcessPathStorage: # empty process path storage
         currentProcessGet() # get current list of processes
 
-    process_name = scm.pud(process_name).str         
+    if isinstance(process_name, scm.pud):
+        process_name = process_name.str  
+    else:
+        process_name = scm.pud(process_name).str         
 
     if (activity is WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL_DAD):
         usefolder = False

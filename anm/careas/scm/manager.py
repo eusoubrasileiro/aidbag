@@ -77,7 +77,10 @@ class ProcessManagerClass(dict):
         Get process from local dictionary first or Database second. 
         """
         with self.lock:
-            key = pud(key).str     
+            if not isinstance(key, pud):
+                key = pud(key).str     
+            else:
+                key = key.str 
             if key in self:
                 processo = super().__getitem__(key)   
                 return processo
