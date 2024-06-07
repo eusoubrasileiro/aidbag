@@ -199,7 +199,7 @@ class Processo(Sei):
         # *= contains text in lowercase - before convert to ASCII
         click(self.driver, f"tr[data-desc*='{unidecode(docname.lower())}'] td a:last-child", delay=DELAY_SMALL)                          
     
-    def insereDocumentoExterno(self, partial_title, pdf_path=None):
+    def insereDocumentoExterno(self, docname, pdf_path=None):
         """
         Inclui pdf como documento externo no SEI name it properly. 
         * partial_title: any partial text that matchs one title on {config.docs_externos}
@@ -207,7 +207,6 @@ class Processo(Sei):
             if None cria sem anexo
         """
         self.insereDocumento("Externo") 
-        docname = closest_string(partial_title, docs_externos)
         pieces = docname.split(' ')
         tipo, desc = pieces[0], ' '.join(pieces[1:]) # Tipo de Documento (e.g Estudo) e Nome na Arvore (e.g. Retirada de Interferência)
         send_keys(self.driver, '#selSerie.infraSelect', tipo) # Tipo de Documento 

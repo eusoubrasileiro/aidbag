@@ -111,7 +111,7 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
         activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_REGISTRO_EXTRAÇÃO):
         # formulário de prioridade
         # Inclui Estudo Interferência pdf como Doc Externo no SEI
-        psei.insereDocumentoExterno("Estudo Interferência", 
+        psei.insereDocumentoExterno("Estudo de Retirada de Interferência", 
             info['estudo']['sigareas']['pdf_path'])      
         if 'ok' in info['work']['resultado']:
             pdf_adicional = info['work']['pdf_adicional']
@@ -128,7 +128,9 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
     elif (activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_RESTUDO or 
         activity in WORK_ACTIVITY.OPCAO_REQUERIMENTO):
         
-        doc_externo = "Estudo Interferência" if WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_RESTUDO else "Estudo de Opção"
+        doc_externo = ( "Estudo de Retirada de Interferência" 
+            if WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_RESTUDO 
+            else "Estudo de Opção" )
         # Inclui Estudo Interferência pdf como Doc Externo no SEI        
         psei.insereDocumentoExterno(doc_externo, 
             info['estudo']['sigareas']['pdf_path'])      

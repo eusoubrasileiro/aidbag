@@ -31,7 +31,7 @@ def minutaName(tipo, fase):
     minuta name for docs publishing based on the given data
     """
     tipo, fase = tipo.lower(), fase.lower()
-    if 'lavra' in fase:
+    if 'lavra' in fase and 'garimpeira' not in tipo:
         return "Minuta de Portaria de Lavra"
     elif "pesquisa" in tipo:
         return "Minuta de Alvará de Pesquisa"
