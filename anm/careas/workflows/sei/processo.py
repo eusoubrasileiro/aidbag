@@ -158,7 +158,9 @@ class Processo(Sei):
             { title , doc protocol number, and inner soup element ...}    
             from listaDocumentos(self)
 
-        """        
+        """
+        # for safety - go back to main document
+        self.driver.switch_to.default_content() 
         switch_to_frame(self.driver, "iframe#ifrArvore") # left bar       
         click(self.driver, doc['selector'])
         self.driver.switch_to.default_content() 
