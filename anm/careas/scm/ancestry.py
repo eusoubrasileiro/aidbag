@@ -1,4 +1,5 @@
 import sys 
+import io 
 import copy, numpy as np 
 import random 
 from functools import cmp_to_key
@@ -81,9 +82,13 @@ def plotGraph(G, layout=nx.spring_layout, figsize=(9,9)):
     plt.show()
 
 
-def plotDirectGraphAssociados(Gd, root=None):
-    """*root: process to use as source of the tree
-    default to the oldest"""
+def plotDirectGraphAssociados(Gd, root=None, show=False):
+    """
+    *root: process to use as source of the tree
+        default to the oldest
+    *save: bool
+        if False returns a io.BytesIO of the image in png
+    """
     # compare process to get older to create node sizes?    
     sortedNodes = sorted(list(Gd.nodes), key=cmp_to_key(cmpPud))    
     sizes = np.geomspace(100, 600,num=len(sortedNodes), dtype=int) # better sizes than limspace
@@ -103,7 +108,14 @@ def plotDirectGraphAssociados(Gd, root=None):
         for na, nb, attr in Gd.edges(data=True) }
     nx.draw_networkx_edge_labels(Gd, pos, edge_labels=labels, alpha=0.6)
     plt.axis("off")
-    plt.show()
+    if show:
+        plt.show()     
+    else: 
+        buffer = io.BytesIO()
+        plt.savefig(buffer, format='png')
+        return buffer
+
+           
 
 # networkx custom plotting layout for tree-like graphs
 def hierarchy_pos(G, root=None, width=1., vert_gap = 0.2, vert_loc = 0, xcenter = 0.5):
