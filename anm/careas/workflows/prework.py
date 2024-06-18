@@ -42,7 +42,7 @@ def BatchPreAnalyses(wpage : wPageNtlm, processos: list[scm.pud],
                 proc = scm.ProcessManager[processo]     
                 with Sei(kwargs['user'], kwargs['passwd'], headless=True) as seid:
                     psei = Processo.fromSei(seid, proc['NUP'])
-                    psei.download_latest_documents(10) # autocreate processfolder                                  
+                    psei.downloadDocumentos(10) # autocreate processfolder                                  
         except DownloadInterferenciaFailed as e:
             pobj = scm.ProcessManager[processo] 
             dados = pobj.dados

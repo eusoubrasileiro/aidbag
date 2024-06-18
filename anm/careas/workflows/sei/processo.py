@@ -141,49 +141,74 @@ class Processo(Sei):
         edocs = soup.select("a.clipboard + a") # getting all docs on process
         # len(docs)
         docs = []
-        for edoc in edocs[1:]: #ignore first that's the process 
+        for index, edoc in enumerate(edocs[1:]): #ignore first that's the process 
             title = edoc.contents[0]['title'] # inside span 1st children
             np = re.findall('\d{6,}', str(edoc.contents[0]))[-1]  # numero protocolo é o último
             name = re.sub("[()]", "", title.replace(np, '')).strip() # anything except ( )            
-            docs.append({ 'title' : name,  'np' : np, 'soup_element' : edoc , 'selector' : f"a#{edoc['id']}"} )
+            docs.append({ 'title' : name,  'np' : np, 'index': index, # real index position of doc
+                         'soup_element' : edoc , 'selector' : f"a#{edoc['id']}"} )
         return docs 
+    
 
-    def download_latest_documents(self, lastn=5):
-        """download lastn documents from listaDocuments to default `processPath` folder"""
+    def _downloadDocument(self, doc : dict):
+        """
+        download document from tree at default process folder
+
+        * doc: dict 
+            { title , doc protocol number, and inner soup element ...}    
+            from listaDocumentos(self)
+
+        """        
+        switch_to_frame(self.driver, "iframe#ifrArvore") # left bar       
+        click(self.driver, doc['selector'])
+        self.driver.switch_to.default_content() 
+        switch_to_frame(self.driver, "iframe#ifrVisualizacao") # right bar
+        try:
+            element = find_element(self.driver, "div a.ancoraArvoreDownload")     
+        except NoSuchElementException:
+            # it's not a downloadable external element it's html doc nota/despacho etc.
+            suffix = '.html'        
+            wait_for_element_presence(self.driver, 'iframe#ifrArvoreHtml')
+            switch_to_frame(self.driver, 'iframe#ifrArvoreHtml') # html iframe         
+            soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+            html_doc = soup.select('html')[0]   
+            file_content = html_doc.prettify().encode('utf-8')    
+        else:        
+            suffix = '.pdf'
+            uri = element.get_attribute('href')    
+            cookies = self.driver.get_cookies() # get selenium cookies
+            s = requests.Session() # create requests session
+            for cookie in cookies: # fill in session with selenium cookies
+                s.cookies.set(cookie['name'], cookie['value'])
+            urllib3.disable_warnings() # ignore SSL warnings
+            response = s.get(uri, verify=False) # ignore SSL certificate
+            file_content = response.content
+        prefix = f"{doc['index']:03d}_"  # maximum 999 index
+        filepath = pathlib.Path(util.processPath(self.nup, create=True)) / ( 
+            prefix + doc['title'] + suffix)
+        with open(filepath.absolute(), 'wb') as f:
+            f.write(file_content)
+
+
+    def downloadDocumentosFiltered(self, filterfunc):
+        """apply filterfunc on listaDocumentos and 
+        download the resulting list 
+        Note 1: filter function returns true or false
+        Note 2: listaDocumentos items are dicts with keys 'title' etc...
+        e. g.:
+        downloaDocumentosFiltered(lambda x: True if 'municip' in x['title'].lower() else False)
+        """
         lista = self.listaDocumentos()
-        lastn = len(lista) if lastn > len(lista) else lastn 
-        for i in range(1,lastn+1):
-            self.driver.switch_to.default_content() 
-            switch_to_frame(self.driver, "iframe#ifrArvore") # left bar       
-            click(self.driver, lista[-i]['selector'])
-            self.driver.switch_to.default_content() 
-            switch_to_frame(self.driver, "iframe#ifrVisualizacao") # right bar
-            try:
-                element = find_element(self.driver, "div a.ancoraArvoreDownload")     
-            except NoSuchElementException:
-                # it's not a downloadable external element it's html doc nota/despacho etc.
-                suffix = '.html'        
-                wait_for_element_presence(self.driver, 'iframe#ifrArvoreHtml')
-                switch_to_frame(self.driver, 'iframe#ifrArvoreHtml') # html iframe         
-                soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-                html_doc = soup.select('html')[0]   
-                file_content = html_doc.prettify().encode('utf-8')    
-            else:        
-                suffix = '.pdf'
-                uri = element.get_attribute('href')    
-                cookies = self.driver.get_cookies() # get selenium cookies
-                s = requests.Session() # create requests session
-                for cookie in cookies: # fill in session with selenium cookies
-                    s.cookies.set(cookie['name'], cookie['value'])
-                urllib3.disable_warnings() # ignore SSL warnings
-                response = s.get(uri, verify=False) # ignore SSL certificate
-                file_content = response.content
-            # number prefix to sort/order documents according to their original position
-            prefix = f"{len(lista)-i:03d}_" 
-            filepath = pathlib.Path(util.processPath(self.nup, create=True)) / ( 
-                prefix + lista[-i]['title'] + suffix)
-            with open(filepath.absolute(), 'wb') as f:
-                f.write(file_content)
+        lista = list(filter(filterfunc, lista))
+        for doc in lista:            
+            self._downloadDocument(doc)
+
+    def downloadDocumentos(self, lastn=5):
+        """download lastn documents from listaDocuments to default `processPath` folder"""
+        lista = self.listaDocumentos()        
+        for doc in lista[-lastn:]:
+            self._downloadDocument(doc)
+
 
     def insereDocumento(self, partial_text):
         """
