@@ -81,7 +81,9 @@ def readdb(method: callable) -> callable:
     @wraps(method)
     def wrapper(self, *args, **kwargs):
         with self._manager.session() as session:
-            if object_session(self.db) is None:
+            obj_session = object_session(self.db)
+            # object might be on another session from another thread
+            if obj_session is None or obj_session != session: 
                 session.add(self.db)
             session.refresh(self.db)
             result = method(self, *args, **kwargs)       
