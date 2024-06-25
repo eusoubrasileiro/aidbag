@@ -71,9 +71,12 @@ def fillFormPrioridade(infos, **kwargs):
     work = infos['work']     
     match work: # awesome powerful match - NO multiple matches allowed but strong pattern matching
         case { 'resultado' : 'ok' }:                        
-            if round(infos['work']['areas']['percs'][0], 2) >= 100:
+            if infos['work']['areas']['percs'][0] >= 100:
                 xset(form, 'Resultado - área livre')
                 Obs += "Área livre. Recomenda-se dar seguimento a análise de plano."
+            elif round(infos['work']['areas']['percs'][0], 2) >= 100:
+                xset(form, 'Resultado - área livre')
+                Obs += "Área original requerida ~100%. Recomenda-se dar seguimento a análise de plano."            
             else: 
                 xset(form, 'Resultado - parcial 1 área remanescente')
                 Obs += (f"Área original requerida foi reduzida "
