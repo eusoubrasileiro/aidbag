@@ -35,7 +35,7 @@ def minutaName(tipo, fase):
         return "Minuta de Portaria de Lavra"
     elif "pesquisa" in tipo:
         return "Minuta de Alvará de Pesquisa"
-    elif "licenciamento"in tipo:
+    elif "licen" in tipo:
         return "Minuta de Licenciamento"
     elif "extração" in tipo:
         return "Minuta de Registro de Extração"
@@ -71,7 +71,7 @@ def inferWork(process, folder='.'):
     tipo = infos['tipo'].lower()
     if 'leilão' in tipo or 'pública' in tipo:  
         work['type'] = WORK_ACTIVITY.REQUERIMENTO_EDITAL      
-        son, dad = dispSonDad(process)
+        son, dad = dispDadSon(process)
         dadnup = getNUP(dad)            
         if 'leilão' in tipo:
             work['edital'] = {'tipo': 'Leilão', 'pai': dadnup}
@@ -89,9 +89,9 @@ def inferWork(process, folder='.'):
             pdf_sigareas = [ file for file in folder.glob(config['sigareas']['doc_prefix'] + '*.pdf') ]
             infos['estudo']['sigareas']['pdf_path'] = pdf_sigareas[0] if pdf_sigareas else None
             infos['estudo']['sigareas']['pdf_text'] = readPdfText(infos['estudo']['sigareas']['pdf_path']) if pdf_sigareas else None                
-        if infos['estudo']['sigareas']['pdf_text']:            
-            pdf_sigareas_text = infos['estudo']['sigareas']['pdf_text']   
-            sigareas = infos['estudo']['sigareas']
+        sigareas = infos['estudo']['sigareas']
+        if sigareas['pdf_text']:            
+            pdf_sigareas_text = sigareas['pdf_text']               
             if 'Bloqueio' in pdf_sigareas_text and (
                 'LT' in pdf_sigareas_text or 'PCH' in pdf_sigareas_text): 
                 # BLOQUEIO PROVISÓRIO SÓ SERVE PARA EMPREENDIMENTOS ELÉTRICOS PROG 500
@@ -111,6 +111,7 @@ def inferWork(process, folder='.'):
                 area_text='ÁREA EM HECTARES:' # para cada area poligonal
                 perc_text='PORCENTAGEM ENTRE ESTA ÁREA E A ÁREA ORIGINAL DO PROCESSO:'  
                 count = pdf_sigareas_text.count(perc_text)  
+                work['areas']['count'] = count 
                 match count:
                     case 1:
                         work['resultado'] = 'ok'
