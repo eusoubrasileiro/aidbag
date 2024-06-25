@@ -83,7 +83,11 @@ def readdb(method: callable) -> callable:
         with self._manager.session() as session:
             obj_session = object_session(self.db)
             # object might be on another session from another thread
-            if obj_session is None or obj_session != session: 
+            if obj_session is None or obj_session != session:                
+                if obj_session is not None: # uggly but simpler
+                    # in the future try something simpler like one single session?
+                    # since two or more thread session cannot the same object
+                    obj_session.expunge(self.db)
                 session.add(self.db)
             session.refresh(self.db)
             result = method(self, *args, **kwargs)       
