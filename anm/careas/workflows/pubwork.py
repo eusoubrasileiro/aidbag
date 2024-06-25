@@ -153,6 +153,19 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
             requerimento=info['tipo'], 
             minuta=info['work']['minuta']['title'])     
 
+
+    elif activity in WORK_ACTIVITY.FORMULARIO_1_DIREITO_RLAVRA:
+        psei.insereDocumentoExterno( "Estudo de Retirada de Interferência", 
+         info['estudo']['sigareas']['pdf_path'])
+        if 'ok' in info['work']['resultado']:     
+            pdf_adicional = info['work']['pdf_adicional']
+            if pdf_adicional and not pdf_adicional.exists():                          
+                downloadMinuta(wpage, process.name, 
+                                str(pdf_adicional.absolute()), MINUTA.fromName(info['work']['minuta']['title']))
+            # guarantee to insert an empty in any case
+            pdf_adicional = str(pdf_adicional.absolute()) if pdf_adicional else None 
+            psei.insereDocumentoExterno(info['work']['minuta']['title'], pdf_adicional) 
+
     # elif activity in WORK_ACTIVITY.REQUERIMENTO_EDITAL:
     #     psei.insereDocumentoExterno("Estudo Interferência", str(info['pdf_sigareas'].absolute()))   
     #     if not info['pdf_adicional'].exists():
@@ -171,15 +184,7 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
     #         psei.insereNotaTecnicaRequerimento("sem_redução", info) 
     #         # Recomenda Só análise de plano s/ notificação titular (mais comum)
 
-    # elif activity in WORK_ACTIVITY.DIREITO_RLAVRA_FORMULARIO_1:
-    #     psei.insereDocumentoExterno(0, str(info['pdf_sigareas'].absolute())) 
-    #     if 'ok' in info['estudo']:                
-    #         if not info['pdf_adicional'].exists():
-    #             downloadMinuta(wpage, process.name, 
-    #                             str(info['pdf_adicional'].absolute()), info['minuta']['code'])
-    #         # guarantee to insert an empty in any case
-    #         pdf_adicional = str(info['pdf_adicional'].absolute()) if info['pdf_adicional'].exists() else None 
-    #         psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional) 
+
     # elif activity in WORK_ACTIVITY.REQUERIMENTO_OPCAO_ALVARA: # opção de área na fase de requerimento
     #     psei.insereDocumentoExterno(3, str(info['pdf_sigareas'].absolute()))  # estudo opção
     #     if not info['pdf_adicional'].exists():
