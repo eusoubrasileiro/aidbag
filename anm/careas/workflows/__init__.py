@@ -1,9 +1,9 @@
 from . import sei
 
 from .pubwork import (
-    IncluiDocumentosSEI,     
-    IncluiDocumentosSEIFirstN,
-    IncluiDocumentosSEI_list
+    PublishDocumentosSEI,     
+    PublishDocumentosSEIFirstN,
+    PublishDocumentosSEI_list
 )
 from .enums import (
     WORK_ACTIVITY, 

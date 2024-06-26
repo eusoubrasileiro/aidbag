@@ -43,7 +43,7 @@ def minutaName(tipo, fase):
         return "Minuta de Lavra Garimpeira"
 
 
-def inferWork(process, folder='.'):
+def inferWork(processname, dados, folder='.'):
     """
     From a Processo object and work-folder, infer the work done and fill in a dictionary with information to fill out documents and forms.
     
@@ -54,7 +54,7 @@ def inferWork(process, folder='.'):
     returns dict with lots of infos key,value pairs    
     """
     
-    infos = process.dados # needed by reg. extração and ?
+    infos = dados # needed by reg. extração and ?
     infos['work'] = { 
         'type' : None, 
         'minuta' : {'title' : None, 'code' : None},
@@ -71,7 +71,7 @@ def inferWork(process, folder='.'):
     tipo = infos['tipo'].lower()
     if 'leilão' in tipo or 'pública' in tipo:  
         work['type'] = WORK_ACTIVITY.REQUERIMENTO_EDITAL      
-        son, dad = dispDadSon(process)
+        son, dad = dispDadSon(processname)
         dadnup = getNUP(dad)            
         if 'leilão' in tipo:
             work['edital'] = {'tipo': 'Leilão', 'pai': dadnup}

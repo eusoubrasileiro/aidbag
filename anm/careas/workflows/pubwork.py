@@ -25,8 +25,12 @@ from .folders import (
 )
 
 
-def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
-        empty=False, termo_abertura=False, verbose=True, **kwargs):
+class AlreadyPublished(Exception):
+  """Raised when a process was already published."""  
+
+
+def PublishDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
+        empty=False, termo_abertura=False, verbose=True, republish=False, **kwargs):
     """
     Inclui process documents from folder specified on `ProcessPathStorage`
 
@@ -56,6 +60,10 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
         
     * termo_abertura: False
         To add for process older than < 2020
+
+    * republish: False
+        whether to republish a process already published on SEI
+        check if dados['work']['published'] === True
                 
     """
     
@@ -77,12 +85,20 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
             scm.ProcessManager.GetorCreate(process_name, wpage, task=scm.SCM_SEARCH.BASICOS_POLIGONAL)
     
     process = scm.ProcessManager[process_name]  
+    dados = process.dados 
+
+    if ('work' in dados and 
+        'published' in dados['work'] and 
+        dados['work']['published'] and 
+        not republish):
+        raise AlreadyPublished("Process already published ignoring")
+
     process_folder = None     
     if usefolder: # needs folder docs and information  
         if process_name not in ProcessPathStorage:     
             raise FileNotFoundError(f"Process {process_name} folder not found! Just checked in ProcessPathStorage. Did you run it?")
         process_folder = ProcessPathStorage[process_name]
-    info = inferWork(process, process_folder)     
+    info = inferWork(process_name, dados, process_folder)     
         
     if not activity:        
         activity = info['work']['type'] # get from inferred information
@@ -231,12 +247,22 @@ def IncluiDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
     # TODO: I need another database to save these - like an Archive
     # process._dados['estudo].update( {'sei-sent': True, 'time' : datetime.datetime.now()} )
     # process.changed() # update database 
+    
+    # prepare to save to db that it was published
+    work = dados['work']    
+    if 'nome_assinatura' in work:
+        del work['nome_assinatura']
+    work['type'] = str(work['type'])
+    work['published'] = True
+    # save on db it was published successfully
+    process.update(info)
 
 
 
-def IncluiDocumentosSEI_list(sei, wpage, process_names, **kwargs):
+
+def PublishDocumentosSEI_list(sei, wpage, process_names, **kwargs):
     """
-    Wrapper for `IncluiDocumentosSEI` 
+    Wrapper for `PublishDocumentosSEI` 
     
     Aditional args should be passed as keyword arguments
 
@@ -245,22 +271,25 @@ def IncluiDocumentosSEI_list(sei, wpage, process_names, **kwargs):
     done = '' 
     for process_name in tqdm.tqdm(process_names):
         try:
-            IncluiDocumentosSEI(sei, process_name, wpage, **kwargs)
+            PublishDocumentosSEI(sei, process_name, wpage, **kwargs)
+        except AlreadyPublished:
+            print(f"Ignored {process_name} already published", file=sys.stderr)           
+            continue 
         except Exception:
-            print("Process {:} Exception: ".format(process_name), traceback.format_exc(), file=sys.stderr)           
+            print(f"Process {process_name} Exception: ", traceback.format_exc(), file=sys.stderr)           
             continue       
         done += scm.ProcessManager[process_name]['NUP'] + '\n'
     print(f"Done:\n{done}")     
 
 
-def IncluiDocumentosSEIFirstN(sei, wpage, nfirst=1, path=None, **kwargs):
+def PublishDocumentosSEIFirstN(sei, wpage, nfirst=1, path=None, **kwargs):
     """
     Inclui first process folders `nfirst` (list of folders) docs on SEI. Follow order of glob(*) 
     
-    Wrapper for `IncluiDocumentosSEI` 
+    Wrapper for `PublishDocumentosSEI` 
     
     Aditional args should be passed as keyword arguments
     """
     currentProcessGet(path)    
     process_folders = list(ProcessPathStorage.keys())[:nfirst]
-    IncluiDocumentosSEI_list(sei, wpage, process_folders, **kwargs)
+    PublishDocumentosSEI_list(sei, wpage, process_folders, **kwargs)
