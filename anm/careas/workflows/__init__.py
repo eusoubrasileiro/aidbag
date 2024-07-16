@@ -15,7 +15,8 @@ from .config import __workflow_debugging__
 from .folders import (
     processPath, 
     currentProcessGet,
-    ProcessPathStorage
+    ProcessPathStorage,
+    currentProcessMove
 )
 from .prework import BatchPreAnalyses
 
