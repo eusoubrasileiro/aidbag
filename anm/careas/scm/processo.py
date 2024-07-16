@@ -288,10 +288,10 @@ class Processo():
             for process_name, future_process in future_processes.items():               
                 try:
                     future_process.result()
-                except requests.BasicosErrorSCM:
+                except requests.BasicosErrorSCM as e:
                     if self._verbose:
-                        print(f"Exception raised while running"
-                        " expandAssociados->graphAddEdges thread for process {process_name}",
+                        print("Exception raised while running"
+                        f" expandAssociados->graphAddEdges thread for process {process_name}",
                             file=sys.stderr)
                     # MUST delete process if did not get scm page
                     # Because will break by not having 'data_prioridade' 

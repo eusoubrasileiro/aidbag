@@ -423,8 +423,8 @@ class Interferencia:
     @staticmethod
     def from_html(wpage, dir='.', overwrite=False):
         name = pud.getAll(pathlib.Path(dir).absolute().stem)[0]
-        if overwrite and processostr in ProcessManager: # delete from database in case of overwrite            
-            del ProcessManager[processostr]
+        if overwrite and name in ProcessManager: # delete from database in case of overwrite            
+            del ProcessManager[name]
             estudo = Interferencia(wpage, name, verbose=False, getprocesso=True)        
         else:
             processo = ProcessManager[name]
