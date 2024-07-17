@@ -26,7 +26,7 @@ class BasicosErrorSCM(Exception):
     Or others like not found errors
     """
 
-class PoligonalErrorSCM(BasicosErrorSCM):
+class PoligonalErrorSCM(Exception):
     """ Poligonal Error not accessible on page or not found etc.
     """
 
@@ -73,7 +73,7 @@ def pageRequest(pagename : Literal['basic', 'polygon'], processopud : str, wpage
             if 'Erro ao mudar a versão para a data selecionada.' in wpage.response.text:
                 if retry_on_error:
                     return pageRequest(pagename, processopud, wpage, retry_on_error=retry_on_error-1)
-                raise BasicosErrorSCM(f"Processo {processopud} failed download poligonal from SCM database.")    
+                raise PoligonalErrorSCM(f"Processo {processopud} failed download poligonal from SCM database.")    
     except (BasicosErrorSCM, HTTPError, ReadTimeout) as e:
         if retry_on_error: 
             return pageRequest(pagename, processopud, wpage, retry_on_error=retry_on_error-1)
