@@ -64,7 +64,8 @@ def BatchPreAnalyses(wpage : wPageNtlm, processos: list[scm.pud],
                 dados = pobj.dados
                 dados['prework'] = {'status' : 'error', 'error' : str(e)} # save for use on workapp
                 pobj.update(dados)
-                failed_NUPS.append((pobj['NUP'], str(e)))             
+                nupstr = dados['NUP'] if 'NUP' in dados else processo # NotFoundError don't even fetch it                   
+                failed_NUPS.append((nupstr, str(e)))             
             else:
                 pobj = scm.ProcessManager[processo] 
                 dados = pobj.dados
