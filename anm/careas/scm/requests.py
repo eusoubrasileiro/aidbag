@@ -16,19 +16,29 @@ from ..config import config
 scm_processo_main_url='https://sistemas.anm.gov.br/SCM/Intra/site/admin/dadosProcesso.aspx'
 
 
-class BasicosErrorSCM(Exception):
-    """ Scm Page Request errors.
+class RequestsSCMException(Exception):
+    """
+    Generic Scm Page request error
+    """
+
+class BasicosErrorSCM(RequestsSCMException):
+    """
+    Basicos Page Tab related errors. Like:
+    1. Object reference not set to an instance of an object. 
+    2. Could not fetch process from SCM. (Probably corrupted on the database)    
+    """
+
+class PoligonalErrorSCM(RequestsSCMException):
+    """
+    Poligonal Page Tab related errors. Like:
+    Not accessible on page or not found etc.
+    """
+
+class NotFoundErrorSCM(RequestsSCMException):
+    """
+    Process not found
+    """
     
-    Like: 
-    Object reference not set to an instance of an object. 
-    Could not fetch process from SCM. Probably missing or corrupted on the database.
-
-    Or others like not found errors
-    """
-
-class PoligonalErrorSCM(Exception):
-    """ Poligonal Error not accessible on page or not found etc.
-    """
 
 def pageRequest(pagename : Literal['basic', 'polygon'], processopud : str, wpage : wPageNtlm, retry_on_error : int = 2):
     """   Get & Post na página dados do Processo do Cadastro  Mineiro (SCM)
@@ -55,7 +65,7 @@ def pageRequest(pagename : Literal['basic', 'polygon'], processopud : str, wpage
             wpage.post(scm_processo_main_url,
                     data=formdata, timeout=config['scm']['timeout'])
             if "Processo não encontrado" in wpage.response.text:            
-                raise BasicosErrorSCM(f"Processo {processopud} not found! Couldn't download.") 
+                raise NotFoundErrorSCM(f"Processo {processopud} not found! Couldn't download.") 
             elif ("ctl00_conteudo_gridPessoas" not in wpage.response.text or 
                     "ctl00_conteudo_gridEventos" not in wpage.response.text): # integrity check of 'gridPessoas'
                 raise BasicosErrorSCM(f"Processo {processopud} download error.")
@@ -71,13 +81,11 @@ def pageRequest(pagename : Literal['basic', 'polygon'], processopud : str, wpage
             wpage.post(scm_processo_main_url, 
                     data=formdata, timeout=config['scm']['timeout'])
             if 'Erro ao mudar a versão para a data selecionada.' in wpage.response.text:
-                if retry_on_error:
-                    return pageRequest(pagename, processopud, wpage, retry_on_error=retry_on_error-1)
                 raise PoligonalErrorSCM(f"Processo {processopud} failed download poligonal from SCM database.")    
-    except (BasicosErrorSCM, HTTPError, ReadTimeout) as e:
+    except (RequestsSCMException, HTTPError, ReadTimeout) as e:
         if retry_on_error: 
             return pageRequest(pagename, processopud, wpage, retry_on_error=retry_on_error-1)
-        elif isinstance(e, BasicosErrorSCM):
+        elif isinstance(e, RequestsSCMException):
             raise
         elif isinstance(e, HTTPError):
             if "Object reference not set to an instance of an object" in wpage.response.text:                

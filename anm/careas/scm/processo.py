@@ -288,7 +288,7 @@ class Processo():
             for process_name, future_process in future_processes.items():               
                 try:
                     future_process.result()
-                except requests.BasicosErrorSCM as e:
+                except requests.RequestsSCMException as e:
                     if self._verbose:
                         print("Exception raised while running"
                         f" expandAssociados->graphAddEdges thread for process {process_name}",

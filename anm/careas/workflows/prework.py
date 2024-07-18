@@ -5,11 +5,19 @@ import tqdm
 from ....web.htmlscrap import wPageNtlm
 from .. import estudos
 from .. import scm
+from ..scm.requests import RequestsSCMException
 from ..estudos.scraping import DownloadInterferenciaFailed
 from ..config import config
 from ..util import processPath
 from .sei import Sei, Processo
 from .enums import ESTUDO_TYPE
+
+# with sei.Sei(anm_user, anm_passwd, True) as seid:     
+#     for name in progressbar(wf.currentProcessGet()):           
+#         p = scm.ProcessManager[name]
+#         if 'licen' in p['tipo'].lower(): # todos tipo licenciamento - ou que 
+#             psei = sei.Processo.fromSei(seid, p['NUP'])                   
+#             psei.downloadDocumentosFiltered(lambda x: True if 'municip' in x['title'].lower() else False)
 
 
 def BatchPreAnalyses(wpage : wPageNtlm, processos: list[scm.pud], 
@@ -51,7 +59,7 @@ def BatchPreAnalyses(wpage : wPageNtlm, processos: list[scm.pud],
                     psei = Processo.fromSei(seid, proc['NUP'])
                     # download licença municipal if any
                     psei.downloadDocumentosFiltered(lambda x: True if 'municip' in x['title'].lower() else False)
-            except DownloadInterferenciaFailed as e:
+            except (DownloadInterferenciaFailed, RequestsSCMException) as e:
                 pobj = scm.ProcessManager[processo] 
                 dados = pobj.dados
                 dados['prework'] = {'status' : 'error', 'error' : str(e)} # save for use on workapp

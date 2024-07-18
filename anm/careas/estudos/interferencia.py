@@ -15,9 +15,7 @@ from ..scm import (
     SCM_SEARCH,
     util,
     pud,
-    ProcessManager,
-    PoligonalErrorSCM,
-    BasicosErrorSCM
+    ProcessManager
 )
 
 from ..util import processPath

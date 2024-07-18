@@ -12,8 +12,10 @@ from .manager import (
 )
 
 from .requests import (
+    RequestsSCMException,
     BasicosErrorSCM,
-    PoligonalErrorSCM
+    PoligonalErrorSCM,    
+    NotFoundErrorSCM
 )
 
 
