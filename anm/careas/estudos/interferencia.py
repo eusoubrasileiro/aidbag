@@ -15,7 +15,8 @@ from ..scm import (
     SCM_SEARCH,
     util,
     pud,
-    ProcessManager
+    ProcessManager,
+    PoligonalErrorSCM
 )
 
 from ..util import processPath
@@ -122,7 +123,7 @@ class Interferencia:
             `DownloadInterferenciaFailed`, `CancelaUltimoEstudoFailed`
         """
         if overwrite and processostr in ProcessManager: # delete from database in case of overwrite            
-            del ProcessManager[processostr]
+            del ProcessManager[processostr]        
         estudo = Interferencia(wpage, processostr, verbose=verbose)
         estudo._processo.salvaPageScmHtml(estudo.processo_path, 'basic', overwrite)
         estudo._processo.salvaPageScmHtml(estudo.processo_path, 'polygon', overwrite)                    
