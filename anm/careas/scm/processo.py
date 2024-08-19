@@ -348,7 +348,17 @@ class Processo():
         if not isinstance(self._wpage, wPageNtlm):
             raise Exception('Invalid `wPage` instance!')
         # str unicode page
-        html, url = requests.pageRequest(name, self.name, self._wpage, False)        
+        try:
+            html, url = requests.pageRequest(name, self.name, self._wpage, False)        
+        except requests.RequestsSCMException as e:            
+            dados = self.dados
+            dados['status'] = {'error' : str(e)}
+            self.update(dados)                        
+            raise e 
+        else:
+            dados = self.dados
+            dados['status'] = 'ok'
+            self.update(dados)                        
         if name == 'basic':
             self._set_html('basic', html) # I don't need images here
         else: # polygon images will be embedded as base64 strings hence perfectly displayable

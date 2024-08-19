@@ -59,10 +59,15 @@ def BatchPreAnalyses(wpage : wPageNtlm, processos: list[scm.pud],
                     psei = Processo.fromSei(seid, proc['NUP'])
                     # download licença municipal if any
                     psei.downloadDocumentosFiltered(lambda x: True if 'municip' in x['title'].lower() else False)
-            except (DownloadInterferenciaFailed, RequestsSCMException) as e:
+            except RequestsSCMException as e:
                 pobj = scm.ProcessManager[processo] 
                 dados = pobj.dados
-                dados['prework'] = {'status' : 'error', 'error' : str(e)} # save for use on workapp
+                dados['prework'] = {'status' : dados['status'] }  # save for use on workapp
+                pobj.update(dados)                
+            except DownloadInterferenciaFailed as e:                
+                pobj = scm.ProcessManager[processo] 
+                dados = pobj.dados
+                dados['prework'] = {'status' : {'error' : str(e)} } # save for use on workapp
                 pobj.update(dados)
                 nupstr = dados['NUP'] if 'NUP' in dados else processo # NotFoundError don't even fetch it                   
                 failed_NUPS.append((nupstr, str(e)))             
