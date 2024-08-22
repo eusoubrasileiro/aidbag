@@ -6,7 +6,7 @@ from functools import cmp_to_key
 import networkx as nx
 import matplotlib.pyplot as plt
 from .pud import cmpPud, pud
-
+from networkx import is_tree
 
 class pGraph(nx.DiGraph):
     """

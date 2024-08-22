@@ -4,7 +4,7 @@ import traceback
 from concurrent import futures
 import enum
 import time
-import tqdm
+import queue
 from functools import cmp_to_key
 from threading import RLock, Lock
 from functools import wraps
@@ -32,7 +32,8 @@ from .parsing import (
 
 from .ancestry import (
     pGraph,
-    toChronology
+    toChronology,
+    is_tree    
 )
 
 from .sqlalchemy import Processodb, object_session
@@ -260,79 +261,74 @@ class Processo():
         if self._verbose:
             print("expandAssociados - getting associados: ", self.name,
             ' - ass_ignore: ', ass_ignore, file=sys.stderr)
-      
-        lock = Lock()  # to not modify the graph 
-        executor = futures.ThreadPoolExecutor()
-        manager = self._manager
-        def graphAddEdges(name:str, G: pGraph, previous: str = ''):
-            """ 
-            * process : processo name
-            * G : `networkx` graph 
-            * previous: previous node name where search came from
-                guarantee outward moving
-            """
-            process =  manager.GetorCreate(name, 
-                self._wpage, SCM_SEARCH.BASICOS, self._verbose)            
-            associados = process['associados']['dict']                    
-            if previous and previous in associados:
-                del associados[previous] # removing circular reference 
-            # first try to request the associados if they suceed we can add 
-            # in the graph since we need their basic data like 'data_protocolo'            
-            future_processes = { associado : 
-                executor.submit(graphAddEdges, associado, G, name)
-                for associado in associados }            
-            futures.wait(future_processes.values())  # wait then finish
-            # use a dict to map { process name : future_wrapped_Processo }             
-            # due possibility of exception on Thread and to know which process 
-            # was responsible for that 
-            for process_name, future_process in future_processes.items():               
-                try:
-                    future_process.result()
-                except requests.RequestsSCMException as e:
-                    if self._verbose:
-                        print("Exception raised while running"
-                        f" expandAssociados->graphAddEdges thread for process {process_name}",
-                            file=sys.stderr)
-                    # MUST delete process if did not get scm page
-                    # Because will break by not having 'data_prioridade' 
-                    del manager[process_name]
-                    del associados[process_name]                    
-                    if self._verbose:
-                        print(str(e) + f" Removed from associados. Exception ignored!",
-                            file=sys.stderr)
-                    continue
-            # finally associados only contain valid processos - add to graph            
-            for associado in associados:
-                with lock:  
-                    if (G.has_edge(process.name, associado) or
-                        G.has_edge(associado, process.name)): # guarantee it acyclic
-                        continue        
-                    # add node source -> target and  edge (arrow ->) attributes dict
-                    G.add_edge(process.name, associado, **associados[associado])
-        # Create graph of associados direct -> each edge has a direction 
-        # each node is a process, each edge (connection) has 
-        # the attributes of `Processo['associados']['dict'][process.name]`
-        # It's a tree acyclic guaranteed above by not adding the same edge twice.
-        # not dealing with grupamento many parents yet
+
         G = pGraph()
-        graphAddEdges(self.name, G) # this graph is oriented by search
-        G = toChronology(G) # oriented by chronology is save                   
-        # graph is ready need to DB-save-it on ALL processes on its nodes
-        for name in G.nodes:
-            proc = manager[name]
-            dados = proc.dados
-            dados['associados']['graph'] = G.toList()
-            proc.update(dados)
-        # sort everything only by name for now... todo in future check also 
-        # data_assoc if an exception of comparision happens
-        nodes = sorted(list(G.nodes), key=cmp_to_key(cmpPud))
+        if self._verbose:
+            self.graph = G # for debugging 
+        visited = set() 
+        # outward expand the graph using a queue instead of threads
+        # MUCH simpler and safer to control what's happening and avoid deadlocks
+        # slower but async is the next step
+        # doesn't assume the graph is a tree or whatever else
+        process_queue = queue.Queue()
+        process_queue.put(self.name)
+        while not process_queue.empty():
+            process_name = process_queue.get()
+            if process_name in visited:
+                continue
+            visited.add(process_name)                   
+            # this here can be made async from gemini answer
+            # turn from G = pGraph() .. a function
+            # TODO:  Run synchronous web scraping in a thread
+            # await asyncio.to_thread(self._manager.GetorCreate, process_name, ...)  #
+            process =  self._manager.GetorCreate(process_name, 
+                self._wpage, SCM_SEARCH.BASICOS, self._verbose) 
+            associados = process['associados']['dict']
+            for associado, edge_data in associados.items(): 
+                if associado not in visited:
+                    process_queue.put(associado)
+                    # add node source -> target and  edge (arrow ->) attributes dict
+                    G.add_edge(process_name, associado, **edge_data)               
+                    if self._verbose:
+                        print(f"Adding edge {process_name}->{associado} "
+                              f"at graph at {process_name} for debugging", file=sys.stderr)
+                        
+        # Run the asynchronous graph construction
+        # asyncio.run(build_graph_async(initial_process_name))
+
+        if G.nodes():
+            if is_tree(G): # a tree graph expected well behaved
+                # graph due (cessões parciais, disponibilidade ... )
+                G = toChronology(G) # oriented by chronology is save                   
+                # sort everything only by name for now... todo in future check also 
+                # data_assoc if an exception of comparision happens
+                nodes = sorted(list(G.nodes), key=cmp_to_key(cmpPud))
+                if nodes:
+                    oldest = nodes[0]  
+                    dados = self.dados
+                    dados['prioridadec'] = self._manager[oldest]['prioridade']        
+            else: # this likely a crazy, cyclic graph or worse
+                # processos associados a multiplos agrupamentos que deveriam ter sido desconectados
+                print("Acyclic or complex graph can't infer prioridade from oldest", file=sys.stderr)
+                # you can plot and interactivly visualize it on Gephi (use Yifan Hu layout)
+                # for that you need to export like bellow to .gexf format
+                # Convert datetime attributes to strings
+                # for u, v, attrs in p.graph.edges(data=True):
+                #     for key, value in attrs.items():
+                #         if isinstance(value, datetime.datetime):
+                #             attrs[key] = value.isoformat()  # Convert to ISO 8601 format
+                # nx.write_gexf(p.graph, 'cyclic_graph.gexf') 
+        
+            # graph is ready need to DB-save-it on ALL processes on its nodes
+            for name in G.nodes:
+                proc = self._manager[name]
+                proc_dados = proc.dados
+                proc_dados['associados']['graph'] = G.toList()
+                proc.update(proc_dados)
+
         dados = self.dados
-        if nodes:
-            oldest = nodes[0]  
-            dados['prioridadec'] = manager[oldest]['prioridade']        
         dados['run']['associados'] = True        
         self.update(dados)
-
 
     @threadsafe
     def _ancestry(self):
