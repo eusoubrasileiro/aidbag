@@ -85,7 +85,7 @@ class Poligon():
         if parse:
             points = readMemorial(points, decimal=True, fmt=fmt)
         points = np.copy(points) # it will be set to data, must not hold references
-        if (not np.alltrue(points[0] == points[-1])): # must be a closed => poligon!
+        if (not np.all(points[0] == points[-1])): # must be a closed => poligon!
             points = np.append(points, points[0:1], axis=0) # add first point to the end  
         self.data = points
         dist_angle = [] # dist, angle pairs

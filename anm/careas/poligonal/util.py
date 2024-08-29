@@ -211,7 +211,7 @@ def check_nsew_memo(data, maxdev=0):
     maxs = np.max(vectors, axis=-1) 
     mins = np.min(vectors, axis=-1)
     dev_angles = np.rad2deg(mins/maxs) # angles of deviation from n/s/e/w
-    if not np.alltrue(dev_angles <= maxdev):
+    if not np.all(dev_angles <= maxdev):
         return False, dev_angles
     return True, dev_angles
 
@@ -279,7 +279,7 @@ def forceverdPoligonal(vertices, tolerancem=0.5, view=False, close_poly=True, de
     """
     if not isinstance(vertices, np.ndarray):
         raise NotImplemented()          
-    if np.alltrue(vertices[0] == vertices[-1]): # needed for calculations bellow
+    if np.all(vertices[0] == vertices[-1]): # needed for calculations bellow
         vertices = vertices[:-1]  # remove end (repeated vertex)      
     dists, vertices_new = _forceverdAprox(vertices, tolerancem, debug)
     if debug and dists: # not dists: means no statistics to report and nothing more            
