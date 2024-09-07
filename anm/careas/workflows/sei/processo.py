@@ -223,8 +223,9 @@ class Processo(Sei):
             'Formulário de Análise do Direito de Prioridade']
         docname = closest_string(partial_text, docnames)
         self.barraComandos(BARRACOMANDOS_BUTTONS.INCLUIR_DOCUMENTO)  
-        # *= contains text in lowercase - before convert to ASCII
-        click(self.driver, f"tr[data-desc*='{unidecode(docname.lower())}'] td a:last-child", delay=DELAY_SMALL)                          
+        # *= contains text in lowercase - before convert to ASCII        
+        click(self.driver, f"tr[data-desc*='{unidecode(docname.lower())}'] td a:last-child", 
+                delay=DELAY_SMALL, timeout=TIMEOUT_LARGE)                          
     
     def insereDocumentoExterno(self, docname, pdf_path=None):
         """
