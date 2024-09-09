@@ -70,7 +70,7 @@ def inferWork(processname, dados, folder='.'):
 
     tipo = infos['tipo'].lower()
     if 'leilão' in tipo or 'pública' in tipo:  
-        work['type'] = WORK_ACTIVITY.REQUERIMENTO_EDITAL      
+        work['type'] = WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL      
         son, dad = dispDadSon(processname)
         dadnup = getNUP(dad)            
         if 'leilão' in tipo:
@@ -78,7 +78,7 @@ def inferWork(processname, dados, folder='.'):
         else:
             work['edital'] = {'tipo': 'Oferta Pública', 'pai': dadnup}
 
-    folder = pathlib.Path(folder) if not isinstance(folder, pathlib.Path) else folder
+    folder = pathlib.Path(folder) if not isinstance(folder, pathlib.Path) and folder is not None else folder
 
     if isinstance(folder, pathlib.Path):
         # backward compatibility - search/parse local folder
