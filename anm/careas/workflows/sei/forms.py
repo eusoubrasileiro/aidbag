@@ -129,6 +129,7 @@ def fillFormPrioridade(infos, **kwargs):
             xset(form, 'Resultado - parcial 1 área remanescente', value='')
             xset(form, 'Resultado - área livre', value='')
             xset(form, 'Resultado - parcial n áreas remanescentes', value='')
+            xset(form, 'Resultado - interfere totalmente', value='') 
         elif 'sustentavel' in text_layer:          
             xset(form, 'Área restrição parcial Sim')
             xset(form, 'Área especial de restrição parcial - Não', '') # unmark
