@@ -125,7 +125,10 @@ def fillFormPrioridade(infos, **kwargs):
             "que disciplina o procedimento de bloqueio. "
             "O termo de renúncia anexo ao Parecer é o dispositivo que possibilita, "
             "à critério da ANM, prosseguir com a análise do requerimento.")
-
+            # clean up other checks of resultado
+            xset(form, 'Resultado - parcial 1 área remanescente', value='')
+            xset(form, 'Resultado - área livre', value='')
+            xset(form, 'Resultado - parcial n áreas remanescentes', value='')
         elif 'sustentavel' in text_layer:          
             xset(form, 'Área restrição parcial Sim')
             xset(form, 'Área especial de restrição parcial - Não', '') # unmark
@@ -161,8 +164,7 @@ def fillFormPrioridade(infos, **kwargs):
         elif 'indigena' in text_layer:
             xset(form, 'Área restrição total Sim')
             xset(form, 'Área especial de restrição total - Não', '') # unmark
-            xset(form, 'Área restrição total - especifique - Indígena')                
-
+            xset(form, 'Área restrição total - especifique - Indígena')       
     xset(form, 'observacoes', Obs)   
     doc_templates = pathlib.Path(config['sei']['doc_templates'])            
     template_path = next(doc_templates.glob(f"*form_analise*.html")) # get the template by name 
