@@ -30,7 +30,7 @@ class AlreadyPublished(Exception):
 
 
 def PublishDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
-        empty=False, termo_abertura=False, verbose=True, republish=False, **kwargs):
+        empty=False, termo_abertura=False, verbose=True, republish=False, sign=False, **kwargs):
     """
     Inclui process documents from folder specified on `ProcessPathStorage`
 
@@ -64,7 +64,9 @@ def PublishDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True
     * republish: False
         whether to republish a process already published on SEI
         check if dados['work']['published'] === True
-                
+    
+    * sign: False
+        whether to sign after publishing or not                 
     """
     
     if not ProcessPathStorage: # empty process path storage
@@ -97,7 +99,7 @@ def PublishDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True
     if usefolder: # needs folder docs and information  
         if process_name not in ProcessPathStorage:     
             raise FileNotFoundError(f"Process {process_name} folder not found! Just checked in ProcessPathStorage. Did you run it?")
-        process_folder = ProcessPathStorage[process_name]
+        process_folder = ProcessPathStorage[process_name]        
     info = inferWork(process_name, dados, process_folder)     
         
     if not activity:        
@@ -170,36 +172,34 @@ def PublishDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True
             minuta=info['work']['minuta']['title'])     
 
 
-    elif activity in WORK_ACTIVITY.FORMULARIO_1_DIREITO_RLAVRA:
-        psei.insereDocumentoExterno( "Estudo de Retirada de Interferência", 
-         info['estudo']['sigareas']['pdf_path'])
+    # elif activity in WORK_ACTIVITY.FORMULARIO_1_DIREITO_RLAVRA:
+    #     psei.insereDocumentoExterno( "Estudo de Retirada de Interferência", 
+    #      info['estudo']['sigareas']['pdf_path'])
+    #     if 'ok' in info['work']['resultado']:     
+    #         pdf_adicional = info['work']['pdf_adicional']
+    #         if pdf_adicional and not pdf_adicional.exists():                          
+    #             downloadMinuta(wpage, process.name, 
+    #                             str(pdf_adicional.absolute()), MINUTA.fromName(info['work']['minuta']['title']))
+    #         # guarantee to insert an empty in any case
+    #         pdf_adicional = str(pdf_adicional.absolute()) if pdf_adicional else None 
+    #         psei.insereDocumentoExterno(info['work']['minuta']['title'], pdf_adicional) 
+
+    elif activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL:
+        psei.insereDocumentoExterno("Estudo Interferência", 
+                                    info['estudo']['sigareas']['pdf_path'])
         if 'ok' in info['work']['resultado']:     
             pdf_adicional = info['work']['pdf_adicional']
             if pdf_adicional and not pdf_adicional.exists():                          
                 downloadMinuta(wpage, process.name, 
                                 str(pdf_adicional.absolute()), MINUTA.fromName(info['work']['minuta']['title']))
             # guarantee to insert an empty in any case
-            pdf_adicional = str(pdf_adicional.absolute()) if pdf_adicional else None 
-            psei.insereDocumentoExterno(info['work']['minuta']['title'], pdf_adicional) 
+            pdf_adicional = str(pdf_adicional.absolute()) if pdf_adicional else None             
+            psei.insereDocumentoExterno(info['work']['minuta']['title'], pdf_adicional)         
 
-    # elif activity in WORK_ACTIVITY.REQUERIMENTO_EDITAL:
-    #     psei.insereDocumentoExterno("Estudo Interferência", str(info['pdf_sigareas'].absolute()))   
-    #     if not info['pdf_adicional'].exists():
-    #         downloadMinuta(wpage, process.name, 
-    #                 str(info['pdf_adicional'].absolute()), info['minuta']['code'])
-    #     # guarantee to insert an empty in any case
-    #     pdf_adicional = str(info['pdf_adicional'].absolute()) if info['pdf_adicional'].exists() else None 
-    #     psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional)                        
-    #     psei.insereNotaTecnicaRequerimento("edital_son", info)            
-    #     # guarantee to insert an empty in any case
-    #     pdf_adicional = str(info['pdf_adicional'].absolute()) if info['pdf_adicional'].exists() else None 
-    #     psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional)        
-    #         psei.insereNotaTecnicaRequerimento("com_redução", info, # com notificação titular
-    #                 area_porcentagem=str(info['areas']['percs'][0]).replace('.',','))                            
-    #     else:
-    #         psei.insereNotaTecnicaRequerimento("sem_redução", info) 
-    #         # Recomenda Só análise de plano s/ notificação titular (mais comum)
-
+        doc_model = "req_edital_son"
+        psei.insereNotaTecnicaRequerimento(doc_model, infos=info['work'], 
+            requerimento=info['tipo'], 
+            minuta=info['work']['minuta']['title'])                                  
 
     # elif activity in WORK_ACTIVITY.REQUERIMENTO_OPCAO_ALVARA: # opção de área na fase de requerimento
     #     psei.insereDocumentoExterno(3, str(info['pdf_sigareas'].absolute()))  # estudo opção
@@ -258,8 +258,6 @@ def PublishDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True
     process.update(info)
 
 
-
-
 def PublishDocumentosSEI_list(sei, wpage, process_names, **kwargs):
     """
     Wrapper for `PublishDocumentosSEI` 
@@ -280,6 +278,7 @@ def PublishDocumentosSEI_list(sei, wpage, process_names, **kwargs):
             continue       
         done += scm.ProcessManager[process_name]['NUP'] + '\n'
     print(f"Done:\n{done}")     
+    return done 
 
 
 def PublishDocumentosSEIFirstN(sei, wpage, nfirst=1, path=None, **kwargs):
@@ -292,4 +291,6 @@ def PublishDocumentosSEIFirstN(sei, wpage, nfirst=1, path=None, **kwargs):
     """
     currentProcessGet(path)    
     process_folders = list(ProcessPathStorage.keys())[:nfirst]
-    PublishDocumentosSEI_list(sei, wpage, process_folders, **kwargs)
+    done = PublishDocumentosSEI_list(sei, wpage, process_folders, **kwargs)
+    return done 
+
