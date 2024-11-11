@@ -71,13 +71,13 @@ def inferWork(processname, dados, folder='.'):
     tipo = infos['tipo'].lower()
     if 'leilão' in tipo or 'pública' in tipo:  
         work['type'] = WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL      
-        son, dad = dispDadSon(processname)
+        dad, son = dispDadSon(processname)
         dadnup = getNUP(dad)   
         sonnup = getNUP(son)         
         if 'leilão' in tipo:
-            work['edital'] = {'tipo': 'Leilão', 'pai': dadnup, 'son' : sonnup}
+            work['edital'] = {'tipo': 'Leilão', 'dad': dadnup, 'son' : sonnup}
         else:
-            work['edital'] = {'tipo': 'Oferta Pública', 'pai': dadnup, 'son' : sonnup}
+            work['edital'] = {'tipo': 'Oferta Pública', 'dad': dadnup, 'son' : sonnup}
 
     folder = pathlib.Path(folder) if not isinstance(folder, pathlib.Path) and folder is not None else folder
 

@@ -28,9 +28,32 @@ from .folders import (
 class AlreadyPublished(Exception):
   """Raised when a process was already published."""  
 
+def handle_pdf_adicional(psei, dadosx, wpage, process_name):
+    """Handles additional PDF download and insertion."""
+    pdf_adicional = dadosx['work']['pdf_adicional']
+    if pdf_adicional and not pdf_adicional.exists():
+        downloadMinuta(wpage, process_name, str(pdf_adicional.absolute()), 
+                    MINUTA.fromName(dadosx['work']['minuta']['title']))
+    return str(pdf_adicional.absolute()) if pdf_adicional else None
+
+def attribui_salva(psei, dadosx, process):
+    psei.insereMarcador(config['sei']['marcador_default'])
+    psei.atribuir(config['sei']['atribuir_default'])
+    # make sure no other pop-up etc windows are still open    
+    psei.closeOtherWindows() 
+    # prepare to save to db that it was published
+    work = dadosx['work']    
+    if 'nome_assinatura' in work:
+        del work['nome_assinatura']
+    work['type'] = str(work['type'])
+    work['published'] = True
+    # save on db it was published successfully
+    process.update(dadosx)
+
 
 def PublishDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
-        empty=False, termo_abertura=False, verbose=True, republish=False, sign=False, **kwargs):
+        empty=False, termo_abertura=False, ignore_area_check=False, verbose=True, 
+        republish=False, sign=False, **kwargs):
     """
     Inclui process documents from folder specified on `ProcessPathStorage`
 
@@ -60,6 +83,9 @@ def PublishDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True
         
     * termo_abertura: False
         To add for process older than < 2020
+
+    * ignore_area_check: False
+        Ignore check of area for disponibilidade 
 
     * republish: False
         whether to republish a process already published on SEI
@@ -100,17 +126,17 @@ def PublishDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True
         if process_name not in ProcessPathStorage:     
             raise FileNotFoundError(f"Process {process_name} folder not found! Just checked in ProcessPathStorage. Did you run it?")
         process_folder = ProcessPathStorage[process_name]        
-    info = inferWork(process_name, dados, process_folder)     
+    dadosx = inferWork(process_name, dados, process_folder)     
         
     if not activity:        
-        activity = info['work']['type'] # get from inferred information
+        activity = dadosx['work']['type'] # get from inferred information
 
     if verbose and __workflow_debugging__:
         if process_folder:
             print("Main path: ", process_folder.parent)     
             print("Process path: ", process_folder.absolute())
             print("Current dir: ", os.getcwd())
-        print(f"activity {activity} \n info dict {info}")         
+        print(f"activity {activity} \n dadosx dict {dadosx}")         
     
     # finally opens SEI with selenium
     psei = Processo.fromSei(sei, process['NUP'])            
@@ -124,24 +150,21 @@ def PublishDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True
     # verificar clayers bloqueio to rename doc externo to Simulação
     #
     #
-        
+
+
     if (activity in WORK_ACTIVITY.INTERFERENCIA_GENERICO_NOT_EDITAL or 
         activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_REGISTRO_EXTRAÇÃO):
         # formulário de prioridade
         # Inclui Estudo Interferência pdf como Doc Externo no SEI
         psei.insereDocumentoExterno("Estudo de Retirada de Interferência", 
-            info['estudo']['sigareas']['pdf_path'])      
-        if 'ok' in info['work']['resultado']:
-            pdf_adicional = info['work']['pdf_adicional']
-            if pdf_adicional and not pdf_adicional.exists():                
-                downloadMinuta(wpage, process.name, 
-                    str(pdf_adicional.absolute()), MINUTA.fromName(info['work']['minuta']['title']))                       
-            # licenciamento - minuta by hand hence None for empty external doc
-            pdf_adicional = str(pdf_adicional.absolute()) if pdf_adicional else None 
-            psei.insereDocumentoExterno(info['work']['minuta']['title'], pdf_adicional)
-        psei.insereFormPrioridade(info)
-        # debugging clayers
-        # print(f" {info['NUP']} clayers {info['estudo']['clayers']}", file=sys.stderr)
+            dadosx['estudo']['sigareas']['pdf_path'])      
+        if 'ok' in dadosx['work']['resultado']:
+            pdf_adicional = handle_pdf_adicional(psei, dadosx, wpage, process.name)
+            psei.insereDocumentoExterno(dadosx['work']['minuta']['title'], pdf_adicional)
+        psei.insereFormPrioridade(dadosx)
+
+        attribui_salva(psei, dadosx, process)
+
     # EDITAL GOES ABOVE TOO! but for now .. let's wait
     elif (activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_RESTUDO or 
         activity in WORK_ACTIVITY.OPCAO_REQUERIMENTO):
@@ -151,111 +174,94 @@ def PublishDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True
             else "Estudo de Opção" )
         # Inclui Estudo Interferência pdf como Doc Externo no SEI        
         psei.insereDocumentoExterno(doc_externo, 
-            info['estudo']['sigareas']['pdf_path'])      
+            dadosx['estudo']['sigareas']['pdf_path'])      
 
-        if 'ok' in info['work']['resultado']:
-            pdf_adicional = info['work']['pdf_adicional']
-            if pdf_adicional and not pdf_adicional.exists():                
-                downloadMinuta(wpage, process.name, 
-                    str(pdf_adicional.absolute()), MINUTA.fromName(info['work']['minuta']['title']))      
-            pdf_adicional = str(pdf_adicional.absolute()) if pdf_adicional else None 
-            psei.insereDocumentoExterno(info['work']['minuta']['title'], pdf_adicional)
+        if 'ok' in dadosx['work']['resultado']:
+            pdf_adicional = handle_pdf_adicional(psei, dadosx, wpage, process.name)
+            psei.insereDocumentoExterno(dadosx['work']['minuta']['title'], pdf_adicional)
     
-        doc_model = ""
-        if activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_RESTUDO:
-            doc_model = "req_restudo"
-        if activity in WORK_ACTIVITY.OPCAO_REQUERIMENTO:
-            doc_model = "req_opcao_feita"
-            
-        psei.insereNotaTecnicaRequerimento(doc_model, info, 
-            requerimento=info['tipo'], 
-            minuta=info['work']['minuta']['title'])     
-
-
-    # elif activity in WORK_ACTIVITY.FORMULARIO_1_DIREITO_RLAVRA:
-    #     psei.insereDocumentoExterno( "Estudo de Retirada de Interferência", 
-    #      info['estudo']['sigareas']['pdf_path'])
-    #     if 'ok' in info['work']['resultado']:     
-    #         pdf_adicional = info['work']['pdf_adicional']
-    #         if pdf_adicional and not pdf_adicional.exists():                          
-    #             downloadMinuta(wpage, process.name, 
-    #                             str(pdf_adicional.absolute()), MINUTA.fromName(info['work']['minuta']['title']))
-    #         # guarantee to insert an empty in any case
-    #         pdf_adicional = str(pdf_adicional.absolute()) if pdf_adicional else None 
-    #         psei.insereDocumentoExterno(info['work']['minuta']['title'], pdf_adicional) 
+        doc_model = "req_restudo" if activity == WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_RESTUDO else "req_opcao_feita"            
+        psei.insereNotaTecnicaRequerimento(doc_model, dadosx, 
+            requerimento=dadosx['tipo'], 
+            minuta=dadosx['work']['minuta']['title'])
+        
+        attribui_salva(psei, dadosx, process)
 
     elif activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL:
         psei.insereDocumentoExterno("Estudo Interferência", 
-                                    info['estudo']['sigareas']['pdf_path'])
-        if 'ok' in info['work']['resultado']:     
-            pdf_adicional = info['work']['pdf_adicional']
-            if pdf_adicional and not pdf_adicional.exists():                          
-                downloadMinuta(wpage, process.name, 
-                                str(pdf_adicional.absolute()), MINUTA.fromName(info['work']['minuta']['title']))
-            # guarantee to insert an empty in any case
-            pdf_adicional = str(pdf_adicional.absolute()) if pdf_adicional else None             
-            psei.insereDocumentoExterno(info['work']['minuta']['title'], pdf_adicional)         
+                                    dadosx['estudo']['sigareas']['pdf_path'])
+        if 'ok' in dadosx['work']['resultado']:     
+            pdf_adicional = handle_pdf_adicional(psei, dadosx, wpage, process.name)         
+            psei.insereDocumentoExterno(dadosx['work']['minuta']['title'], pdf_adicional)         
 
         doc_model = "req_edital_son"
-        psei.insereNotaTecnicaRequerimento(doc_model, infos=info['work'], 
-            requerimento=info['tipo'], 
-            minuta=info['work']['minuta']['title'])                                  
+        psei.insereNotaTecnicaRequerimento(doc_model, infos=dadosx['work'], 
+            requerimento=dadosx['tipo'], 
+            minuta=dadosx['work']['minuta']['title'])                                  
+        
+        attribui_salva(psei, dadosx, process)
+        # force run for dad just bellow 
+        PublishDocumentosSEI(psei, dadosx['work']['edital']['dad'],         
+                             activity=WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL_DAD)        
+        
+    elif activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL_DAD:        
+        dad, son = dadosx['work']['edital']['dad'], dadosx['work']['edital']['son']        
+        dad, son = scm.ProcessManager[dad], scm.ProcessManager[son]     
+        # this is where we will put documents - fly to there - since we were in the son above
+        psei = Processo.fromSei(sei, dad['NUP']) 
+        # calculate again: check in case area was not checked by infer method
+        areadiff = dad['polygon'][0]['area']-son['polygon'][0]['area']
+        # SOMETIMES it'll fail before comming here, when son not found
+        # TODO deal with more participants on edital                
+        if areadiff > 0.1 and not ignore_area_check: # compare areas if difference > 0.1 ha stop! - not same area
+            raise NotImplementedError(f"Not same Area! dad {dad['polygon'][0]['area']:.2f} ha son {son['polygon'][0]['area']:.2f} ha")
+        doc_model = "req_edital_dad"
+        psei.insereNotaTecnicaRequerimento(doc_model, dadosx, edital=dadosx['work']['edital']['tipo'], 
+                            processo_filho=son['NUP'])
+        process = dad # this is what was done
+        attribui_salva(psei, dadosx, process)
 
+    elif activity in WORK_ACTIVITY.NOTA_TECNICA_GENERICA:
+        psei.insereNotaTecnicaRequerimento(kwargs['doc_template_name'], dadosx)    
+        
+        attribui_salva(psei, dadosx, process)
+
+    # elif activity in WORK_ACTIVITY.FORMULARIO_1_DIREITO_RLAVRA:
+    #     psei.insereDocumentoExterno( "Estudo de Retirada de Interferência", 
+    #      dadosx['estudo']['sigareas']['pdf_path'])
+    #     if 'ok' in dadosx['work']['resultado']:     
+    #         pdf_adicional = dadosx['work']['pdf_adicional']
+    #         if pdf_adicional and not pdf_adicional.exists():                          
+    #             downloadMinuta(wpage, process.name, 
+    #                             str(pdf_adicional.absolute()), MINUTA.fromName(dadosx['work']['minuta']['title']))
+    #         # guarantee to insert an empty in any case
+    #         pdf_adicional = str(pdf_adicional.absolute()) if pdf_adicional else None 
+    #         psei.insereDocumentoExterno(dadosx['work']['minuta']['title'], pdf_adicional)     
     # elif activity in WORK_ACTIVITY.REQUERIMENTO_OPCAO_ALVARA: # opção de área na fase de requerimento
-    #     psei.insereDocumentoExterno(3, str(info['pdf_sigareas'].absolute()))  # estudo opção
-    #     if not info['pdf_adicional'].exists():
+    #     psei.insereDocumentoExterno(3, str(dadosx['pdf_sigareas'].absolute()))  # estudo opção
+    #     if not dadosx['pdf_adicional'].exists():
     #         downloadMinuta(wpage, process.name, 
-    #                     str(info['pdf_adicional'].absolute()), info['minuta']['code'])     
+    #                     str(dadosx['pdf_adicional'].absolute()), dadosx['minuta']['code'])     
     #                     # guarantee to insert an empty in any case
-    #     pdf_adicional = str(info['pdf_adicional'].absolute()) if info['pdf_adicional'].exists() else None 
-    #     psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional) # minuta alvará           
-    #     psei.insereNotaTecnicaRequerimento("opção_feita", info) 
+    #     pdf_adicional = str(dadosx['pdf_adicional'].absolute()) if dadosx['pdf_adicional'].exists() else None 
+    #     psei.insereDocumentoExterno(dadosx['minuta']['doc_ext'], pdf_adicional) # minuta alvará           
+    #     psei.insereNotaTecnicaRequerimento("opção_feita", dadosx) 
     # elif activity in WORK_ACTIVITY.REQUERIMENTO_MUDANCA_REGIME: # mudança de regimen com redução
-    #     psei.insereDocumentoExterno(8, str(info['pdf_sigareas'].absolute()))  # estudo opção
-    #     if not info['pdf_adicional'].exists():
+    #     psei.insereDocumentoExterno(8, str(dadosx['pdf_sigareas'].absolute()))  # estudo opção
+    #     if not dadosx['pdf_adicional'].exists():
     #         downloadMinuta(wpage, process.name, 
-    #                     str(info['pdf_adicional'].absolute()), info['minuta']['code'])     
+    #                     str(dadosx['pdf_adicional'].absolute()), dadosx['minuta']['code'])     
     #                     # guarantee to insert an empty in any case
-    #     pdf_adicional = str(info['pdf_adicional'].absolute()) if info['pdf_adicional'].exists() else None 
-    #     psei.insereDocumentoExterno(info['minuta']['doc_ext'], pdf_adicional) # minuta alvará           
-    #     psei.insereNotaTecnicaRequerimento("sem_redução", info)  # need a new one for mudança regime
-    # elif activity in WORK_ACTIVITY.REQUERIMENTO_EDITAL_DAD:
-    #     # doesn't matter if son or dad was passed, here it's sorted!
-    #     dad, son = dispDadSon(process_name)
-    #     for p in [dad, son]:
-    #         if p not in scm.ProcessManager:
-    #             scm.ProcessManager.GetorCreate(p, wpage, scm.SCM_SEARCH.BASICOS_POLIGONAL)
-    #     dad, son = scm.ProcessManager[dad], scm.ProcessManager[son]     
-    #     # this is where we will put documents - fly to there - since we were in the son above
-    #     psei = Processo.fromSei(sei, dad['NUP']) 
-    #     # calculate again: check in case area was not checked by infer method
-    #     areadiff = dad['polygon'][0]['area']-son['polygon'][0]['area']
-    #     # SOMETIMES it'll fail before comming here, when son not found
-    #     # TODO deal with more participants on edital                
-    #     if areadiff > 0.1: # compare areas if difference > 0.1 ha stop! - not same area
-    #         raise NotImplementedError(f"Not same Area! dad {dad['polygon'][0]['area']:.2f} ha son {son['polygon'][0]['area']:.2f} ha")
-    #     psei.insereNotaTecnicaRequerimento("edital_dad", info, edital=editalTipo(son), 
-    #                         processo_filho=son['NUP'])
-    #     process = dad # this is what was done
-    # elif activity in WORK_ACTIVITY.NOTA_TECNICA_GENERICA:
-    #     psei.insereNotaTecnicaRequerimento(kwargs['doc_template_name'], info)    
+    #     pdf_adicional = str(dadosx['pdf_adicional'].absolute()) if dadosx['pdf_adicional'].exists() else None 
+    #     psei.insereDocumentoExterno(dadosx['minuta']['doc_ext'], pdf_adicional) # minuta alvará           
+    #     psei.insereNotaTecnicaRequerimento("sem_redução", dadosx)  # need a new one for mudança regime
 
-    psei.insereMarcador(config['sei']['marcador_default'])
-    psei.atribuir(config['sei']['atribuir_default'])
-    # should also close the openned text window - going to previous state
-    psei.closeOtherWindows()        
+   
     # TODO: I need another database to save these - like an Archive
     # process._dados['estudo].update( {'sei-sent': True, 'time' : datetime.datetime.now()} )
     # process.changed() # update database 
     
-    # prepare to save to db that it was published
-    work = dados['work']    
-    if 'nome_assinatura' in work:
-        del work['nome_assinatura']
-    work['type'] = str(work['type'])
-    work['published'] = True
-    # save on db it was published successfully
-    process.update(info)
+
 
 
 def PublishDocumentosSEI_list(sei, wpage, process_names, **kwargs):

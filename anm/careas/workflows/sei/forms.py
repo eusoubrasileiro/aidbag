@@ -105,7 +105,7 @@ def fillFormPrioridade(infos, **kwargs):
             xset(form, 'Regime Registro Extracao')
             xset(form, 'Anuência de Titular Sim')
     if work['edital']:
-        tipo, nup_pai = work['edital']['tipo'], work['edital']['pai']
+        tipo, nup_pai = work['edital']['tipo'], work['edital']['dad']
         if nup_pai == infos['NUP']:  # processo é originário do edital (não é filho!)                
             raise Exception(f"Este processo  {nup_pai} é Pai e foi à edital {tipo} e seu arquivamento é por nota técnica")
         Obs = f"Proveniente de edital de disponibilidade {tipo} sendo sua origem do processo {nup_pai} " + Obs
