@@ -207,6 +207,9 @@ class Processo():
     def __getitem__(self, key):        
         return self.dados[key]
 
+    def __contains__(self, item):
+        return item in self.dados  # Check if item is in content
+
     @threadsafe
     @updatedb
     def update(self, _dict):
