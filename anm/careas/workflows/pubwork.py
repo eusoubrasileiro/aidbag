@@ -201,14 +201,20 @@ def PublishDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True
         
         attribui_salva(psei, dadosx, process)
         # force run for dad just bellow 
-        PublishDocumentosSEI(psei, dadosx['work']['edital']['dad'],         
+        PublishDocumentosSEI(psei, dadosx['work']['edital']['dad'], wpage,        
                              activity=WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL_DAD)        
         
-    elif activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL_DAD:        
+    elif activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL_DAD:                
         dad, son = dadosx['work']['edital']['dad'], dadosx['work']['edital']['son']        
         dad, son = scm.ProcessManager[dad], scm.ProcessManager[son]     
+        def check_get_polygon(proc):
+            if 'poligon' not in proc or not proc['poligon']: 
+                proc._wpage =  wpage.copy()            
+                proc.runTask(scm.SCM_SEARCH.BASICOS_POLIGONAL) 
+        check_get_polygon(dad)
+        check_get_polygon(son)
         # this is where we will put documents - fly to there - since we were in the son above
-        psei = Processo.fromSei(sei, dad['NUP']) 
+        psei = Processo.fromSei(sei, dad['NUP'])         
         # calculate again: check in case area was not checked by infer method
         areadiff = dad['polygon'][0]['area']-son['polygon'][0]['area']
         # SOMETIMES it'll fail before comming here, when son not found
