@@ -24,6 +24,9 @@ class BARRACOMANDOS_BUTTONS(Enum): #barra comandos list of by index
         ATRIBUIR = 8
         GERENCIAR_MARCADOR = 20
 
+class ProcessoSeiNotOpen(BlockingIOError):    
+    pass
+
 
 class Processo(Sei):
     def __init__(self, processnup, user, passwd, headless=True, login=False, webdriver=None):
@@ -47,14 +50,19 @@ class Processo(Sei):
         self.login = login 
         self.driver = webdriver
         self.mainwindow = self.driver.current_window_handle
-        self.nup = processnup        
-        
+        self.nup = processnup 
+        self.pesquisaProcesso(processnup) # go-to processo
+        if not self._isOpen():
+            raise  ProcessoSeiNotOpen("Não aberto nesta unidade! Movimente-o para cá.")
+
+    def _isOpen(self):
+        """processo aberto nesta unidade"""
+        return self.barraComandosState() == BARRACOMANDOS_STATE.MAIN_OPEN
+
     @staticmethod
     def fromSei(sei, processnup):
         """re-using an existing webdriver window opened on sei"""
-        processo = Processo(processnup, sei.user, sei.passwd, sei.headless, False, sei.driver)
-        processo.pesquisaProcesso(processnup)
-        return processo 
+        return Processo(processnup, sei.user, sei.passwd, sei.headless, False, sei.driver)
     
     def mainMenu(self):
         """back to main menu processo"""            
@@ -102,10 +110,6 @@ class Processo(Sei):
         # safer and more efficient to use click
         click(self.driver, f'div.infraBarraComandos a:nth-of-type({button.value})')   
                  
-    def isOpen(self):
-        """processo aberto nesta unidade"""
-        return self.barraComandosState() == BARRACOMANDOS_STATE.MAIN_OPEN
-
     def atribuir(self, pessoa):
         self.barraComandos(BARRACOMANDOS_BUTTONS.ATRIBUIR)         
         dropdown = wait_for_element_visible(self.driver,'select#selAtribuicao')
@@ -224,8 +228,10 @@ class Processo(Sei):
         docname = closest_string(partial_text, docnames)
         self.barraComandos(BARRACOMANDOS_BUTTONS.INCLUIR_DOCUMENTO)  
         # *= contains text in lowercase - before convert to ASCII        
+        # constant exception here of cannot find element
         click(self.driver, f"tr[data-desc*='{unidecode(docname.lower())}'] td a:last-child", 
                 delay=DELAY_SMALL, timeout=TIMEOUT_LARGE)                          
+        
     
     def insereDocumentoExterno(self, docname, pdf_path=None):
         """
