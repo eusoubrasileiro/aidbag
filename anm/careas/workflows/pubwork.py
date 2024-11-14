@@ -103,7 +103,11 @@ def PublishDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True
     else:
         process_name = scm.pud(process_name).str         
 
-    if (activity is WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL_DAD):
+
+    # if activity is WORK_ACTIVITY.ARQUIVAMENTO_ERRO_REPEM:         
+    #     psei = Processo.fromSei(sei, process_name) # name must be nup in this case            
+    # else:
+    if (activity is WORK_ACTIVITY.ARQUIVAMENTO_EDITAL_DAD):
         usefolder = False
 
     if not usefolder:
@@ -144,71 +148,64 @@ def PublishDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True
     # Inclui termo de abertura de processo eletronico se data < 2020 (protocolo digital nov/2019)
     if termo_abertura and process['data_protocolo'].year < 2020:  
         psei.InsereTermoAberturaProcessoEletronico()    
-
-    #
-    #
-    # verificar clayers bloqueio to rename doc externo to Simulação
-    #
-    #
-
-
-    if (activity in WORK_ACTIVITY.INTERFERENCIA_GENERICO_NOT_EDITAL or 
-        activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_REGISTRO_EXTRAÇÃO):
-        # formulário de prioridade
+        
+    if (activity in WORK_ACTIVITY.INTERFERENCIA_GENERICO or 
+        activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_RESTUDO or
+        activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL):
+        estudo_interferencia_name = "Estudo de Retirada de Interferência"
+        if dadosx['work']['bloqueio']:
+            estudo_interferencia_name += "(Simulação)"
         # Inclui Estudo Interferência pdf como Doc Externo no SEI
-        psei.insereDocumentoExterno("Estudo de Retirada de Interferência", 
+        psei.insereDocumentoExterno(estudo_interferencia_name, 
             dadosx['estudo']['sigareas']['pdf_path'])      
+        # Inclui Minuta, Reg. Extração, PLG, Licenciamento (Empty)
         if 'ok' in dadosx['work']['resultado']:
             pdf_adicional = handle_pdf_adicional(psei, dadosx, wpage, process.name)
             psei.insereDocumentoExterno(dadosx['work']['minuta']['title'], pdf_adicional)
+
+    if (activity in WORK_ACTIVITY.INTERFERENCIA_GENERICO_REQUERIMENTO and
+        activity is not WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL):
+        # Formulário de Prioridade
         psei.insereFormPrioridade(dadosx)
-
         attribui_salva(psei, dadosx, process)
 
-    # EDITAL GOES ABOVE TOO! but for now .. let's wait
-    elif (activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_RESTUDO or 
-        activity in WORK_ACTIVITY.OPCAO_REQUERIMENTO):
-        
-        doc_externo = ( "Estudo de Retirada de Interferência" 
-            if WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_RESTUDO 
-            else "Estudo de Opção" )
-        # Inclui Estudo Interferência pdf como Doc Externo no SEI        
-        psei.insereDocumentoExterno(doc_externo, 
-            dadosx['estudo']['sigareas']['pdf_path'])      
-
-        if 'ok' in dadosx['work']['resultado']:
-            pdf_adicional = handle_pdf_adicional(psei, dadosx, wpage, process.name)
-            psei.insereDocumentoExterno(dadosx['work']['minuta']['title'], pdf_adicional)
-    
-        doc_model = "req_restudo" if activity == WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_RESTUDO else "req_opcao_feita"            
-        psei.insereNotaTecnicaRequerimento(doc_model, dadosx, 
-            requerimento=dadosx['tipo'], 
-            minuta=dadosx['work']['minuta']['title'])
-        
-        attribui_salva(psei, dadosx, process)
-
-    elif activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL:
-        psei.insereDocumentoExterno("Estudo Interferência", 
-                                    dadosx['estudo']['sigareas']['pdf_path'])
-        if 'ok' in dadosx['work']['resultado']:     
-            pdf_adicional = handle_pdf_adicional(psei, dadosx, wpage, process.name)         
-            psei.insereDocumentoExterno(dadosx['work']['minuta']['title'], pdf_adicional)         
-
+    elif activity is WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL:
+        # Nota Técnica ao invés de Formulário de Prioridade
         doc_model = "req_edital_son"
         psei.insereNotaTecnicaRequerimento(doc_model, infos=dadosx['work'], 
             requerimento=dadosx['tipo'], 
-            minuta=dadosx['work']['minuta']['title'])                                  
-        
+            minuta=dadosx['work']['minuta']['title'])      
         attribui_salva(psei, dadosx, process)
         # force run for dad just bellow 
         PublishDocumentosSEI(psei, dadosx['work']['edital']['dad'], wpage,        
-                             activity=WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL_DAD)        
+                             activity=WORK_ACTIVITY.ARQUIVAMENTO_EDITAL_DAD)       
+    elif activity in WORK_ACTIVITY.OPCAO_REQUERIMENTO:
+        # Nota Técnica ao invés de Formulário de Prioridade
+        doc_externo = "Estudo de Opção"
+        # Inclui Estudo Interferência pdf como Doc Externo no SEI        
+        psei.insereDocumentoExterno(doc_externo, 
+            dadosx['estudo']['sigareas']['pdf_path'])      
+        if 'ok' in dadosx['work']['resultado']:
+            pdf_adicional = handle_pdf_adicional(psei, dadosx, wpage, process.name)
+            psei.insereDocumentoExterno(dadosx['work']['minuta']['title'], pdf_adicional)
+        doc_model = "req_opcao_feita"            
+        psei.insereNotaTecnicaRequerimento(doc_model, dadosx, 
+            requerimento=dadosx['tipo'], 
+            minuta=dadosx['work']['minuta']['title'])
+        attribui_salva(psei, dadosx, process)
+
+    elif activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_RESTUDO:        
+        doc_model = "req_restudo"            
+        psei.insereNotaTecnicaRequerimento(doc_model, dadosx, 
+            requerimento=dadosx['tipo'], 
+            minuta=dadosx['work']['minuta']['title'])
+        attribui_salva(psei, dadosx, process)
         
-    elif activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL_DAD:                
+    elif activity in WORK_ACTIVITY.ARQUIVAMENTO_EDITAL_DAD:                
         dad, son = dadosx['work']['edital']['dad'], dadosx['work']['edital']['son']        
         dad, son = scm.ProcessManager[dad], scm.ProcessManager[son]     
         def check_get_polygon(proc):
-            if 'poligon' not in proc or not proc['poligon']: 
+            if 'polygon' not in proc or not proc['polygon']: 
                 proc._wpage =  wpage.copy()            
                 proc.runTask(scm.SCM_SEARCH.BASICOS_POLIGONAL) 
         check_get_polygon(dad)
@@ -227,9 +224,12 @@ def PublishDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True
         process = dad # this is what was done
         attribui_salva(psei, dadosx, process)
 
+    elif activity in WORK_ACTIVITY.ARQUIVAMENTO_ERRO_REPEM:
+        psei.insereNotaTecnicaRequerimento('req_erro_repem', dadosx)            
+        attribui_salva(psei, dadosx, process)
+
     elif activity in WORK_ACTIVITY.NOTA_TECNICA_GENERICA:
         psei.insereNotaTecnicaRequerimento(kwargs['doc_template_name'], dadosx)    
-        
         attribui_salva(psei, dadosx, process)
 
     # elif activity in WORK_ACTIVITY.FORMULARIO_1_DIREITO_RLAVRA:
