@@ -21,3 +21,4 @@ urllib3
 xlsxwriter
 lxml
 python-Levenshtein
+xlrd
