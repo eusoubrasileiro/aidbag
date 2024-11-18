@@ -273,7 +273,7 @@ class Processo(Sei):
         self.closeOtherWindows()
         self.driver.switch_to.default_content() # go back to main document        
         
-    def insereNotaTecnicaRequerimento(self, template_name, infos, **kwargs):
+    def insereNotaTecnicaRequerimento(self, template_name, infos=None, **kwargs):
         """analisa documentos e cria nota técnica sobre análise de interferência
         based on jinja2 template
         'area_porcentagem' must be passed as **kwargs"""

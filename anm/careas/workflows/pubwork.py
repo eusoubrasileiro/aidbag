@@ -41,18 +41,47 @@ def attribui_salva(psei, dadosx, process):
     psei.atribuir(config['sei']['atribuir_default'])
     # make sure no other pop-up etc windows are still open    
     psei.closeOtherWindows() 
-    # prepare to save to db that it was published
-    work = dadosx['work']    
-    if 'nome_assinatura' in work:
-        del work['nome_assinatura']
-    work['type'] = str(work['type'])
-    work['published'] = True
-    # save on db it was published successfully
-    process.update(dadosx)
+    if process:
+        # prepare to save to db that it was published
+        work = dadosx['work']    
+        if 'nome_assinatura' in work:
+            del work['nome_assinatura']
+        work['type'] = str(work['type'])
+        work['published'] = True
+        # save on db it was published successfully
+        process.update(dadosx)
 
+def prepareData(process_name, verbose, republish, wpage, activity=None):
+    """Infers work and collects data por publishing the given process."""
+    if isinstance(process_name, scm.pud):
+        process_name = process_name.str  
+    else:
+        process_name = scm.pud(process_name).str         
+    if process_name not in scm.ProcessManager:
+        scm.ProcessManager.GetorCreate(process_name, wpage, task=scm.SCM_SEARCH.BASICOS_POLIGONAL)
+    process = scm.ProcessManager[process_name]  
+    dados = process.dados 
+    if ('work' in dados and 
+        'published' in dados['work'] and 
+        dados['work']['published'] and 
+        not republish):
+        raise AlreadyPublished("Process already published - ignoring")
+    if process_name not in ProcessPathStorage:     
+        raise FileNotFoundError(f"Process {process_name} folder not found! Just checked in ProcessPathStorage. Did you run it?")
+    process_folder = ProcessPathStorage[process_name]        
+    dadosx = inferWork(process_name, dados, process_folder)             
+    if not activity:        
+        activity = dadosx['work']['type'] # get from inferred information
+    if verbose and __workflow_debugging__:
+        if process_folder:
+            print("Main path: ", process_folder.parent)     
+            print("Process path: ", process_folder.absolute())
+            print("Current dir: ", os.getcwd())
+        print(f"activity {activity} \n dadosx dict {dadosx}")         
+    return dadosx, activity, process 
 
-def PublishDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True,
-        empty=False, termo_abertura=False, ignore_area_check=False, verbose=True, 
+def PublishDocumentosSEI(sei, process_name, wpage, activity=None, 
+        ignore_area_check=False, verbose=True, 
         republish=False, sign=False, **kwargs):
     """
     Inclui process documents from folder specified on `ProcessPathStorage`
@@ -70,19 +99,9 @@ def PublishDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True
     * verbose: True
         avisa ausência de pdfs, quando cria documentos sem anexos
 
-    * usefolder: True
-        If False, only add documents on SEI don't use folder
-        And uses 'req_custom.html' for 'Nota Técnica'.        
-        
-    * empty : True
-        cria documentos sem anexos
-
     * activity : None or Enum `WORK_ACTIVITY` 
         If None infer from tipo and fase dados basicos processo 
-        documents to add. Otherwise specify explicitly what to do.
-        
-    * termo_abertura: False
-        To add for process older than < 2020
+        documents to add. Otherwise specify explicitly what to do.        
 
     * ignore_area_check: False
         Ignore check of area for disponibilidade 
@@ -97,57 +116,15 @@ def PublishDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True
     
     if not ProcessPathStorage: # empty process path storage
         currentProcessGet() # get current list of processes
-
-    if isinstance(process_name, scm.pud):
-        process_name = process_name.str  
+    
+    if activity is WORK_ACTIVITY.ARQUIVAMENTO_ERRO_REPEM:         
+        # não tem cadastro no SCM - não tem nada só SEI
+        psei = Processo.fromSei(sei, process_name) # name must be NUP real in this case            
+        process = None 
+        dadosx = {}
     else:
-        process_name = scm.pud(process_name).str         
-
-
-    # if activity is WORK_ACTIVITY.ARQUIVAMENTO_ERRO_REPEM:         
-    #     psei = Processo.fromSei(sei, process_name) # name must be nup in this case            
-    # else:
-    if (activity is WORK_ACTIVITY.ARQUIVAMENTO_EDITAL_DAD):
-        usefolder = False
-
-    if not usefolder:
-        # Only writes on SEI (don't need folder and pdf's)
-        # but needs scm data, probably not downloaded yet, e.g. parent edital 
-        if process_name not in scm.ProcessManager:
-            scm.ProcessManager.GetorCreate(process_name, wpage, task=scm.SCM_SEARCH.BASICOS_POLIGONAL)
-    
-    process = scm.ProcessManager[process_name]  
-    dados = process.dados 
-
-    if ('work' in dados and 
-        'published' in dados['work'] and 
-        dados['work']['published'] and 
-        not republish):
-        raise AlreadyPublished("Process already published ignoring")
-
-    process_folder = None     
-    if usefolder: # needs folder docs and information  
-        if process_name not in ProcessPathStorage:     
-            raise FileNotFoundError(f"Process {process_name} folder not found! Just checked in ProcessPathStorage. Did you run it?")
-        process_folder = ProcessPathStorage[process_name]        
-    dadosx = inferWork(process_name, dados, process_folder)     
-        
-    if not activity:        
-        activity = dadosx['work']['type'] # get from inferred information
-
-    if verbose and __workflow_debugging__:
-        if process_folder:
-            print("Main path: ", process_folder.parent)     
-            print("Process path: ", process_folder.absolute())
-            print("Current dir: ", os.getcwd())
-        print(f"activity {activity} \n dadosx dict {dadosx}")         
-    
-    # finally opens SEI with selenium
-    psei = Processo.fromSei(sei, process['NUP'])            
-    # inclui vários documentos, se desnecessário é só apagar
-    # Inclui termo de abertura de processo eletronico se data < 2020 (protocolo digital nov/2019)
-    if termo_abertura and process['data_protocolo'].year < 2020:  
-        psei.InsereTermoAberturaProcessoEletronico()    
+        dadosx, activity, process = prepareData(process_name, verbose, republish, wpage, activity)        
+        psei = Processo.fromSei(sei, process['NUP'])                    
         
     if (activity in WORK_ACTIVITY.INTERFERENCIA_GENERICO or 
         activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_RESTUDO or
@@ -225,7 +202,7 @@ def PublishDocumentosSEI(sei, process_name, wpage, activity=None, usefolder=True
         attribui_salva(psei, dadosx, process)
 
     elif activity in WORK_ACTIVITY.ARQUIVAMENTO_ERRO_REPEM:
-        psei.insereNotaTecnicaRequerimento('req_erro_repem', dadosx)            
+        psei.insereNotaTecnicaRequerimento('req_erro_repem')            
         attribui_salva(psei, dadosx, process)
 
     elif activity in WORK_ACTIVITY.NOTA_TECNICA_GENERICA:
@@ -288,7 +265,10 @@ def PublishDocumentosSEI_list(sei, wpage, process_names, **kwargs):
         except Exception:
             print(f"Process {process_name} Exception: ", traceback.format_exc(), file=sys.stderr)           
             continue       
-        done += scm.ProcessManager[process_name]['NUP'] + '\n'
+        nup = process_name # case of process not on SCM
+        if process_name in scm.ProcessManager:
+            nup = scm.ProcessManager[process_name]['NUP']
+        done +=  nup + '\n'
     print(f"Done:\n{done}")     
     return done 
 
