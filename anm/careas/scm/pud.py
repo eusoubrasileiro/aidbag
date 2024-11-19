@@ -17,7 +17,9 @@ class pud():
     # reversed pattern - the only way that effectly works for anything
     # since year is the more striking characteristic to match first 
     # [1-2]\d{3} years from 1900-2999 - reversed pattern
-    rpattern = '(\d{3}[1-2])\D(\d{1,3})\D*(\d{0,3})'
+    # separators are any non digit except \n -> [^\d\n] simple \D isn't enough
+    # Negative lookbehind to ensure that no digit comes before year \d{3}[1-2] -> (?<!\d)
+    rpattern = '(?<!\d)(\d{3}[1-2])[^\d\n](\d{1,3})[^\d\n]*(\d{0,3})'
     pattern = re.compile(rpattern)
     def __init__(self, str_: str = None, yng: list = None):                 
         if yng:
@@ -130,10 +132,16 @@ def test_pnum_cmp():
     assert (pud('847/1945') > pud('1325/1944')) == True
     assert (pud('831.915/2023') < pud('831.012/2021')) == False
 
+def test_newline_plus():
+    testext = "48054.830817/2024-91\n48054.831400/2024-46\n27203.831741/2002-85\n"
+    result = [p.str for p in pud.getAll(testext)]
+    expected = ['830.817/2024', '831.400/2024', '831.741/2002']
+    assert  result == expected
+
 test_pnum_getAll()
 test_pnum_numbers()
 test_pnum_cmp()
-
+test_newline_plus()
 
 
 # fonte de informação da data de origem do processo 
