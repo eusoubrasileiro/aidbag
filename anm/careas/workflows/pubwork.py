@@ -51,34 +51,36 @@ def attribui_salva(psei, dadosx, process):
         # save on db it was published successfully
         process.update(dadosx)
 
-def prepareData(process_name, verbose, republish, wpage, activity=None):
-    """Infers work and collects data por publishing the given process."""
-    if isinstance(process_name, scm.pud):
-        process_name = process_name.str  
-    else:
-        process_name = scm.pud(process_name).str         
+
+def format_name(process_name):
+    return process_name.str if isinstance(process_name, scm.pud) else scm.pud(process_name).str    
+
+def getProcess(process_name, wpage):     
     if process_name not in scm.ProcessManager:
         scm.ProcessManager.GetorCreate(process_name, wpage, task=scm.SCM_SEARCH.BASICOS_POLIGONAL)
-    process = scm.ProcessManager[process_name]  
-    dados = process.dados 
+    return scm.ProcessManager[process_name]  
+
+def wasPublished(dados, republish):
     if ('work' in dados and 
-        'published' in dados['work'] and 
-        dados['work']['published'] and 
-        not republish):
+    'published' in dados['work'] and 
+    dados['work']['published'] and 
+    not republish):
         raise AlreadyPublished("Process already published - ignoring")
+
+def prepareData(process_name, dados, verbose):
+    """Infers work and collects data por publishing the given process."""
+    if not ProcessPathStorage: # empty process path storage
+        currentProcessGet() # get current list of processes
     if process_name not in ProcessPathStorage:     
         raise FileNotFoundError(f"Process {process_name} folder not found! Just checked in ProcessPathStorage. Did you run it?")
     process_folder = ProcessPathStorage[process_name]        
     dadosx = inferWork(process_name, dados, process_folder)             
-    if not activity:        
-        activity = dadosx['work']['type'] # get from inferred information
     if verbose and __workflow_debugging__:
         if process_folder:
             print("Main path: ", process_folder.parent)     
             print("Process path: ", process_folder.absolute())
-            print("Current dir: ", os.getcwd())
-        print(f"activity {activity} \n dadosx dict {dadosx}")         
-    return dadosx, activity, process 
+            print("Current dir: ", os.getcwd())       
+    return dadosx # dados + inferred information 
 
 def PublishDocumentosSEI(sei, process_name, wpage, activity=None, 
         ignore_area_check=False, verbose=True, 
@@ -112,10 +114,8 @@ def PublishDocumentosSEI(sei, process_name, wpage, activity=None,
     
     * sign: False
         whether to sign after publishing or not                 
-    """
-    
-    if not ProcessPathStorage: # empty process path storage
-        currentProcessGet() # get current list of processes
+    """    
+    process_name = format_name(process_name)    
     
     if activity is WORK_ACTIVITY.ARQUIVAMENTO_ERRO_REPEM:         
         # não tem cadastro no SCM - não tem nada só SEI
@@ -123,7 +123,10 @@ def PublishDocumentosSEI(sei, process_name, wpage, activity=None,
         process = None 
         dadosx = {}
     else:
-        dadosx, activity, process = prepareData(process_name, verbose, republish, wpage, activity)        
+        process = getProcess(process_name, wpage) # get from db or fetch now      
+        wasPublished(process.dados, republish)        
+        dadosx = prepareData(process_name, process.dados, verbose)        
+        activity = dadosx['work']['type'] if not activity else activity        
         psei = Processo.fromSei(sei, process['NUP'])                    
         
     if (activity in WORK_ACTIVITY.INTERFERENCIA_GENERICO or 
@@ -154,8 +157,11 @@ def PublishDocumentosSEI(sei, process_name, wpage, activity=None,
             minuta=dadosx['work']['minuta']['title'])      
         attribui_salva(psei, dadosx, process)
         # force run for dad just bellow 
+        dadosx['work']['edital']['dad']
+        scm.ProcessManager['']
         PublishDocumentosSEI(psei, dadosx['work']['edital']['dad'], wpage,        
-                             activity=WORK_ACTIVITY.ARQUIVAMENTO_EDITAL_DAD)       
+                             activity=WORK_ACTIVITY.ARQUIVAMENTO_EDITAL_DAD)    
+           
     elif activity in WORK_ACTIVITY.OPCAO_REQUERIMENTO:
         # Nota Técnica ao invés de Formulário de Prioridade
         doc_externo = "Estudo de Opção"
@@ -266,6 +272,7 @@ def PublishDocumentosSEI_list(sei, wpage, process_names, **kwargs):
             print(f"Process {process_name} Exception: ", traceback.format_exc(), file=sys.stderr)           
             continue       
         nup = process_name # case of process not on SCM
+        process_name = format_name(process_name)
         if process_name in scm.ProcessManager:
             nup = scm.ProcessManager[process_name]['NUP']
         done +=  nup + '\n'
