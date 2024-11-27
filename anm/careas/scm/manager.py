@@ -1,3 +1,4 @@
+import pathlib
 import sys 
 import datetime
 import threading
@@ -16,6 +17,7 @@ from sqlalchemy.orm import (
     object_session
     )
 
+from ....general import progressbar
 from ....web.htmlscrap import wPageNtlm
 from ....web.io import try_read_html
 from ..config import config
@@ -28,7 +30,7 @@ from .processo import (
 from .pud import pud 
 
 
-class ProcessManagerClass(dict):
+class ProcessManagerClass():
     """Container and Factory of Processo objects 
     uses SQLAlchemy sqlite3 for storage 
     Avoids:
@@ -43,7 +45,8 @@ class ProcessManagerClass(dict):
         self._engine = create_engine(f"sqlite:///{config['scm']['process_storage_file']+'.db'}")                    
         self.__session = scoped_session(sessionmaker(bind=self._engine))
         self.debug = debug           
-        self.lock = threading.RLock()
+        self.lock = threading.RLock()        
+        self._local = {}  # _local_storage dict
     
     @property
     def session(self):
@@ -69,7 +72,7 @@ class ProcessManagerClass(dict):
         """
         if self[key]:                
             p = self[key]                                    
-            super().__delitem__(key)
+            self._local.__delitem__(key)
             p.delete()
     
     def __getitem__(self, key : str) -> Processo:
@@ -81,17 +84,21 @@ class ProcessManagerClass(dict):
                 key = pud(key).str     
             else:
                 key = key.str 
-            if key in self:
-                processo = super().__getitem__(key)   
+            if key in self._local:
+                processo = self._local[key]
                 return processo
             else:
                 with self.session() as session:
                     processodb = session.query(Processodb).filter_by(name=key).first()                                        
                 if processodb is not None:
                     processo = Processo(key, processodb=processodb, manager=self)                           
-                    self.update({key : processo})
+                    self._local.update({key : processo})
                     return processo    
                 return None
+
+    def __contains__(self, key : str) -> bool:
+        # method this class cannot inheret from dict
+        return True if self[key] else False        
 
     def _getwithFilter(self, filter_condition):
         """
@@ -132,7 +139,7 @@ class ProcessManagerClass(dict):
         Any aditional args or keywork args for `runTask` can be passed. 
         Like dados=Processo.SCM_SEARCH.BASICOS or any tuple (function, args) pair
         """    
-        for processodb in progressbar(session.query(Processodb).all()):
+        for processodb in progressbar(self.session.query(Processodb).all()):
             processo = Processo(processodb.name, processodb=processodb, 
                 wpagentlm=wPageNtlm(wp.user, wp.passwd, ssl=True))
             #must be one independent requests.Session for each process otherwise mess                        
@@ -178,8 +185,9 @@ class ProcessManagerClass(dict):
     #             self.update({processo.name : processo})
     #         except FileNotFoundError:
     #             if verbose:
-    #                 print(f"Did not find process html at {process_path}", file=sys.stderr)           
-    
+    #                 print(f"Did not find process html at {process_path}", file=sys.stderr)     
+          
+    @staticmethod
     def fromStrHtml(processostr, html_basicos, html_poligonal=None, verbose=True):
         """Create a `Processo` from a html str of basicos and poligonal (if available)
             - main_html : str (optional)
@@ -196,6 +204,7 @@ class ProcessManagerClass(dict):
         self[processo.name] = processo # saves it in here
         return processo
 
+    @staticmethod
     def fromHtml(path='.', processostr=None, verbose=True):
         """Try create a `Processo` from a html's of basicos and poligonal (optional)       
         """
