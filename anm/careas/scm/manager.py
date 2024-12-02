@@ -71,7 +71,7 @@ class ProcessManagerClass():
         be careful with this 
         """
         if self[key]:                
-            p = self[key]                                    
+            p = self._local[key]                                    
             self._local.__delitem__(key)
             p.delete()
     
@@ -164,7 +164,7 @@ class ProcessManagerClass():
                     print("Processo placing on storage ", processostr, file=sys.stderr)                
                 del self[processostr] # delete here and on database before adding a new one               
                 processo = Processo(processostr, wpagentlm, manager=self, verbose=verbose) # replace with a newer guy  
-                self[processostr] = processo
+                self._local[processostr] = processo
             else:
                 if verbose: 
                     print("Processo getting from storage ", processostr, file=sys.stderr)            
@@ -172,7 +172,7 @@ class ProcessManagerClass():
             if verbose: 
                 print("Processo placing on storage ", processostr, file=sys.stderr)
             processo = Processo(processostr, wpagentlm, manager=self, verbose=verbose)  # store new guy
-            self[processostr] = processo            
+            self._local[processostr] = processo            
         if run: # wether run the task, dont run when loading from file/str
             processo.runTask(task)
         return processo
@@ -194,14 +194,14 @@ class ProcessManagerClass():
                 directly from a request.response.content string previouly saved  
                 `processostr` must be set
         """
-        processo = Processo(processostr, None, manager=self, verbose=verbose)
+        processo = Processo(processostr, None, manager=ProcessManager, verbose=verbose)
         processo.db.basic_html = html_basicos
         processo.db.polygon_html = html_poligonal
         processo._dadosScmGet('basic', download=False) 
         if html_poligonal:            
             if not processo._dadosPoligonalGet(download=False) and verbose:
                 print('Some error on poligonal page cant read poligonal table', file=sys.stderr)            
-        self[processo.name] = processo # saves it in here
+        ProcessManager._local[processo.name] = processo # saves it in here
         return processo
 
     @staticmethod
