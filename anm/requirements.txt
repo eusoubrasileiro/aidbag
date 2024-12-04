@@ -22,3 +22,4 @@ xlsxwriter
 lxml
 python-Levenshtein
 xlrd
+selenium

@@ -1,9 +1,5 @@
-from lib2to3.pgen2.driver import Driver
 from pickle import NONE
-from selenium.webdriver import Chrome
-from selenium.webdriver import ChromeOptions
 from selenium.common.exceptions import (
-    WebDriverException, 
     TimeoutException, 
     NoSuchElementException, 
     ElementNotVisibleException,
@@ -13,7 +9,6 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait as wait
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import Select # drop down select
 from selenium.common.exceptions import (
     StaleElementReferenceException
     )
