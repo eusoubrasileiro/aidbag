@@ -1,6 +1,5 @@
-import sys 
 import io 
-import copy, numpy as np 
+import numpy as np 
 import random 
 from functools import cmp_to_key
 import networkx as nx

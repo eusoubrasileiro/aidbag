@@ -1,4 +1,11 @@
-from .....web.selenium import *
+from selenium.webdriver import (
+    Chrome, 
+    ChromeOptions
+)
+from .....web.selenium import (
+    send_keys,
+    click
+)
 
 class Sei:
     # https://book.pythontips.com/en/latest/context_managers.html

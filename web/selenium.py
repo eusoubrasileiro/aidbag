@@ -5,6 +5,7 @@ from selenium.common.exceptions import (
     ElementNotVisibleException,
     NoAlertPresentException
 )
+from selenium.webdriver.support.ui import Select 
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait as wait
@@ -14,11 +15,7 @@ from selenium.common.exceptions import (
     )
 
 import json 
-import time, sys
-from bs4 import BeautifulSoup
-import re 
-from enum import IntEnum
-
+import time
 
 # delay in seconds
 DELAY_TINY = 0.050

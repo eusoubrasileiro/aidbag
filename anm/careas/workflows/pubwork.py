@@ -1,7 +1,6 @@
 import sys 
 import traceback
 import os
-import re 
 import tqdm 
 
 from .. import scm     

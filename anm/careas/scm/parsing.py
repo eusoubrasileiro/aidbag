@@ -1,4 +1,4 @@
-import sys, copy
+import sys
 from datetime import datetime
 from bs4 import BeautifulSoup
 from ....web import htmlscrap

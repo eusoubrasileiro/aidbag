@@ -1,5 +1,6 @@
 from datetime import datetime
-from enum import auto, Enum
+from enum import Enum
+import re 
 import requests
 import pathlib
 from bs4 import BeautifulSoup
@@ -8,6 +9,7 @@ from unidecode import unidecode
 
 from .....general import closest_string
 from ... import util
+
 from .....web.selenium import *
 from .cls import Sei
 from .config import *

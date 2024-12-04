@@ -1,5 +1,3 @@
-import traceback
-import sys 
 import tqdm
 
 from ....web.htmlscrap import wPageNtlm
@@ -7,8 +5,6 @@ from .. import estudos
 from .. import scm
 from ..scm.requests import RequestsSCMException
 from ..estudos.scraping import DownloadInterferenciaFailed
-from ..config import config
-from ..util import processPath
 from .sei import Sei, Processo
 from .enums import ESTUDO_TYPE
 
