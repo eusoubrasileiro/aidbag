@@ -121,8 +121,10 @@ def inferWork(processname, dados, folder='.'):
                     case n if n > 1:
                         work['resultado'] = 'opção'
                 if count > 0:                                  
-                    percs = re.findall(f"(?<={perc_text}) +([\d,]+)", pdf_sigareas_text)
-                    areas = re.findall(f"(?<={area_text}) +([\d,]+)", pdf_sigareas_text)
+                    percs = re.findall(f"(?<={perc_text}) +([\\d,]+)", # \\ due f string
+                                       pdf_sigareas_text)
+                    areas = re.findall(f"(?<={area_text}) +([\\d,]+)",  # \\ due f string
+                                       pdf_sigareas_text)
                     percs = [ float(x.replace(',', '.')) for x in percs ]  
                     areas = [ float(x.replace(',', '.')) for x in areas ]  
                     work['areas']['percs'] = percs                 
