@@ -130,10 +130,11 @@ def PublishDocumentosSEI(sei, process_name, wpage, activity=None,
         
     if (activity in WORK_ACTIVITY.INTERFERENCIA_GENERICO or 
         activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_RESTUDO or
-        activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL):
+        activity in WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_EDITAL or
+        activity in WORK_ACTIVITY.INTERFERENCIA_FORMULARIO_1_DIREITO_REQUERER_LAVRA):
         estudo_interferencia_name = "Estudo de Retirada de Interferência"
         if dadosx['work']['bloqueio']:
-            estudo_interferencia_name += "(Simulação)"
+            estudo_interferencia_name += " (Simulação)"
         # Inclui Estudo Interferência pdf como Doc Externo no SEI
         psei.insereDocumentoExterno(estudo_interferencia_name, 
             dadosx['estudo']['sigareas']['pdf_path'])      
@@ -210,21 +211,16 @@ def PublishDocumentosSEI(sei, process_name, wpage, activity=None,
         psei.insereNotaTecnicaRequerimento('req_erro_repem')            
         attribui_salva(psei, dadosx, process)
 
-    elif activity in WORK_ACTIVITY.NOTA_TECNICA_GENERICA:
-        psei.insereNotaTecnicaRequerimento(kwargs['doc_template_name'], dadosx)    
-        attribui_salva(psei, dadosx, process)
+    elif activity in WORK_ACTIVITY.INTERFERENCIA_FORMULARIO_1_DIREITO_REQUERER_LAVRA:        
+        # Formulário 1 is filled in by human, so we don't need to do anything here
+        pass 
+        
 
-    # elif activity in WORK_ACTIVITY.FORMULARIO_1_DIREITO_RLAVRA:
-    #     psei.insereDocumentoExterno( "Estudo de Retirada de Interferência", 
-    #      dadosx['estudo']['sigareas']['pdf_path'])
-    #     if 'ok' in dadosx['work']['resultado']:     
-    #         pdf_adicional = dadosx['work']['pdf_adicional']
-    #         if pdf_adicional and not pdf_adicional.exists():                          
-    #             downloadMinuta(wpage, process.name, 
-    #                             str(pdf_adicional.absolute()), MINUTA.fromName(dadosx['work']['minuta']['title']))
-    #         # guarantee to insert an empty in any case
-    #         pdf_adicional = str(pdf_adicional.absolute()) if pdf_adicional else None 
-    #         psei.insereDocumentoExterno(dadosx['work']['minuta']['title'], pdf_adicional)     
+    # elif activity in WORK_ACTIVITY.NOTA_TECNICA_GENERICA:
+    #     psei.insereNotaTecnicaRequerimento(kwargs['doc_template_name'], dadosx)    
+    #     attribui_salva(psei, dadosx, process)
+
+
     # elif activity in WORK_ACTIVITY.REQUERIMENTO_OPCAO_ALVARA: # opção de área na fase de requerimento
     #     psei.insereDocumentoExterno(3, str(dadosx['pdf_sigareas'].absolute()))  # estudo opção
     #     if not dadosx['pdf_adicional'].exists():

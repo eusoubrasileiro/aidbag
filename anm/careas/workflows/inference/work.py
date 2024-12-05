@@ -18,7 +18,7 @@ def activityFromDados(dados):
         case (tipo, fase) if 'garimpeira' in fase and 'requerimento' in tipo:
             return WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_PLG
         case (tipo, fase) if 'lavra' in fase and 'requerimento' in tipo:
-            return WORK_ACTIVITY.FORMULARIO_1_DIREITO_RLAVRA
+            return WORK_ACTIVITY.INTERFERENCIA_FORMULARIO_1_DIREITO_REQUERER_LAVRA
         case (tipo, fase) if 'licenciamento' in fase and 'requerimento' in tipo:
             return WORK_ACTIVITY.INTERFERENCIA_REQUERIMENTO_LICENCIAMENTO
         case (tipo, fase) if 'extração' in fase and 'requerimento' in tipo:
