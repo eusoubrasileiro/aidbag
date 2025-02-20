@@ -1,7 +1,5 @@
-from selenium.webdriver import (
-    Chrome, 
-    ChromeOptions
-)
+from selenium import webdriver
+
 from .....web.selenium import (
     send_keys,
     click
@@ -28,10 +26,10 @@ class Sei:
         login: bool 
             Makes Login on start
         """
-        self.headless = headless         
-        self.user = user 
-        self.passwd = passwd 
-        self.driver = None 
+        self.headless : bool = headless         
+        self.user : str = user 
+        self.passwd : str = passwd 
+        self.driver : webdriver.Chrome | None = None
         if login:
             self._login()
 
@@ -42,7 +40,7 @@ class Sei:
         self.driver.quit()        
           
     def _login(self):
-        options = ChromeOptions()
+        options = webdriver.ChromeOptions()
         # not exactly needed since I am downloading pdfs with requets
         # but keeping it since it makes navigation faster ? when not loading pdf's 
         options.add_experimental_option('prefs', {            
@@ -52,7 +50,7 @@ class Sei:
         })
         if self.headless:
             options.add_argument("headless") # to hide window in 'background'
-        self.driver = Chrome(options=options)        
+        self.driver = webdriver.Chrome(options=options)        
         self.driver.get("https://sei.anm.gov.br/")        
         send_keys(self.driver, "input#txtUsuario", self.user, clear=True)
         send_keys(self.driver, "input#pwdSenha", self.passwd, clear=True)        
