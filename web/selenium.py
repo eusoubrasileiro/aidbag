@@ -44,7 +44,7 @@ def switch_to_frame(driver, selector, by=By.CSS_SELECTOR, timeout=10):
         
 
 def send_keys(driver, selector, text, by=By.CSS_SELECTOR, timeout=10, 
-              retry_count=3, clear=False):
+              retry_count=3, clear=False, delay=None):
     """This method 'send_keys' to an element's text field.
     
     Has multiple parts:
@@ -63,7 +63,9 @@ def send_keys(driver, selector, text, by=By.CSS_SELECTOR, timeout=10,
     * clear - clear before, send Keys.BACK_SPACE*42 before
     
     """
-    element = wait_for_element_visible(driver, selector, by)              
+    if delay:
+        time.sleep(delay)
+    element = wait_for_element_visible(driver, selector, by)
     try:        
         if clear:
             element.send_keys(Keys.BACK_SPACE*42)
@@ -147,6 +149,9 @@ def wait_until(driver, selector, expected_condition,
 
 def wait_for_element_presence(driver, selector, by=By.CSS_SELECTOR, timeout=10):
     return wait(driver, timeout).until(expected_conditions.presence_of_element_located((by, selector)))
+
+def wait_for_element_clickable(driver, selector, by=By.CSS_SELECTOR, timeout=10):
+    return wait(driver, timeout).until(expected_conditions.element_to_be_clickable((by, selector)))
 
 def try_accept_alerts(driver, timeout=5):
     """try dismiss as many alerts IF shown up"""  

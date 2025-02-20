@@ -245,9 +245,10 @@ class Processo(Sei):
         self.insereDocumento("Externo") 
         pieces = docname.split(' ')
         tipo, desc = pieces[0], ' '.join(pieces[1:]) # Tipo de Documento (e.g Estudo) e Nome na Arvore (e.g. Retirada de Interferência)
-        send_keys(self.driver, '#selSerie.infraSelect', tipo) # Tipo de Documento 
-        send_keys(self.driver, '#txtDataElaboracao.infraText', datetime.today().strftime('%d/%m/%Y')) # Data do Documento put today
-        send_keys(self.driver, '#txtNumero.infraText', desc) # Nome na Arvore
+        
+        send_keys(self.driver, '#selSerie.infraSelect', tipo, delay=DELAY_TINY) # Tipo de Documento                                    
+        send_keys(self.driver, '#txtDataElaboracao.infraText', datetime.today().strftime('%d/%m/%Y'), delay=DELAY_SMALL) # Data do Documento put today
+        send_keys(self.driver, '#txtNumero.infraText', desc, delay=DELAY_SMALL) # Nome na Arvore
         click(self.driver, '#optNato.infraRadio') #  Nato-digital
         click(self.driver, '#lblPublico.infraLabelRadio') # Publico
         pdf_path = str(pdf_path) # convert to string case pathlib.Path
